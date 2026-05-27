@@ -637,7 +637,7 @@ class BModuleTests(unittest.TestCase):
         env_without_keys = {
             key: value
             for key, value in os.environ.items()
-            if key not in {"WASHMATE_API_KEY", "OPENAI_API_KEY"}
+            if key not in {"WASHMATE_API_KEY", "OPENAI_API_KEY", "WASHMATE_CONFIG_FILE"}
         }
         with patch.dict(os.environ, env_without_keys, clear=True):
             client = create_default_llm_client()
@@ -646,6 +646,49 @@ class BModuleTests(unittest.TestCase):
 
         self.assertEqual(response.provider, "local-noop")
         self.assertEqual(response.text, "{}")
+
+    def test_create_default_llm_client_reads_local_api_config_file(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config_path = Path(tmp_dir) / "api_config.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "base_url": "http://127.0.0.1:8000/v1",
+                        "api_key": "local-test-key",
+                        "model_name": "qwen2.5-vl",
+                        "role": "user",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            env_without_keys = {
+                key: value
+                for key, value in os.environ.items()
+                if key
+                not in {
+                    "WASHMATE_API_KEY",
+                    "OPENAI_API_KEY",
+                    "WASHMATE_BASE_URL",
+                    "OPENAI_BASE_URL",
+                    "WASHMATE_MODEL",
+                    "OPENAI_MODEL",
+                    "WASHMATE_CONFIG_FILE",
+                }
+            }
+
+            with patch.dict(
+                os.environ,
+                {**env_without_keys, "WASHMATE_CONFIG_FILE": str(config_path)},
+                clear=True,
+            ):
+                client = create_default_llm_client()
+
+        self.assertEqual(client.api_key, "local-test-key")
+        self.assertEqual(client.base_url, "http://127.0.0.1:8000/v1")
+        self.assertEqual(client.model, "qwen2.5-vl")
 
 
 if __name__ == "__main__":

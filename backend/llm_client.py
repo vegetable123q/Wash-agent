@@ -16,6 +16,7 @@ from typing import Protocol
 from .models import LLMResponse
 
 _SUPPORTED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+_DEFAULT_CONFIG_PATH = Path("config/api_config.json")
 
 
 class LLMClient(Protocol):
@@ -306,9 +307,27 @@ Extracted facts:
 """.strip()
 
 
+def _read_local_api_config() -> dict[str, str]:
+    config_path = Path(os.getenv("WASHMATE_CONFIG_FILE") or _DEFAULT_CONFIG_PATH)
+    if not config_path.is_file():
+        return {}
+    try:
+        raw = json.loads(config_path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    return {str(key): str(value) for key, value in raw.items() if value is not None}
+
+
 def create_default_llm_client() -> LLMClient:
     """Create the default LLM client from runtime configuration."""
-    api_key = os.getenv("WASHMATE_API_KEY") or os.getenv("OPENAI_API_KEY")
+    local_config = _read_local_api_config()
+    api_key = (
+        os.getenv("WASHMATE_API_KEY")
+        or os.getenv("OPENAI_API_KEY")
+        or local_config.get("api_key")
+    )
     if not api_key:
         return LocalNoopLLMClient()
 
@@ -316,7 +335,13 @@ def create_default_llm_client() -> LLMClient:
         api_key=api_key,
         base_url=os.getenv("WASHMATE_BASE_URL")
         or os.getenv("OPENAI_BASE_URL")
+        or local_config.get("base_url")
+        or local_config.get("api_url")
         or "https://api.openai.com/v1",
-        model=os.getenv("WASHMATE_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4o-mini",
+        model=os.getenv("WASHMATE_MODEL")
+        or os.getenv("OPENAI_MODEL")
+        or local_config.get("model_name")
+        or local_config.get("model")
+        or "gpt-4o-mini",
     )
 

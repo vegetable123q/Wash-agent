@@ -100,7 +100,33 @@ wardrobe_item = build_wardrobe_item(profile)
 
 ### 大模型 API 配置
 
-未配置 API key 时，B 模块会返回 `extraction_status="llm_unavailable"`，不会生成规则猜测结果。用户手填字段仍会被保留，因为它们来自用户明确输入。
+推荐复制示例配置文件后本地修改：
+
+```powershell
+Copy-Item config/api_config.example.json config/api_config.json
+```
+
+`config/api_config.json` 不会被提交到 git，适合放自己的 API 地址和密钥：
+
+```json
+{
+  "base_url": "http://127.0.0.1:8000/v1",
+  "api_key": "local-dev-key",
+  "model_name": "qwen2.5-vl",
+  "role": "user"
+}
+```
+
+字段说明：
+
+- `base_url`：OpenAI-compatible API 根地址，例如本地 vLLM/LiteLLM/LM Studio/Ollama 兼容端点的 `/v1`。
+- `api_key`：API key；本地无鉴权服务通常也可以填一个占位值，例如 `local-dev-key`。
+- `model_name`：模型名。
+- `role`：预留字段，当前默认客户端不依赖它。
+
+默认加载优先级为：环境变量 > `WASHMATE_CONFIG_FILE` 指向的配置文件 > `config/api_config.json`。
+
+未配置 API key 且没有本地配置文件时，B 模块会返回 `extraction_status="llm_unavailable"`，不会生成规则猜测结果。用户手填字段仍会被保留，因为它们来自用户明确输入。
 
 可选环境变量：
 
