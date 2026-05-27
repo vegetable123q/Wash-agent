@@ -63,6 +63,7 @@ class ClothingInput:
     shop_name: str = ""
     tag_text: str = ""
     user_description: str = ""
+    user_note: str = ""
     image_refs: list[str] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
 
@@ -83,12 +84,15 @@ class ClothingProfile:
 
     item_id: str
     name: str
+    user_note: str = ""
     material_ratios: dict[str, float] = field(default_factory=dict)
     colors: list[str] = field(default_factory=list)
     care_forbidden: list[str] = field(default_factory=list)
     risks: dict[str, RiskLevel] = field(default_factory=dict)
     confidence: float = 0.0
     source_notes: list[str] = field(default_factory=list)
+    missing_fields: list[str] = field(default_factory=list)
+    user_fill_suggestions: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
