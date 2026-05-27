@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .models import MachineInfo
+from backend.shared.models import MachineInfo
 
 
 class LaundryMachineClient:
@@ -20,4 +20,3 @@ class LaundryMachineClient:
     def get_machine(self, machine_id: str) -> MachineInfo | None:
         """Return one machine by id."""
         raise NotImplementedError
-

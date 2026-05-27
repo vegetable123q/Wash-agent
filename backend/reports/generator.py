@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .models import CampusContext, LaundryPlan, WardrobeItem, WashReport
+from backend.shared.models import CampusContext, LaundryPlan, WardrobeItem, WashReport
 
 
 def generate_report(
@@ -12,4 +12,3 @@ def generate_report(
 ) -> WashReport:
     """Generate report sections from the final laundry plan."""
     raise NotImplementedError
-

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .models import CampusContext, LaundryConstraints, LaundryPlan, WardrobeItem
+from backend.shared.models import CampusContext, LaundryConstraints, LaundryPlan, WardrobeItem
 
 
 def plan_laundry(
@@ -12,4 +12,3 @@ def plan_laundry(
 ) -> LaundryPlan:
     """Create wash buckets, machine modes, drying advice, and risk warnings."""
     raise NotImplementedError
-

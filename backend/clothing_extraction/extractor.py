@@ -13,9 +13,9 @@ from .llm_client import (
     build_extraction_prompt,
     build_image_router_prompt,
     build_typed_extraction_prompt,
-    create_default_llm_client,
+    create_configured_llm_client,
 )
-from .models import ClothingInput, ClothingProfile, RiskLevel, WardrobeItem
+from backend.shared.models import ClothingInput, ClothingProfile, RiskLevel, WardrobeItem
 from .product_info import enrich_product_info
 
 
@@ -765,7 +765,7 @@ def extract_clothing_info(
     """Extract material, color, care constraints, risks, and confidence."""
     enriched = enrich_product_info(raw)
     source_text = enriched.extra.get("normalized_source_text", enriched.name)
-    client = llm_client or create_default_llm_client()
+    client = llm_client or create_configured_llm_client()
     if enriched.image_refs:
         try:
             profile = _profile_from_image_agents(enriched, client, source_text)
@@ -851,4 +851,3 @@ def build_wardrobe_item(
         profile=profile,
         user_notes=[note] if note else [],
     )
-

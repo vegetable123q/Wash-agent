@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .models import FrequencyAdvice, LaundryConstraints, WardrobeItem
+from backend.shared.models import FrequencyAdvice, LaundryConstraints, WardrobeItem
 
 
 def advise_frequency(
@@ -11,4 +11,3 @@ def advise_frequency(
 ) -> FrequencyAdvice:
     """Recommend whether and how urgently one item should be washed."""
     raise NotImplementedError
-

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from .laundry_machine_api import LaundryMachineClient
-from .models import CampusContext
+from backend.campus.machine_api import LaundryMachineClient
+from backend.shared.models import CampusContext
 
 
 def build_campus_context(
@@ -12,4 +12,3 @@ def build_campus_context(
 ) -> CampusContext:
     """Combine machine, weather, balcony, humidity, and pricing context."""
     raise NotImplementedError
-

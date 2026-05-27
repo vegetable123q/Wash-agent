@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build B module data acquisition so clothing photos, tag photos, Taobao/product-page screenshots, supplemental text, and manual user fields can be merged into a reliable `ClothingProfile`.
+**Goal:** Build clothing extraction module data acquisition so clothing photos, tag photos, Taobao/product-page screenshots, supplemental text, and manual user fields can be merged into a reliable `ClothingProfile`.
 
-**Architecture:** Keep the existing B boundaries: `llm_client.py` owns the API call, `product_info.py` normalizes all user/product/source inputs, and `clothing_extractor.py` merges LLM output with deterministic fallback and user overrides. The LLM client remains OpenAI-compatible and safe without API keys; image support is added through optional `image_refs` so existing text-only tests and mocks keep working.
+**Architecture:** Keep the existing B boundaries: `llm_client.py` owns the API call, `product_info.py` normalizes all user/product/source inputs, and `clothing_extractor.py` merges LLM output with deterministic explicit error and user overrides. The LLM client remains OpenAI-compatible and safe without API keys; image support is added through optional `image_refs` so existing text-only tests and mocks keep working.
 
 **Tech Stack:** Python 3.12 standard library, `unittest`, dataclasses, OpenAI-compatible chat completions API, base64 data URLs for local uploaded images.
 
@@ -12,22 +12,22 @@
 
 ## File Structure
 
-- Modify `backend/models.py`
+- Modify `backend/shared/models.py`
   - Add optional `missing_fields` and `user_fill_suggestions` fields to `ClothingProfile` so downstream UI can ask the user to fill data not found in images or text.
-- Modify `backend/llm_client.py`
+- Modify `backend/clothing_extraction/llm_client.py`
   - Extend `LLMClient.complete()` with optional `image_refs`.
   - Add helpers to convert local image paths, `http(s)` URLs, and `data:image/...` URLs into OpenAI-compatible `image_url` message parts.
   - Update `build_extraction_prompt()` so the LLM is explicitly asked to inspect clothing photos, tag photos, product-page screenshots, and return `missing_fields`.
   - Keep `LocalFallbackLLMClient` no-network behavior unchanged.
-- Modify `backend/product_info.py`
+- Modify `backend/clothing_extraction/product_info.py`
   - Normalize `extra["ocr_text"]`, `extra["product_page_text"]`, `extra["taobao_text"]`, `extra["supplemental_sources"]`, and `extra["manual_fields"]`.
   - Include these sources in `normalized_source_text` and source notes.
-- Modify `backend/clothing_extractor.py`
+- Modify `backend/clothing_extraction/extractor.py`
   - Send `image_refs` to clients that accept image input.
   - Parse optional LLM `missing_fields`.
-  - Apply manual user fields after LLM/fallback.
+  - Apply manual user fields after LLM/explicit error.
   - Compute missing-field suggestions when data is still incomplete.
-- Modify `tests/test_b_modules.py`
+- Modify `tests/test_clothing_extraction.py`
   - Add tests for image dispatch, multimodal payload construction, supplemental source normalization, manual field overrides, and missing-field prompts.
 
 ---
@@ -35,7 +35,7 @@
 ### Task 1: Extend Tests For B Flow
 
 **Files:**
-- Modify: `tests/test_b_modules.py`
+- Modify: `tests/test_clothing_extraction.py`
 
 - [ ] **Step 1: Add a fake vision-capable client**
 
@@ -62,7 +62,7 @@ class FakeVisionLLMClient:
 
 - [ ] **Step 2: Add failing tests for new behavior**
 
-Add these tests to `BModuleTests`:
+Add these tests to `ClothingExtractionTests`:
 
 ```python
 def test_enrich_product_info_merges_supplemental_sources_and_manual_fields(self) -> None:
@@ -120,7 +120,7 @@ def test_openai_client_builds_multimodal_payload_without_network(self) -> None:
     from pathlib import Path
     from unittest.mock import patch
 
-    from backend.llm_client import OpenAICompatibleLLMClient
+    from backend.clothing_extraction.llm_client import OpenAICompatibleLLMClient
 
     captured: dict[str, object] = {}
 
@@ -155,7 +155,7 @@ def test_openai_client_builds_multimodal_payload_without_network(self) -> None:
 ```
 
 ```python
-def test_manual_fields_fill_missing_image_data_after_fallback(self) -> None:
+def test_manual_fields_fill_missing_image_data_when_llm_fails(self) -> None:
     profile = extract_clothing_info(
         ClothingInput(
             name="针织衫",
@@ -194,7 +194,7 @@ def test_missing_fields_are_reported_when_sources_are_insufficient(self) -> None
 
 - [ ] **Step 3: Run tests to verify they fail**
 
-Run: `python -m unittest tests.test_b_modules -v`
+Run: `uv run python -m unittest tests.test_clothing_extraction -v`
 
 Expected: FAIL because `FakeVisionLLMClient` image path is not passed yet, supplemental source text is missing, and `ClothingProfile` has no `missing_fields`.
 
@@ -203,32 +203,32 @@ Expected: FAIL because `FakeVisionLLMClient` image path is not passed yet, suppl
 ### Task 2: Add Model Fields And Vision LLM Support
 
 **Files:**
-- Modify: `backend/models.py`
-- Modify: `backend/llm_client.py`
-- Test: `tests/test_b_modules.py`
+- Modify: `backend/shared/models.py`
+- Modify: `backend/clothing_extraction/llm_client.py`
+- Test: `tests/test_clothing_extraction.py`
 
 - [ ] **Step 1: Extend `ClothingProfile`**
 
-In `backend/models.py`, append these fields to `ClothingProfile` with defaults:
+In `backend/shared/models.py`, append these fields to `ClothingProfile` with defaults:
 
 ```python
 missing_fields: list[str] = field(default_factory=list)
 user_fill_suggestions: dict[str, str] = field(default_factory=dict)
 ```
 
-- [ ] **Step 2: Update the client protocol and local fallback**
+- [ ] **Step 2: Update the client protocol and local explicit error**
 
-In `backend/llm_client.py`, change both `LLMClient.complete` and `LocalFallbackLLMClient.complete` to accept:
+In `backend/clothing_extraction/llm_client.py`, change both `LLMClient.complete` and `LocalFallbackLLMClient.complete` to accept:
 
 ```python
 image_refs: list[str] | None = None
 ```
 
-The fallback should still return `LLMResponse(text="{}", provider="local-fallback", model="rule-based")`.
+The explicit error should still return `LLMResponse(text="{}", provider="local-explicit error", model="rule-based")`.
 
 - [ ] **Step 3: Add image content helpers**
 
-Add standard-library helpers to `backend/llm_client.py`:
+Add standard-library helpers to `backend/clothing_extraction/llm_client.py`:
 
 ```python
 import base64
@@ -269,7 +269,7 @@ Keep existing error normalization.
 
 - [ ] **Step 5: Update `build_extraction_prompt` for multimodal extraction**
 
-In `backend/llm_client.py`, update the prompt schema to include:
+In `backend/clothing_extraction/llm_client.py`, update the prompt schema to include:
 
 ```python
 "missing_fields": ["material_ratios", "colors", "care_forbidden"]
@@ -285,13 +285,13 @@ Add rules that say:
 
 - [ ] **Step 6: Run focused tests**
 
-Run: `python -m unittest tests.test_b_modules.BModuleTests.test_create_default_llm_client_is_safe_without_api_key -v`
+Run: `uv run python -m unittest tests.test_clothing_extraction.ClothingExtractionTests.test_create_default_llm_client_is_safe_without_api_key -v`
 
 Expected: PASS.
 
 - [ ] **Step 7: Run multimodal payload test**
 
-Run: `python -m unittest tests.test_b_modules.BModuleTests.test_openai_client_builds_multimodal_payload_without_network -v`
+Run: `uv run python -m unittest tests.test_clothing_extraction.ClothingExtractionTests.test_openai_client_builds_multimodal_payload_without_network -v`
 
 Expected: PASS and no real network request.
 
@@ -300,12 +300,12 @@ Expected: PASS and no real network request.
 ### Task 3: Normalize Supplemental Sources
 
 **Files:**
-- Modify: `backend/product_info.py`
-- Test: `tests/test_b_modules.py`
+- Modify: `backend/clothing_extraction/product_info.py`
+- Test: `tests/test_clothing_extraction.py`
 
 - [ ] **Step 1: Add source normalization helpers**
 
-Add helpers in `backend/product_info.py`:
+Add helpers in `backend/clothing_extraction/product_info.py`:
 
 ```python
 from typing import Any
@@ -375,7 +375,7 @@ if manual_fields:
 
 - [ ] **Step 4: Run focused test**
 
-Run: `python -m unittest tests.test_b_modules.BModuleTests.test_enrich_product_info_merges_supplemental_sources_and_manual_fields -v`
+Run: `uv run python -m unittest tests.test_clothing_extraction.ClothingExtractionTests.test_enrich_product_info_merges_supplemental_sources_and_manual_fields -v`
 
 Expected: PASS.
 
@@ -384,12 +384,12 @@ Expected: PASS.
 ### Task 4: Merge LLM, Fallback, Missing Fields, And Manual User Input
 
 **Files:**
-- Modify: `backend/clothing_extractor.py`
-- Test: `tests/test_b_modules.py`
+- Modify: `backend/clothing_extraction/extractor.py`
+- Test: `tests/test_clothing_extraction.py`
 
 - [ ] **Step 1: Add missing-field helpers**
 
-Add to `backend/clothing_extractor.py`:
+Add to `backend/clothing_extraction/extractor.py`:
 
 ```python
 _USER_FILL_SUGGESTIONS = {
@@ -486,7 +486,7 @@ If this raises `TypeError` because a legacy fake client lacks `image_refs`, retr
 
 - [ ] **Step 5: Apply manual fields and missing-field suggestions before returning**
 
-For both LLM and fallback branches:
+For both LLM and explicit error branches:
 
 ```python
 profile = _apply_manual_fields(profile, enriched.extra.get("manual_fields"))
@@ -495,7 +495,7 @@ return _with_missing_fields(profile, profile.missing_fields)
 
 - [ ] **Step 6: Run focused tests**
 
-Run: `python -m unittest tests.test_b_modules.BModuleTests.test_extract_clothing_info_sends_uploaded_images_to_llm tests.test_b_modules.BModuleTests.test_manual_fields_fill_missing_image_data_after_fallback tests.test_b_modules.BModuleTests.test_missing_fields_are_reported_when_sources_are_insufficient -v`
+Run: `uv run python -m unittest tests.test_clothing_extraction.ClothingExtractionTests.test_extract_clothing_info_sends_uploaded_images_to_llm tests.test_clothing_extraction.ClothingExtractionTests.test_manual_fields_fill_missing_image_data_when_llm_fails tests.test_clothing_extraction.ClothingExtractionTests.test_missing_fields_are_reported_when_sources_are_insufficient -v`
 
 Expected: PASS.
 
@@ -508,19 +508,19 @@ Expected: PASS.
 
 - [ ] **Step 1: Run all B tests**
 
-Run: `python -m unittest tests.test_b_modules -v`
+Run: `uv run python -m unittest tests.test_clothing_extraction -v`
 
 Expected: PASS.
 
 - [ ] **Step 2: Run all tests discovered by unittest**
 
-Run: `python -m unittest discover -v`
+Run: `uv run python -m unittest discover -v`
 
 Expected: PASS.
 
 - [ ] **Step 3: Inspect final diff**
 
-Run: `git diff -- backend/models.py backend/llm_client.py backend/product_info.py backend/clothing_extractor.py tests/test_b_modules.py docs/superpowers/plans/2026-05-27-b-vision-extraction.md`
+Run: `git diff -- backend/shared/models.py backend/clothing_extraction/llm_client.py backend/clothing_extraction/product_info.py backend/clothing_extraction/extractor.py tests/test_clothing_extraction.py docs/superpowers/plans/2026-05-27-b-vision-extraction.md`
 
 Expected: diff only contains B implementation, B tests, and this plan.
 

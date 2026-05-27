@@ -7,7 +7,7 @@ import re
 from dataclasses import replace
 from typing import Any
 
-from .models import ClothingInput
+from backend.shared.models import ClothingInput
 
 
 def _normalize_text(value: str) -> str:
@@ -101,4 +101,3 @@ def enrich_product_info(raw: ClothingInput) -> ClothingInput:
         user_note=user_note,
         extra=extra,
     )
-

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .models import WardrobeItem, WashRecord
+from backend.shared.models import WardrobeItem, WashRecord
 
 
 class WardrobeStore:
@@ -32,4 +32,3 @@ class WardrobeStore:
     def add_wash_record(self, item_id: str, record: WashRecord) -> None:
         """Append one wash history record to a wardrobe item."""
         raise NotImplementedError
-

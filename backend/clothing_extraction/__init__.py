@@ -1,0 +1,2 @@
+"""Clothing extraction package."""
+

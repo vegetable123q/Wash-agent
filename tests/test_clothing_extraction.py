@@ -1,20 +1,20 @@
 from __future__ import annotations
 
 import json
-import os
 import unittest
 from unittest.mock import patch
 
-from backend.clothing_extractor import build_wardrobe_item, extract_clothing_info
-from backend.llm_client import (
+from backend.clothing_extraction.extractor import build_wardrobe_item, extract_clothing_info
+from backend.clothing_extraction.llm_client import (
+    GeminiV1BetaLLMClient,
     build_care_inference_prompt,
     build_extraction_prompt,
     build_image_router_prompt,
     build_typed_extraction_prompt,
-    create_default_llm_client,
+    create_configured_llm_client,
 )
-from backend.models import ClothingInput, LLMResponse, RiskLevel, WashMethod
-from backend.product_info import enrich_product_info
+from backend.shared.models import ClothingInput, LLMResponse, RiskLevel, WashMethod
+from backend.clothing_extraction.product_info import enrich_product_info
 
 
 class FakeLLMClient:
@@ -73,7 +73,7 @@ class BrokenLLMClient:
         raise RuntimeError("network unavailable")
 
 
-class BModuleTests(unittest.TestCase):
+class ClothingExtractionTests(unittest.TestCase):
     def test_build_extraction_prompt_requests_json_schema(self) -> None:
         prompt = build_extraction_prompt("灰色连帽卫衣，棉混纺，不能高温烘干")
 
@@ -471,12 +471,53 @@ class BModuleTests(unittest.TestCase):
             ],
         )
 
-    def test_openai_client_builds_multimodal_payload_without_network(self) -> None:
+    def test_gemini_v1beta_client_builds_generate_content_path_without_network(self) -> None:
+        captured: dict[str, object] = {}
+
+        class FakeHTTPResponse:
+            def __enter__(self) -> "FakeHTTPResponse":
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return (
+                    b'{"candidates":[{"content":{"parts":[{"text":"{\\"ok\\":true}"}]}}]}'
+                )
+
+        def fake_urlopen(request, timeout):
+            captured["url"] = request.full_url
+            captured["headers"] = dict(request.header_items())
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            captured["timeout"] = timeout
+            return FakeHTTPResponse()
+
+        client = GeminiV1BetaLLMClient(
+            apikey="test-key",
+            base_url="https://modelhub.ailemac.com/v1beta",
+            model="gemini-3.1-pro-preview",
+        )
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            response = client.complete("extract")
+
+        self.assertEqual(
+            captured["url"],
+            "https://modelhub.ailemac.com/v1beta/models/"
+            "gemini-3.1-pro-preview:generateContent",
+        )
+        self.assertEqual(captured["headers"]["X-goog-api-key"], "test-key")
+        payload = captured["payload"]
+        self.assertEqual(payload["generationConfig"]["responseMimeType"], "application/json")
+        self.assertEqual(payload["contents"][0]["parts"][0], {"text": "extract"})
+        self.assertEqual(response.provider, "gemini-v1beta")
+        self.assertEqual(response.text, '{"ok":true}')
+
+    def test_gemini_v1beta_client_builds_inline_image_parts_without_network(self) -> None:
         import base64
         import tempfile
         from pathlib import Path
-
-        from backend.llm_client import OpenAICompatibleLLMClient
 
         captured: dict[str, object] = {}
 
@@ -488,58 +529,31 @@ class BModuleTests(unittest.TestCase):
                 return None
 
             def read(self) -> bytes:
-                return b'{"choices":[{"message":{"content":"{}"}}]}'
+                return b'{"candidates":[{"content":{"parts":[{"text":"{}"}]}}]}'
 
         def fake_urlopen(request, timeout):
             captured["payload"] = json.loads(request.data.decode("utf-8"))
-            captured["timeout"] = timeout
             return FakeHTTPResponse()
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             image_path = Path(tmp_dir) / "tag.png"
             image_path.write_bytes(base64.b64decode("iVBORw0KGgo="))
-            client = OpenAICompatibleLLMClient(
-                api_key="test-key",
-                base_url="https://example.test",
+            client = GeminiV1BetaLLMClient(
+                apikey="test-key",
+                base_url="https://modelhub.ailemac.com/v1beta",
+                model="gemini-3.1-pro-preview",
             )
 
             with patch("urllib.request.urlopen", fake_urlopen):
                 response = client.complete("extract", image_refs=[str(image_path)])
 
-        payload = captured["payload"]
-        self.assertIsInstance(payload, dict)
-        user_content = payload["messages"][1]["content"]
-        self.assertEqual(response.provider, "openai-compatible")
-        self.assertEqual(user_content[0], {"type": "text", "text": "extract"})
-        self.assertEqual(user_content[1]["type"], "image_url")
-        self.assertTrue(
-            user_content[1]["image_url"]["url"].startswith("data:image/png;base64,")
-        )
+        parts = captured["payload"]["contents"][0]["parts"]
+        self.assertEqual(parts[0], {"text": "extract"})
+        self.assertEqual(parts[1]["inline_data"]["mime_type"], "image/png")
+        self.assertTrue(parts[1]["inline_data"]["data"])
+        self.assertEqual(response.provider, "gemini-v1beta")
 
-    def test_openai_client_rejects_unsupported_local_image_without_network(self) -> None:
-        import tempfile
-        from pathlib import Path
-
-        from backend.llm_client import OpenAICompatibleLLMClient
-
-        def fail_urlopen(request, timeout):
-            raise AssertionError("network should not be called for invalid images")
-
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            image_path = Path(tmp_dir) / "tag.txt"
-            image_path.write_text("not an image", encoding="utf-8")
-            client = OpenAICompatibleLLMClient(
-                api_key="test-key",
-                base_url="https://example.test",
-            )
-
-            with patch("urllib.request.urlopen", fail_urlopen):
-                response = client.complete("extract", image_refs=[str(image_path)])
-
-        self.assertEqual(response.text, "{}")
-        self.assertIn("unsupported image type", response.raw["error"].lower())
-
-    def test_extract_clothing_info_does_not_fall_back_to_rules_when_llm_fails(self) -> None:
+    def test_extract_clothing_info_does_not_generate_rules_when_llm_fails(self) -> None:
         profile = extract_clothing_info(
             ClothingInput(
                 name="优衣库灰色连帽卫衣",
@@ -633,21 +647,17 @@ class BModuleTests(unittest.TestCase):
         self.assertIn("No JSON object", profile.extraction_error)
         self.assertIn("material_ratios", profile.missing_fields)
 
-    def test_create_default_llm_client_is_safe_without_api_key(self) -> None:
-        env_without_keys = {
-            key: value
-            for key, value in os.environ.items()
-            if key not in {"WASHMATE_API_KEY", "OPENAI_API_KEY", "WASHMATE_CONFIG_FILE"}
-        }
-        with patch.dict(os.environ, env_without_keys, clear=True):
-            client = create_default_llm_client()
+    def test_create_configured_llm_client_requires_api_config_file(self) -> None:
+        import tempfile
+        from pathlib import Path
 
-            response = client.complete("hello")
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            missing_config = Path(tmp_dir) / "missing_api_config.json"
+            with patch("backend.clothing_extraction.llm_client._CONFIG_PATH", missing_config):
+                with self.assertRaises(FileNotFoundError):
+                    create_configured_llm_client()
 
-        self.assertEqual(response.provider, "local-noop")
-        self.assertEqual(response.text, "{}")
-
-    def test_create_default_llm_client_reads_local_api_config_file(self) -> None:
+    def test_create_configured_llm_client_reads_api_config_file(self) -> None:
         import tempfile
         from pathlib import Path
 
@@ -656,39 +666,33 @@ class BModuleTests(unittest.TestCase):
             config_path.write_text(
                 json.dumps(
                     {
-                        "base_url": "http://127.0.0.1:8000/v1",
-                        "api_key": "local-test-key",
-                        "model_name": "qwen2.5-vl",
-                        "role": "user",
+                        "baseUrl": "https://modelhub.ailemac.com/v1beta",
+                        "apikey": "configured-test-key",
+                        "model_name": "gemini-3.1-pro-preview",
                     }
                 ),
                 encoding="utf-8",
             )
-            env_without_keys = {
-                key: value
-                for key, value in os.environ.items()
-                if key
-                not in {
-                    "WASHMATE_API_KEY",
-                    "OPENAI_API_KEY",
-                    "WASHMATE_BASE_URL",
-                    "OPENAI_BASE_URL",
-                    "WASHMATE_MODEL",
-                    "OPENAI_MODEL",
-                    "WASHMATE_CONFIG_FILE",
-                }
-            }
+            with patch("backend.clothing_extraction.llm_client._CONFIG_PATH", config_path):
+                client = create_configured_llm_client()
 
-            with patch.dict(
-                os.environ,
-                {**env_without_keys, "WASHMATE_CONFIG_FILE": str(config_path)},
-                clear=True,
-            ):
-                client = create_default_llm_client()
+        self.assertEqual(client.apikey, "configured-test-key")
+        self.assertEqual(client.base_url, "https://modelhub.ailemac.com/v1beta")
+        self.assertEqual(client.model, "gemini-3.1-pro-preview")
 
-        self.assertEqual(client.api_key, "local-test-key")
-        self.assertEqual(client.base_url, "http://127.0.0.1:8000/v1")
-        self.assertEqual(client.model, "qwen2.5-vl")
+    def test_create_configured_llm_client_requires_baseurl_and_apikey(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config_path = Path(tmp_dir) / "api_config.json"
+            config_path.write_text(
+                json.dumps({"baseUrl": "https://modelhub.ailemac.com/v1beta"}),
+                encoding="utf-8",
+            )
+            with patch("backend.clothing_extraction.llm_client._CONFIG_PATH", config_path):
+                with self.assertRaisesRegex(ValueError, "apikey"):
+                    create_configured_llm_client()
 
 
 if __name__ == "__main__":

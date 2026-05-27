@@ -5,18 +5,18 @@ from __future__ import annotations
 import base64
 import json
 import mimetypes
-import os
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from typing import Protocol
 
-from .models import LLMResponse
+from backend.shared.models import LLMResponse
 
 _SUPPORTED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
-_DEFAULT_CONFIG_PATH = Path("config/api_config.json")
+_CONFIG_PATH = Path("config/api_config.json")
 
 
 class LLMClient(Protocol):
@@ -33,24 +33,6 @@ class LLMClient(Protocol):
         raise NotImplementedError
 
 
-@dataclass(slots=True)
-class LocalNoopLLMClient:
-    """No-network client used to report that no API key is configured."""
-
-    provider: str = "local-noop"
-    model: str = "rule-based"
-
-    def complete(
-        self,
-        prompt: str,
-        *,
-        temperature: float = 0.0,
-        image_refs: list[str] | None = None,
-    ) -> LLMResponse:
-        """Return empty JSON so callers can report LLM unavailability."""
-        return LLMResponse(text="{}", provider=self.provider, model=self.model)
-
-
 def _image_ref_to_url(image_ref: str) -> str:
     if image_ref.startswith(("http://", "https://", "data:image/")):
         return image_ref
@@ -62,28 +44,36 @@ def _image_ref_to_url(image_ref: str) -> str:
     return f"data:{mime_type};base64,{encoded}"
 
 
-def _build_user_content(
+def _build_gemini_parts(
     prompt: str,
     image_refs: list[str] | None,
-) -> str | list[dict[str, Any]]:
-    if not image_refs:
-        return prompt
-    content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
-    for image_ref in image_refs:
-        content.append(
-            {"type": "image_url", "image_url": {"url": _image_ref_to_url(image_ref)}}
+) -> list[dict[str, Any]]:
+    parts: list[dict[str, Any]] = [{"text": prompt}]
+    for image_ref in image_refs or []:
+        image_url = _image_ref_to_url(image_ref)
+        if not image_url.startswith("data:image/"):
+            raise ValueError(f"Unsupported Gemini image reference: {image_ref}")
+        metadata, encoded = image_url.split(",", 1)
+        mime_type = metadata.removeprefix("data:").removesuffix(";base64")
+        parts.append(
+            {
+                "inline_data": {
+                    "mime_type": mime_type,
+                    "data": encoded,
+                }
+            }
         )
-    return content
+    return parts
 
 
 @dataclass(slots=True)
-class OpenAICompatibleLLMClient:
-    """Minimal OpenAI-compatible chat completions client."""
+class GeminiV1BetaLLMClient:
+    """Gemini v1beta generateContent client for modelhub-style endpoints."""
 
-    api_key: str
-    base_url: str = "https://api.openai.com/v1"
-    model: str = "gpt-4o-mini"
-    timeout_seconds: float = 20.0
+    apikey: str
+    base_url: str
+    model: str
+    timeout_seconds: float = 60.0
 
     def complete(
         self,
@@ -92,45 +82,58 @@ class OpenAICompatibleLLMClient:
         temperature: float = 0.0,
         image_refs: list[str] | None = None,
     ) -> LLMResponse:
-        """Call a chat-completions endpoint and normalize failures."""
-        endpoint = self.base_url.rstrip("/") + "/chat/completions"
+        """Call a Gemini v1beta generateContent endpoint and normalize failures."""
+        model_path = urllib.parse.quote(self.model.removeprefix("models/"), safe="")
+        endpoint = f"{self.base_url.rstrip('/')}/models/{model_path}:generateContent"
 
         try:
             payload = {
-                "model": self.model,
-                "messages": [
+                "systemInstruction": {
+                    "parts": [
+                        {
+                            "text": (
+                                "You extract clothing care facts from text and images "
+                                "and return JSON only."
+                            )
+                        }
+                    ]
+                },
+                "contents": [
                     {
-                        "role": "system",
-                        "content": (
-                            "You extract clothing care facts from text and images "
-                            "and return JSON only."
-                        ),
-                    },
-                    {"role": "user", "content": _build_user_content(prompt, image_refs)},
+                        "role": "user",
+                        "parts": _build_gemini_parts(prompt, image_refs),
+                    }
                 ],
-                "temperature": temperature,
-                "response_format": {"type": "json_object"},
+                "generationConfig": {
+                    "temperature": temperature,
+                    "responseMimeType": "application/json",
+                },
             }
             request = urllib.request.Request(
                 endpoint,
                 data=json.dumps(payload).encode("utf-8"),
                 headers={
-                    "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",
+                    "x-goog-api-key": self.apikey,
                 },
                 method="POST",
             )
             with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
                 raw_text = response.read().decode("utf-8")
             raw: dict[str, Any] = json.loads(raw_text)
-            content = (
-                raw.get("choices", [{}])[0]
-                .get("message", {})
-                .get("content", "{}")
+            parts = (
+                raw.get("candidates", [{}])[0]
+                .get("content", {})
+                .get("parts", [])
+            )
+            content = "".join(
+                str(part.get("text", ""))
+                for part in parts
+                if isinstance(part, dict)
             )
             return LLMResponse(
-                text=content,
-                provider="openai-compatible",
+                text=content or "{}",
+                provider="gemini-v1beta",
                 model=self.model,
                 raw=raw,
             )
@@ -144,7 +147,7 @@ class OpenAICompatibleLLMClient:
         ) as exc:
             return LLMResponse(
                 text="{}",
-                provider="openai-compatible",
+                provider="gemini-v1beta",
                 model=self.model,
                 raw={"error": str(exc)},
             )
@@ -307,41 +310,31 @@ Extracted facts:
 """.strip()
 
 
-def _read_local_api_config() -> dict[str, str]:
-    config_path = Path(os.getenv("WASHMATE_CONFIG_FILE") or _DEFAULT_CONFIG_PATH)
+def _read_api_config() -> dict[str, str]:
+    config_path = _CONFIG_PATH
     if not config_path.is_file():
-        return {}
+        raise FileNotFoundError(f"Missing API config file: {config_path}")
     try:
         raw = json.loads(config_path.read_text(encoding="utf-8-sig"))
-    except (OSError, json.JSONDecodeError):
-        return {}
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON in {config_path}: {exc}") from exc
     if not isinstance(raw, dict):
-        return {}
+        raise ValueError(f"API config root must be an object: {config_path}")
     return {str(key): str(value) for key, value in raw.items() if value is not None}
 
 
-def create_default_llm_client() -> LLMClient:
-    """Create the default LLM client from runtime configuration."""
-    local_config = _read_local_api_config()
-    api_key = (
-        os.getenv("WASHMATE_API_KEY")
-        or os.getenv("OPENAI_API_KEY")
-        or local_config.get("api_key")
-    )
-    if not api_key:
-        return LocalNoopLLMClient()
+def _required_config_value(config: dict[str, str], key: str) -> str:
+    value = config.get(key, "").strip()
+    if not value:
+        raise ValueError(f"Missing required config/api_config.json field: {key}")
+    return value
 
-    return OpenAICompatibleLLMClient(
-        api_key=api_key,
-        base_url=os.getenv("WASHMATE_BASE_URL")
-        or os.getenv("OPENAI_BASE_URL")
-        or local_config.get("base_url")
-        or local_config.get("api_url")
-        or "https://api.openai.com/v1",
-        model=os.getenv("WASHMATE_MODEL")
-        or os.getenv("OPENAI_MODEL")
-        or local_config.get("model_name")
-        or local_config.get("model")
-        or "gpt-4o-mini",
-    )
 
+def create_configured_llm_client() -> LLMClient:
+    """Create the configured Gemini v1beta client from config/api_config.json."""
+    config = _read_api_config()
+    return GeminiV1BetaLLMClient(
+        apikey=_required_config_value(config, "apikey"),
+        base_url=_required_config_value(config, "baseUrl"),
+        model=_required_config_value(config, "model_name"),
+    )
