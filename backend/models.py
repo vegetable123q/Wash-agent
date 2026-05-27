@@ -94,6 +94,7 @@ class ClothingProfile:
     missing_fields: list[str] = field(default_factory=list)
     user_fill_suggestions: dict[str, str] = field(default_factory=dict)
     image_type: str = ""
+    care_symbols: dict[str, str] = field(default_factory=dict)
     material_evidence_level: str = "unknown"
     care_evidence_level: str = "unknown"
     recommended_wash: str = ""

@@ -90,6 +90,105 @@ _CARE_LABEL_ALIASES = {
     "平摊晾干": "flat_dry",
 }
 
+_CARE_SYMBOL_ALIASES = {
+    "wash_method": {
+        "machine_wash": "machine_wash",
+        "machine wash": "machine_wash",
+        "normal_wash": "machine_wash",
+        "hand_wash": "hand_wash_only",
+        "hand wash": "hand_wash_only",
+        "hand_wash_only": "hand_wash_only",
+        "do_not_wash": "do_not_wash",
+        "no wash": "do_not_wash",
+        "do not wash": "do_not_wash",
+    },
+    "wash_temperature": {
+        "cold": "cold",
+        "cold_wash": "cold",
+        "30": "30c",
+        "30c": "30c",
+        "30 c": "30c",
+        "30°c": "30c",
+        "30℃": "30c",
+        "40": "40c",
+        "40c": "40c",
+        "40 c": "40c",
+        "40°c": "40c",
+        "40℃": "40c",
+        "60": "60c",
+        "60c": "60c",
+        "60 c": "60c",
+        "60°c": "60c",
+        "60℃": "60c",
+        "95": "95c",
+        "95c": "95c",
+        "95 c": "95c",
+        "95°c": "95c",
+        "95℃": "95c",
+    },
+    "bleach": {
+        "allowed": "allowed",
+        "bleach_allowed": "allowed",
+        "do_not_bleach": "do_not_bleach",
+        "bleach": "do_not_bleach",
+        "no bleach": "do_not_bleach",
+        "non_chlorine_only": "non_chlorine_only",
+        "non chlorine only": "non_chlorine_only",
+    },
+    "tumble_dry": {
+        "allowed": "allowed",
+        "tumble_dry": "allowed",
+        "low_heat": "low_heat",
+        "low tumble dry": "low_heat",
+        "low_temperature": "low_heat",
+        "normal_heat": "normal_heat",
+        "medium_heat": "normal_heat",
+        "high_heat": "high_heat",
+        "do_not_tumble_dry": "do_not_tumble_dry",
+        "no tumble dry": "do_not_tumble_dry",
+    },
+    "iron": {
+        "low_heat": "low_heat",
+        "low iron": "low_heat",
+        "medium_heat": "medium_heat",
+        "medium iron": "medium_heat",
+        "high_heat": "high_heat",
+        "high iron": "high_heat",
+        "do_not_iron": "do_not_iron",
+        "no iron": "do_not_iron",
+    },
+    "dry_clean": {
+        "allowed": "allowed",
+        "dry_clean": "allowed",
+        "dry_clean_only": "dry_clean_only",
+        "do_not_dry_clean": "do_not_dry_clean",
+        "no dry clean": "do_not_dry_clean",
+    },
+    "natural_dry": {
+        "line_dry": "line_dry",
+        "line dry": "line_dry",
+        "flat_dry": "flat_dry",
+        "dry flat": "flat_dry",
+        "drip_dry": "drip_dry",
+        "drip dry": "drip_dry",
+        "shade_dry": "shade_dry",
+        "dry in shade": "shade_dry",
+    },
+}
+
+_CARE_SYMBOL_FORBIDDEN = {
+    ("wash_method", "hand_wash_only"): "hand_wash_only",
+    ("wash_method", "do_not_wash"): "do_not_wash",
+    ("wash_temperature", "cold"): "low_temperature_only",
+    ("wash_temperature", "30c"): "avoid_hot_water",
+    ("bleach", "do_not_bleach"): "do_not_bleach",
+    ("tumble_dry", "do_not_tumble_dry"): "do_not_tumble_dry",
+    ("iron", "do_not_iron"): "do_not_iron",
+    ("dry_clean", "do_not_dry_clean"): "do_not_dry_clean",
+    ("dry_clean", "dry_clean_only"): "dry_clean_only",
+    ("natural_dry", "flat_dry"): "flat_dry",
+}
+
 
 def _profile_id(source_text: str) -> str:
     digest = hashlib.sha1(source_text.encode("utf-8")).hexdigest()[:12]
@@ -183,6 +282,43 @@ def _normalize_care_labels(value: Any) -> list[str]:
             labels.append(label)
             seen.add(label)
     return labels
+
+
+def _canonical_care_symbol(category: str, value: Any) -> str:
+    token = str(value or "").strip().lower()
+    if not token:
+        return ""
+    if category == "wash_temperature":
+        token = token.replace("°", "").replace("℃", "c")
+        token = re.sub(r"\s+", "", token)
+    else:
+        token = re.sub(r"[\s\-]+", "_", token)
+    aliases = _CARE_SYMBOL_ALIASES.get(category, {})
+    if token in aliases:
+        return aliases[token]
+    return aliases.get(token.replace("_", " "), "")
+
+
+def _normalize_care_symbols(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    normalized: dict[str, str] = {}
+    for category, raw_value in value.items():
+        key = str(category).strip().lower()
+        if key not in _CARE_SYMBOL_ALIASES:
+            continue
+        symbol = _canonical_care_symbol(key, raw_value)
+        if symbol:
+            normalized[key] = symbol
+    return normalized
+
+
+def _care_forbidden_from_symbols(care_symbols: dict[str, str]) -> list[str]:
+    return [
+        forbidden
+        for item in care_symbols.items()
+        if (forbidden := _CARE_SYMBOL_FORBIDDEN.get(item))
+    ]
 
 
 def _unknown_risks() -> dict[str, RiskLevel]:
@@ -281,6 +417,17 @@ def _apply_manual_fields(
             profile.field_sources["care_forbidden"] = "manual_fields"
             applied = True
 
+    care_symbols = _normalize_care_symbols(manual_fields.get("care_symbols"))
+    if care_symbols:
+        profile.care_symbols.update(care_symbols)
+        _extend_unique(
+            profile.care_forbidden,
+            _care_forbidden_from_symbols(care_symbols),
+        )
+        profile.care_evidence_level = "visible"
+        profile.field_sources["care_symbols"] = "manual_fields"
+        applied = True
+
     risks = manual_fields.get("risks")
     if isinstance(risks, dict):
         profile.risks.update(
@@ -359,6 +506,7 @@ def _profile_from_llm(raw: ClothingInput, payload: dict[str, Any]) -> ClothingPr
             or ["LLM returned usable JSON"]
         ],
         image_type=_image_type(payload.get("image_type")),
+        care_symbols=_normalize_care_symbols(payload.get("care_symbols")),
         material_evidence_level=_evidence_level(
             payload.get("material_evidence_level")
         ),
@@ -370,6 +518,10 @@ def _profile_from_llm(raw: ClothingInput, payload: dict[str, Any]) -> ClothingPr
         },
         agent_trace=_string_list(payload.get("agent_trace")),
         extraction_status="llm_success",
+    )
+    _extend_unique(
+        profile.care_forbidden,
+        _care_forbidden_from_symbols(profile.care_symbols),
     )
     return _with_missing_fields(profile, llm_missing)
 
@@ -443,6 +595,19 @@ def _merge_inference_payload(
             profile.care_forbidden = care_forbidden
         profile.care_evidence_level = care_evidence
         profile.field_sources["care_forbidden"] = "care_inference"
+
+    care_symbols = _normalize_care_symbols(payload.get("care_symbols"))
+    if care_symbols:
+        for category, symbol in care_symbols.items():
+            if profile.care_evidence_level != "visible" or category not in profile.care_symbols:
+                profile.care_symbols[category] = symbol
+        _extend_unique(
+            profile.care_forbidden,
+            _care_forbidden_from_symbols(care_symbols),
+        )
+        if profile.care_evidence_level != "visible":
+            profile.care_evidence_level = care_evidence
+        profile.field_sources["care_symbols"] = "care_inference"
 
     risks = payload.get("risks")
     if isinstance(risks, dict):

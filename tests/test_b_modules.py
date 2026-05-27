@@ -392,6 +392,65 @@ class BModuleTests(unittest.TestCase):
             ],
         )
 
+    def test_care_symbols_capture_standard_wash_label_dimensions(self) -> None:
+        fake = ScriptedVisionLLMClient(
+            [
+                {"image_type": "care_label"},
+                {
+                    "name": "labeled shirt",
+                    "material_ratios": {"cotton": 1.0},
+                    "material_evidence_level": "visible",
+                    "colors": ["white"],
+                    "care_forbidden": [],
+                    "risks": {},
+                    "confidence": 0.8,
+                    "missing_fields": ["care_forbidden"],
+                },
+                {
+                    "care_symbols": {
+                        "wash_method": "machine wash",
+                        "wash_temperature": "30°C",
+                        "bleach": "bleach",
+                        "tumble_dry": "low tumble dry",
+                        "iron": "no iron",
+                        "dry_clean": "no dry clean",
+                        "unknown_category": "ignored",
+                    },
+                    "care_forbidden": ["wash_with_hot_water"],
+                    "care_evidence_level": "inferred",
+                    "risks": {},
+                    "confidence": 0.75,
+                    "missing_fields": [],
+                },
+            ]
+        )
+
+        profile = extract_clothing_info(
+            ClothingInput(name="labeled shirt", image_refs=["uploads/label.png"]),
+            llm_client=fake,
+        )
+
+        self.assertEqual(
+            profile.care_symbols,
+            {
+                "wash_method": "machine_wash",
+                "wash_temperature": "30c",
+                "bleach": "do_not_bleach",
+                "tumble_dry": "low_heat",
+                "iron": "do_not_iron",
+                "dry_clean": "do_not_dry_clean",
+            },
+        )
+        self.assertEqual(
+            profile.care_forbidden,
+            [
+                "avoid_hot_water",
+                "do_not_bleach",
+                "do_not_iron",
+                "do_not_dry_clean",
+            ],
+        )
+
     def test_openai_client_builds_multimodal_payload_without_network(self) -> None:
         import base64
         import tempfile
