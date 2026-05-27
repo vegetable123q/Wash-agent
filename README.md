@@ -126,6 +126,8 @@ Copy-Item config/api_config.example.json config/api_config.json
 
 ### 本地验证
 
+本项目统一使用 `uv` 管理依赖和运行命令，不使用 `requirements.txt`。
+
 ```powershell
 uv run python -m unittest tests.test_clothing_extraction -v
 uv run python -m unittest discover -v

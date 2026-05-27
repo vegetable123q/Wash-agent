@@ -85,6 +85,8 @@ Use:
 - `docs/` for design notes and implementation documentation.
 - `README.md` for stable user-facing setup and run instructions.
 
+When changing module structure, directory ownership, public interfaces, shared models, configuration behavior, or the main workflow, update `docs/structure_design.md` in the same change. Do not leave architecture docs behind the code.
+
 ## Import Rules
 
 - Import shared contracts from `backend.shared.models`.
