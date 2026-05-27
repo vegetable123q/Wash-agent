@@ -83,7 +83,6 @@ class GeminiV1BetaLLMClient:
     apikey: str
     base_url: str
     model: str
-    role: str
     timeout_seconds: float = 60.0
 
     def complete(
@@ -111,7 +110,7 @@ class GeminiV1BetaLLMClient:
                 },
                 "contents": [
                     {
-                        "role": self.role,
+                        "role": "user",
                         "parts": _build_gemini_parts(prompt, image_refs),
                     }
                 ],
@@ -421,8 +420,7 @@ def create_configured_llm_client() -> LLMClient:
     """Create the configured Gemini v1beta client from config/api_config.json."""
     config = _read_api_config()
     return GeminiV1BetaLLMClient(
-        apikey=_required_config_value(config, "api_key"),
-        base_url=_required_config_value(config, "base_url"),
+        apikey=_required_config_value(config, "apikey"),
+        base_url=_required_config_value(config, "baseUrl"),
         model=_required_config_value(config, "model_name"),
-        role=_required_config_value(config, "role"),
     )

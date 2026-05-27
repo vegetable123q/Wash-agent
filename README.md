@@ -120,31 +120,29 @@ wardrobe_item = build_wardrobe_item(profile)
 
 ### 大模型 API 配置
 
-`config/api_config.json` 不会被提交到 git，适合放自己的 API 地址和密钥。首次运行可以从桌面已有配置复制：
+推荐复制示例配置文件后本地修改：
 
 ```powershell
-Copy-Item D:\桌面\api_config.json config\api_config.json
+Copy-Item config/api_config.example.json config/api_config.json
 ```
 
-仓库只提交 `config/api_config.example.json`，字段结构如下。除 `api_key` 本地填写外，其余字段保持团队统一的 Gemini 访问方式：
+`config/api_config.json` 不会被提交到 git，适合放自己的 API 地址和密钥：
 
 ```json
 {
-  "base_url": "https://rjmodel.rjupc.com/v1beta",
-  "api_key": "",
-  "model_name": "gemini-3.1-pro-preview",
-  "role": "user"
+  "baseUrl": "https://modelhub.ailemac.com/v1beta",
+  "apikey": "sk-your-api-key-here",
+  "model_name": "gemini-3.1-pro-preview"
 }
 ```
 
 字段说明：
 
-- `base_url`：课程统一的 Gemini API 根地址，客户端会请求 `models/{model_name}:generateContent`。
-- `api_key`：个人 API key，只放在本地 `config/api_config.json`。
-- `model_name`：统一模型名。
-- `role`：Gemini `contents` 中使用的角色，通常为 `user`。
+- `baseUrl`：ModelHub / Gemini v1beta 根地址，当前固定使用 `https://modelhub.ailemac.com/v1beta`。
+- `apikey`：ModelHub API key。
+- `model_name`：模型名。
 
-客户端只读取 `config/api_config.json`，不读取环境变量，也不使用其他字段名。缺少 `base_url`、`api_key`、`model_name` 或 `role` 时会显式报错。
+客户端只读取 `config/api_config.json`，不读取环境变量，也不使用其他字段名。缺少 `baseUrl`、`apikey` 或 `model_name` 时会显式报错。
 
 ### 本地验证
 

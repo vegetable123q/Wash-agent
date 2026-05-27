@@ -665,9 +665,8 @@ class ClothingExtractionTests(unittest.TestCase):
 
         client = GeminiV1BetaLLMClient(
             apikey="test-key",
-            base_url="https://rjmodel.rjupc.com/v1beta",
+            base_url="https://modelhub.ailemac.com/v1beta",
             model="gemini-3.1-pro-preview",
-            role="user",
         )
 
         with patch("urllib.request.urlopen", fake_urlopen):
@@ -675,7 +674,7 @@ class ClothingExtractionTests(unittest.TestCase):
 
         self.assertEqual(
             captured["url"],
-            "https://rjmodel.rjupc.com/v1beta/models/"
+            "https://modelhub.ailemac.com/v1beta/models/"
             "gemini-3.1-pro-preview:generateContent",
         )
         self.assertEqual(captured["headers"]["X-goog-api-key"], "test-key")
@@ -712,9 +711,8 @@ class ClothingExtractionTests(unittest.TestCase):
             image_path.write_bytes(base64.b64decode("iVBORw0KGgo="))
             client = GeminiV1BetaLLMClient(
                 apikey="test-key",
-                base_url="https://rjmodel.rjupc.com/v1beta",
+                base_url="https://modelhub.ailemac.com/v1beta",
                 model="gemini-3.1-pro-preview",
-                role="user",
             )
 
             with patch("urllib.request.urlopen", fake_urlopen):
@@ -839,10 +837,9 @@ class ClothingExtractionTests(unittest.TestCase):
             config_path.write_text(
                 json.dumps(
                     {
-                        "base_url": "https://rjmodel.rjupc.com/v1beta",
-                        "api_key": "configured-test-key",
+                        "baseUrl": "https://modelhub.ailemac.com/v1beta",
+                        "apikey": "configured-test-key",
                         "model_name": "gemini-3.1-pro-preview",
-                        "role": "user",
                     }
                 ),
                 encoding="utf-8",
@@ -851,11 +848,10 @@ class ClothingExtractionTests(unittest.TestCase):
                 client = create_configured_llm_client()
 
         self.assertEqual(client.apikey, "configured-test-key")
-        self.assertEqual(client.base_url, "https://rjmodel.rjupc.com/v1beta")
+        self.assertEqual(client.base_url, "https://modelhub.ailemac.com/v1beta")
         self.assertEqual(client.model, "gemini-3.1-pro-preview")
-        self.assertEqual(client.role, "user")
 
-    def test_api_config_example_uses_desktop_field_names_with_blank_key(self) -> None:
+    def test_api_config_example_uses_modelhub_gemini_fields(self) -> None:
         from pathlib import Path
 
         example = json.loads(
@@ -863,15 +859,14 @@ class ClothingExtractionTests(unittest.TestCase):
         )
 
         self.assertEqual(
-            example["base_url"],
-            "https://rjmodel.rjupc.com/v1beta",
+            example["baseUrl"],
+            "https://modelhub.ailemac.com/v1beta",
         )
-        self.assertEqual(example["api_key"], "")
+        self.assertEqual(example["apikey"], "sk-your-api-key-here")
         self.assertEqual(example["model_name"], "gemini-3.1-pro-preview")
-        self.assertEqual(example["role"], "user")
-        self.assertEqual(set(example), {"base_url", "api_key", "model_name", "role"})
+        self.assertEqual(set(example), {"baseUrl", "apikey", "model_name"})
 
-    def test_create_configured_llm_client_requires_api_key(self) -> None:
+    def test_create_configured_llm_client_requires_apikey(self) -> None:
         import tempfile
         from pathlib import Path
 
@@ -880,30 +875,29 @@ class ClothingExtractionTests(unittest.TestCase):
             config_path.write_text(
                 json.dumps(
                     {
-                        "base_url": "https://rjmodel.rjupc.com/v1beta",
-                        "api_key": "",
+                        "baseUrl": "https://modelhub.ailemac.com/v1beta",
+                        "apikey": "",
                         "model_name": "gemini-3.1-pro-preview",
-                        "role": "user",
                     }
                 ),
                 encoding="utf-8",
             )
             with patch("backend.clothing_extraction.llm_client._CONFIG_PATH", config_path):
-                with self.assertRaisesRegex(ValueError, "api_key"):
+                with self.assertRaisesRegex(ValueError, "apikey"):
                     create_configured_llm_client()
 
-    def test_create_configured_llm_client_requires_base_url_and_model_name(self) -> None:
+    def test_create_configured_llm_client_requires_baseurl_and_model_name(self) -> None:
         import tempfile
         from pathlib import Path
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             config_path = Path(tmp_dir) / "api_config.json"
             config_path.write_text(
-                json.dumps({"api_key": "configured-test-key"}),
+                json.dumps({"apikey": "configured-test-key"}),
                 encoding="utf-8",
             )
             with patch("backend.clothing_extraction.llm_client._CONFIG_PATH", config_path):
-                with self.assertRaisesRegex(ValueError, "base_url"):
+                with self.assertRaisesRegex(ValueError, "baseUrl"):
                     create_configured_llm_client()
 
 
