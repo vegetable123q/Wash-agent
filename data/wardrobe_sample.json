@@ -1,4 +1,125 @@
 {
-  "items": []
+  "items": [
+    {
+      "profile": {
+        "item_id": "wm-white-tee-001",
+        "name": "白色纯棉 T 恤",
+        "user_note": "明天要穿",
+        "material_ratios": {
+          "cotton": 1.0
+        },
+        "colors": ["white", "light"],
+        "care_forbidden": [],
+        "risks": {
+          "shrink": "low",
+          "color_bleed": "low"
+        },
+        "confidence": 0.9
+      },
+      "wear_count_since_wash": 2,
+      "preferred_method": "machine_wash",
+      "wash_history": [
+        {
+          "washed_at": "2026-05-20",
+          "method": "machine_wash",
+          "notes": "标准洗，无异常",
+          "issues": []
+        }
+      ],
+      "user_notes": ["常穿基础款"]
+    },
+    {
+      "profile": {
+        "item_id": "wm-black-jeans-001",
+        "name": "黑色牛仔裤",
+        "user_note": "少洗，怕掉色",
+        "material_ratios": {
+          "denim": 1.0
+        },
+        "colors": ["black", "dark"],
+        "care_forbidden": ["wash_separately"],
+        "risks": {
+          "color_bleed": "high",
+          "shrink": "medium"
+        },
+        "confidence": 0.86
+      },
+      "wear_count_since_wash": 3,
+      "preferred_method": "machine_wash",
+      "wash_history": [],
+      "user_notes": ["新深色衣物，前几次单独洗"]
+    },
+    {
+      "profile": {
+        "item_id": "wm-gray-wool-001",
+        "name": "浅灰色羊毛衫",
+        "user_note": "轻柔处理，不进共享洗衣机",
+        "material_ratios": {
+          "wool": 0.9,
+          "nylon": 0.1
+        },
+        "colors": ["gray", "light"],
+        "care_forbidden": ["hand_wash_only", "do_not_tumble_dry"],
+        "risks": {
+          "shrink": "high",
+          "deform": "high",
+          "pilling": "medium"
+        },
+        "confidence": 0.82
+      },
+      "wear_count_since_wash": 4,
+      "preferred_method": "hand_wash",
+      "wash_history": [
+        {
+          "washed_at": "2026-05-10",
+          "method": "hand_wash",
+          "notes": "平铺晾干",
+          "issues": ["pilling"]
+        }
+      ],
+      "user_notes": ["上次有轻微起球"]
+    },
+    {
+      "profile": {
+        "item_id": "wm-sports-tee-001",
+        "name": "运动速干短袖",
+        "user_note": "运动后穿过",
+        "material_ratios": {
+          "polyester": 0.92,
+          "spandex": 0.08
+        },
+        "colors": ["black", "dark"],
+        "care_forbidden": [],
+        "risks": {
+          "odor": "medium"
+        },
+        "confidence": 0.88
+      },
+      "wear_count_since_wash": 1,
+      "preferred_method": "machine_wash",
+      "wash_history": [],
+      "user_notes": ["运动后及时洗"]
+    },
+    {
+      "profile": {
+        "item_id": "wm-bedding-001",
+        "name": "床单被套",
+        "user_note": "建议大筒或大件模式",
+        "material_ratios": {
+          "cotton": 1.0
+        },
+        "colors": ["white", "light"],
+        "care_forbidden": [],
+        "risks": {
+          "shrink": "low"
+        },
+        "confidence": 0.8
+      },
+      "wear_count_since_wash": 1,
+      "preferred_method": "machine_wash",
+      "wash_history": [],
+      "user_notes": []
+    }
+  ]
 }
 
