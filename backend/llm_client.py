@@ -33,10 +33,10 @@ class LLMClient(Protocol):
 
 
 @dataclass(slots=True)
-class LocalFallbackLLMClient:
-    """No-network client used when no API key is configured."""
+class LocalNoopLLMClient:
+    """No-network client used to report that no API key is configured."""
 
-    provider: str = "local-fallback"
+    provider: str = "local-noop"
     model: str = "rule-based"
 
     def complete(
@@ -46,7 +46,7 @@ class LocalFallbackLLMClient:
         temperature: float = 0.0,
         image_refs: list[str] | None = None,
     ) -> LLMResponse:
-        """Return empty JSON so callers can fall back to deterministic rules."""
+        """Return empty JSON so callers can report LLM unavailability."""
         return LLMResponse(text="{}", provider=self.provider, model=self.model)
 
 
@@ -169,7 +169,7 @@ def build_extraction_prompt(source_text: str) -> str:
 规则：
 - material_ratios 使用英文小写材质键，比例为 0 到 1；不知道比例时给合理估计。
 - colors 使用英文小写颜色词；深色可用 "dark"，浅色可用 "light"。
-- care_forbidden 使用英文 snake_case，例如 do_not_bleach、do_not_tumble_dry、hand_wash_only、dry_clean_only。
+- care_forbidden 只能使用这些 canonical labels：do_not_bleach, do_not_tumble_dry, do_not_wash, hand_wash_only, dry_clean_only, do_not_dry_clean, do_not_iron, do_not_machine_wash, avoid_hot_water, cold_wash, low_temperature_only, wash_separately, use_laundry_bag, gentle_cycle, air_dry, flat_dry；不要输出其他标签。
 - risks 的等级只能是 low、medium、high、unknown。
 - confidence 为 0 到 1。
 - 如果输入包含衣服照片、吊牌照片或淘宝/商品页截图，请同时读取图片中的款式、颜色、材质成分、洗护图标和商品页文案。
@@ -182,11 +182,123 @@ def build_extraction_prompt(source_text: str) -> str:
 """.strip()
 
 
+def build_image_router_prompt(source_text: str) -> str:
+    """Build the first-stage prompt that classifies what kind of image was sent."""
+    return f"""
+[ImageRouterAgent]
+You only classify the image/source type. Do not infer material or care rules.
+Return JSON only:
+{{
+  "image_type": "garment_photo|care_label|tag_photo|product_page|mixed|low_quality|unknown",
+  "confidence": 0.0,
+  "source_notes": ["short reason"]
+}}
+
+Definitions:
+- garment_photo: ordinary clothing photo where fabric shape/color is visible.
+- care_label or tag_photo: textile label, hang tag, washing symbols, or composition text.
+- product_page: e-commerce or product detail screenshot with marketing/spec text.
+- mixed: multiple useful regions/types in one image.
+- low_quality: too blurry/cropped/dark for reliable extraction.
+
+Input/source context:
+{source_text}
+""".strip()
+
+
+def build_typed_extraction_prompt(source_text: str, image_type: str) -> str:
+    """Build the second-stage prompt specialized for the routed image type."""
+    type_rules = {
+        "care_label": (
+            "Prioritize OCR, fiber composition, wash care symbols, and exact visible text. "
+            "Only mark material/care evidence as visible when the label explicitly shows it. "
+            "Decode care symbols carefully."
+        ),
+        "tag_photo": (
+            "Prioritize OCR from hang tags, product cards, and label text. Extract exact "
+            "composition and care symbols when visible."
+        ),
+        "product_page": (
+            "Extract product title, visible material copy, color, and care copy. Ignore "
+            "shop name, price, links, promotions, and recommendations."
+        ),
+        "garment_photo": (
+            "Extract visual fabric cues, garment type, colors, prints, coatings, knits, "
+            "denim, padding, and contrast panels. Do not pretend inferred details are visible."
+        ),
+        "mixed": (
+            "Separate visible regions mentally: product text, care label/tag, and garment "
+            "photo. Extract visible facts from each region without mixing them."
+        ),
+        "low_quality": (
+            "Extract only high-confidence visual facts. Mark unclear material and care as "
+            "missing for the inference agent."
+        ),
+    }
+    guidance = type_rules.get(image_type, type_rules["garment_photo"])
+    return f"""
+[TypedExtractionAgent]
+Image type: {image_type}
+Responsibility: extract visible facts for this image type. Do not do best-effort completion.
+Specialized rules: {guidance}
+
+Return JSON only:
+{{
+  "name": "clothing name",
+  "material_ratios": {{"cotton": 0.8, "polyester": 0.2}},
+  "material_evidence_level": "visible|unknown",
+  "colors": ["black", "white"],
+  "care_forbidden": ["do_not_bleach", "do_not_tumble_dry"],
+  "care_evidence_level": "visible|unknown",
+  "risks": {{"shrink": "low|medium|high|unknown", "color_bleed": "low|medium|high|unknown", "deform": "low|medium|high|unknown", "pilling": "low|medium|high|unknown", "dryer_damage": "low|medium|high|unknown"}},
+  "confidence": 0.0,
+  "source_notes": ["what was visible"],
+  "missing_fields": ["material_ratios", "care_forbidden"]
+}}
+Allowed care_forbidden labels: do_not_bleach, do_not_tumble_dry, do_not_wash, hand_wash_only, dry_clean_only, do_not_dry_clean, do_not_iron, do_not_machine_wash, avoid_hot_water, cold_wash, low_temperature_only, wash_separately, use_laundry_bag, gentle_cycle, air_dry, flat_dry. Omit unknown labels.
+
+Input/source context:
+{source_text}
+""".strip()
+
+
+def build_care_inference_prompt(
+    extracted_payload: dict[str, Any],
+    image_type: str,
+) -> str:
+    """Build the third-stage prompt that fills gaps with labeled inference."""
+    extracted_json = json.dumps(extracted_payload, ensure_ascii=False, sort_keys=True)
+    return f"""
+[CareInferenceAgent]
+Responsibility: fill missing material/care/risk fields with best-effort inference.
+Use the extracted facts below; do not override fields whose evidence level is visible.
+Every inferred or uncertain value must be marked with evidence level inferred or uncertain.
+
+Return JSON only:
+{{
+  "material_ratios": {{"cotton": 0.8, "polyester": 0.2}},
+  "material_evidence_level": "inferred|uncertain|visible",
+  "care_forbidden": ["do_not_bleach", "do_not_tumble_dry", "wash_separately", "use_laundry_bag"],
+  "care_evidence_level": "inferred|uncertain|visible",
+  "recommended_wash": "short practical Chinese wash advice",
+  "risks": {{"shrink": "low|medium|high", "color_bleed": "low|medium|high", "deform": "low|medium|high", "pilling": "low|medium|high", "dryer_damage": "low|medium|high"}},
+  "confidence": 0.0,
+  "source_notes": ["why the inference is reasonable"],
+  "missing_fields": []
+}}
+Allowed care_forbidden labels: do_not_bleach, do_not_tumble_dry, do_not_wash, hand_wash_only, dry_clean_only, do_not_dry_clean, do_not_iron, do_not_machine_wash, avoid_hot_water, cold_wash, low_temperature_only, wash_separately, use_laundry_bag, gentle_cycle, air_dry, flat_dry. Omit unknown labels.
+
+Image type: {image_type}
+Extracted facts:
+{extracted_json}
+""".strip()
+
+
 def create_default_llm_client() -> LLMClient:
     """Create the default LLM client from runtime configuration."""
     api_key = os.getenv("WASHMATE_API_KEY") or os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return LocalFallbackLLMClient()
+        return LocalNoopLLMClient()
 
     return OpenAICompatibleLLMClient(
         api_key=api_key,

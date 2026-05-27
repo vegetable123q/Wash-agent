@@ -34,8 +34,12 @@ B 模块只负责“数据获取与结构化”，不负责衣柜存储、机器
 - `missing_fields`
 - `user_fill_suggestions`
 - `source_notes`
+- `extraction_status`
+- `extraction_error`
 
 如果图片或文字中缺少关键信息，模块会返回 `missing_fields` 和 `user_fill_suggestions`，用于前端提示用户补拍吊牌或手动填写。
+
+如果 LLM 不可用、返回空 JSON 或返回非 JSON，B 模块不会再使用规则兜底生成材质、颜色或风险。此时核心字段保持空值或 `unknown`，并通过 `extraction_status` / `extraction_error` 标明失败原因，避免把规则猜测误认为大模型结果。
 
 ### 接入 C 模块
 
@@ -58,7 +62,7 @@ wardrobe_item = build_wardrobe_item(profile)
 
 ### 大模型 API 配置
 
-未配置 API key 时，B 模块会自动使用本地规则兜底，不会因为网络或密钥缺失导致流程中断。
+未配置 API key 时，B 模块会返回 `extraction_status="llm_unavailable"`，不会生成规则猜测结果。用户手填字段仍会被保留，因为它们来自用户明确输入。
 
 可选环境变量：
 

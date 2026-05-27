@@ -80,7 +80,7 @@ Wash-agent/
 
 应该做：
 
-- `llm_client.py` 负责统一 LLM 调用接口、失败兜底和响应格式。
+- `llm_client.py` 负责统一 LLM 调用接口和响应格式；未配置 API key 时只返回空响应标记，不生成规则猜测结果。
 - `product_info.py` 负责商品名、店铺名、吊牌文字、用户描述等原始信息的补全和归一化。
 - `clothing_extractor.py` 负责从归一化输入中抽取材质、颜色、洗护禁忌、风险和置信度。
 
@@ -218,11 +218,12 @@ Wash-agent/
 11. `report_generator.generate_report()` 输出 `WashReport`。
 12. `app.py` 渲染方案和报告。
 
-## 6. 错误与兜底
+## 6. 错误与可用性边界
 
-第一阶段保留以下兜底边界：
+第一阶段保留以下错误边界：
 
-- LLM 失败：`clothing_extractor` 返回低置信度 `ClothingProfile`，页面提示用户手动确认。
+- LLM 失败：`clothing_extractor` 返回空核心字段、`unknown` 风险、`extraction_status` 和 `extraction_error`，页面提示用户重试或手动填写。
+- LLM 返回空 JSON 或非 JSON：`clothing_extractor` 不做规则兜底，明确标记 `llm_empty_response` 或 `llm_invalid_json`。
 - 商品信息不足：`product_info` 保留原始输入，不阻断流程。
 - 机器接口失败：`laundry_machine_api` 使用 `data/machines_mock.json`。
 - 天气信息缺失：`campus_context` 使用用户手动输入或默认未知状态。

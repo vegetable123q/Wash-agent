@@ -93,6 +93,14 @@ class ClothingProfile:
     source_notes: list[str] = field(default_factory=list)
     missing_fields: list[str] = field(default_factory=list)
     user_fill_suggestions: dict[str, str] = field(default_factory=dict)
+    image_type: str = ""
+    material_evidence_level: str = "unknown"
+    care_evidence_level: str = "unknown"
+    recommended_wash: str = ""
+    field_sources: dict[str, str] = field(default_factory=dict)
+    agent_trace: list[str] = field(default_factory=list)
+    extraction_status: str = "unknown"
+    extraction_error: str = ""
 
 
 @dataclass(slots=True)

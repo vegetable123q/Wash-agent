@@ -7,49 +7,87 @@ import json
 import re
 from typing import Any
 
-from .llm_client import LLMClient, build_extraction_prompt, create_default_llm_client
+from .llm_client import (
+    LLMClient,
+    build_care_inference_prompt,
+    build_extraction_prompt,
+    build_image_router_prompt,
+    build_typed_extraction_prompt,
+    create_default_llm_client,
+)
 from .models import ClothingInput, ClothingProfile, RiskLevel, WardrobeItem
 from .product_info import enrich_product_info
 
-
-_MATERIAL_ALIASES: dict[str, tuple[str, ...]] = {
-    "cotton": ("棉", "cotton"),
-    "polyester": ("聚酯", "涤纶", "polyester"),
-    "wool": ("羊毛", "wool"),
-    "silk": ("真丝", "蚕丝", "silk"),
-    "spandex": ("氨纶", "弹性纤维", "spandex", "elastane"),
-    "nylon": ("锦纶", "尼龙", "nylon"),
-    "linen": ("亚麻", "linen"),
-    "down": ("羽绒", "down"),
-    "denim": ("牛仔", "denim"),
-}
-
-_COLOR_ALIASES: dict[str, tuple[str, ...]] = {
-    "white": ("白", "white"),
-    "black": ("黑", "black"),
-    "gray": ("灰", "grey", "gray"),
-    "blue": ("蓝", "blue"),
-    "red": ("红", "red"),
-    "green": ("绿", "green"),
-    "yellow": ("黄", "yellow"),
-    "pink": ("粉", "pink"),
-    "dark": ("深色", "深", "dark"),
-    "light": ("浅色", "浅", "light"),
-}
-
-_CARE_FORBIDDEN_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("do_not_bleach", ("不可漂白", "不能漂白", "no bleach")),
-    ("do_not_tumble_dry", ("不可烘干", "不能烘干", "禁止烘干", "no tumble dry")),
-    ("do_not_wash", ("不可水洗", "不能水洗", "do not wash")),
-    ("hand_wash_only", ("手洗", "hand wash")),
-    ("dry_clean_only", ("干洗", "dry clean")),
-    ("low_temperature_only", ("低温", "冷水", "low heat", "cold wash")),
-)
 
 _USER_FILL_SUGGESTIONS = {
     "material_ratios": "请补充吊牌材质成分，例如 棉 80%、聚酯纤维 20%。",
     "colors": "请补充衣物主色和深浅，例如 black、blue、dark。",
     "care_forbidden": "请补充洗护禁忌，例如 不可漂白、不可烘干、只能手洗。",
+}
+
+_CANONICAL_CARE_LABELS = {
+    "air_dry",
+    "avoid_hot_water",
+    "cold_wash",
+    "do_not_bleach",
+    "do_not_dry_clean",
+    "do_not_iron",
+    "do_not_machine_wash",
+    "do_not_tumble_dry",
+    "do_not_wash",
+    "dry_clean_only",
+    "flat_dry",
+    "gentle_cycle",
+    "hand_wash_only",
+    "low_temperature_only",
+    "use_laundry_bag",
+    "wash_separately",
+}
+
+_CARE_LABEL_ALIASES = {
+    "bleach": "do_not_bleach",
+    "no_bleach": "do_not_bleach",
+    "no bleach": "do_not_bleach",
+    "not_bleach": "do_not_bleach",
+    "不可漂白": "do_not_bleach",
+    "tumble_dry": "do_not_tumble_dry",
+    "no_tumble_dry": "do_not_tumble_dry",
+    "no tumble dry": "do_not_tumble_dry",
+    "not_tumble_dry": "do_not_tumble_dry",
+    "不可烘干": "do_not_tumble_dry",
+    "不能烘干": "do_not_tumble_dry",
+    "wash_with_hot_water": "avoid_hot_water",
+    "hot_wash": "avoid_hot_water",
+    "hot water": "avoid_hot_water",
+    "avoid hot water": "avoid_hot_water",
+    "避免热水": "avoid_hot_water",
+    "cold water": "cold_wash",
+    "cold wash": "cold_wash",
+    "laundry_bag": "use_laundry_bag",
+    "use laundry bag": "use_laundry_bag",
+    "use_laundry_net": "use_laundry_bag",
+    "洗衣袋": "use_laundry_bag",
+    "separate_wash": "wash_separately",
+    "wash separately": "wash_separately",
+    "separate colors": "wash_separately",
+    "分开洗": "wash_separately",
+    "gentle wash": "gentle_cycle",
+    "gentle_cycle_only": "gentle_cycle",
+    "hand wash": "hand_wash_only",
+    "handwash": "hand_wash_only",
+    "手洗": "hand_wash_only",
+    "no iron": "do_not_iron",
+    "no_iron": "do_not_iron",
+    "不可熨烫": "do_not_iron",
+    "no dry clean": "do_not_dry_clean",
+    "no_dry_clean": "do_not_dry_clean",
+    "不可干洗": "do_not_dry_clean",
+    "no machine wash": "do_not_machine_wash",
+    "no_machine_wash": "do_not_machine_wash",
+    "不可机洗": "do_not_machine_wash",
+    "flat dry": "flat_dry",
+    "dry flat": "flat_dry",
+    "平摊晾干": "flat_dry",
 }
 
 
@@ -58,21 +96,23 @@ def _profile_id(source_text: str) -> str:
     return f"cloth-{digest}"
 
 
-def _parse_json_object(text: str) -> dict[str, Any]:
+def _parse_json_object(text: str) -> tuple[dict[str, Any], str]:
     stripped = text.strip()
     if not stripped:
-        return {}
+        return {}, "Empty LLM response"
     fence_match = re.search(r"```(?:json)?\s*(.*?)```", stripped, flags=re.S | re.I)
     if fence_match:
         stripped = fence_match.group(1).strip()
     object_match = re.search(r"\{.*\}", stripped, flags=re.S)
     if not object_match:
-        return {}
+        return {}, "No JSON object found in LLM response"
     try:
         parsed = json.loads(object_match.group(0))
-    except json.JSONDecodeError:
-        return {}
-    return parsed if isinstance(parsed, dict) else {}
+    except json.JSONDecodeError as exc:
+        return {}, f"Invalid JSON returned by LLM: {exc}"
+    if not isinstance(parsed, dict):
+        return {}, "LLM JSON root is not an object"
+    return parsed, ""
 
 
 def _normalize_ratio(value: Any) -> float | None:
@@ -87,65 +127,6 @@ def _normalize_ratio(value: Any) -> float | None:
     return min(ratio, 1.0)
 
 
-def _extract_materials(source_text: str) -> dict[str, float]:
-    materials: dict[str, float] = {}
-    lower = source_text.lower()
-
-    for material, aliases in _MATERIAL_ALIASES.items():
-        for alias in aliases:
-            escaped = re.escape(alias)
-            patterns = (
-                rf"{escaped}(?:纤维)?\s*(\d+(?:\.\d+)?)\s*%?",
-                rf"{escaped}[^0-9%]{{0,4}}(\d+(?:\.\d+)?)\s*%?",
-                rf"(\d+(?:\.\d+)?)\s*%?\s*{escaped}",
-            )
-            for pattern in patterns:
-                match = re.search(pattern, lower, flags=re.I)
-                if match:
-                    ratio = _normalize_ratio(match.group(1))
-                    if ratio is not None:
-                        materials[material] = ratio
-                        break
-            if material in materials:
-                break
-        if material in materials:
-            continue
-        if any(alias.lower() in lower for alias in aliases):
-            materials[material] = 0.6 if "混纺" in source_text and material == "cotton" else 1.0
-
-    if "混纺" in source_text and materials == {"cotton": 0.6}:
-        materials["polyester"] = 0.4
-
-    total = sum(materials.values())
-    if total > 1.05:
-        materials = {key: round(value / total, 3) for key, value in materials.items()}
-    return materials
-
-
-def _extract_colors(source_text: str) -> list[str]:
-    color_source = re.sub(
-        r"不可漂白|不能漂白|禁止漂白|不要漂白|漂白|no bleach",
-        " ",
-        source_text,
-        flags=re.I,
-    )
-    lower = color_source.lower()
-    colors: list[str] = []
-    for color, aliases in _COLOR_ALIASES.items():
-        if any(alias.lower() in lower for alias in aliases):
-            colors.append(color)
-    return colors
-
-
-def _extract_care_forbidden(source_text: str) -> list[str]:
-    lower = source_text.lower()
-    forbidden: list[str] = []
-    for code, aliases in _CARE_FORBIDDEN_PATTERNS:
-        if any(alias.lower() in lower for alias in aliases):
-            forbidden.append(code)
-    return forbidden
-
-
 def _risk_level(value: Any) -> RiskLevel:
     if isinstance(value, RiskLevel):
         return value
@@ -155,36 +136,63 @@ def _risk_level(value: Any) -> RiskLevel:
         return RiskLevel.UNKNOWN
 
 
-def _extract_risks(source_text: str) -> dict[str, RiskLevel]:
-    text = source_text.lower()
-    risks = {
+def _evidence_level(value: Any) -> str:
+    normalized = str(value or "unknown").strip().lower()
+    if normalized in {"visible", "inferred", "uncertain", "unknown"}:
+        return normalized
+    return "unknown"
+
+
+def _image_type(value: Any) -> str:
+    normalized = str(value or "unknown").strip().lower()
+    allowed = {
+        "garment_photo",
+        "care_label",
+        "tag_photo",
+        "product_page",
+        "mixed",
+        "low_quality",
+        "unknown",
+    }
+    return normalized if normalized in allowed else "unknown"
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if str(item).strip()]
+
+
+def _canonical_care_label(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    normalized = re.sub(r"[\s\-]+", "_", raw.lower())
+    spaced = normalized.replace("_", " ")
+    if normalized in _CANONICAL_CARE_LABELS:
+        return normalized
+    return _CARE_LABEL_ALIASES.get(raw.lower()) or _CARE_LABEL_ALIASES.get(spaced, "")
+
+
+def _normalize_care_labels(value: Any) -> list[str]:
+    labels: list[str] = []
+    seen: set[str] = set()
+    for item in _string_list(value):
+        label = _canonical_care_label(item)
+        if label and label not in seen:
+            labels.append(label)
+            seen.add(label)
+    return labels
+
+
+def _unknown_risks() -> dict[str, RiskLevel]:
+    return {
         "shrink": RiskLevel.UNKNOWN,
         "color_bleed": RiskLevel.UNKNOWN,
         "deform": RiskLevel.UNKNOWN,
         "pilling": RiskLevel.UNKNOWN,
         "dryer_damage": RiskLevel.UNKNOWN,
     }
-
-    if any(word in source_text for word in ("缩水", "缩小")) or "shrink" in text:
-        risks["shrink"] = RiskLevel.HIGH
-    elif any(word in source_text for word in ("棉", "羊毛", "真丝")):
-        risks["shrink"] = RiskLevel.MEDIUM
-
-    if any(word in source_text for word in ("掉色", "褪色", "串色", "深色", "牛仔")):
-        risks["color_bleed"] = RiskLevel.HIGH
-
-    if any(word in source_text for word in ("变形", "拉伸", "羊毛", "真丝", "针织")):
-        risks["deform"] = RiskLevel.HIGH
-
-    if any(word in source_text for word in ("起球", "毛球", "羊毛", "混纺")):
-        risks["pilling"] = RiskLevel.MEDIUM
-
-    if any(word in source_text for word in ("高温烘干", "不可烘干", "不能烘干", "烘坏")):
-        risks["dryer_damage"] = RiskLevel.HIGH
-    elif any(word in source_text for word in ("棉", "羊毛", "真丝")):
-        risks["dryer_damage"] = RiskLevel.MEDIUM
-
-    return risks
 
 
 def _missing_fields_for_profile(profile: ClothingProfile) -> list[str]:
@@ -249,6 +257,8 @@ def _apply_manual_fields(
         }
         if normalized:
             profile.material_ratios = normalized
+            profile.material_evidence_level = "visible"
+            profile.field_sources["material_ratios"] = "manual_fields"
             applied = True
 
     colors = manual_fields.get("colors")
@@ -264,13 +274,11 @@ def _apply_manual_fields(
 
     care_forbidden = manual_fields.get("care_forbidden")
     if isinstance(care_forbidden, list):
-        normalized_forbidden = [
-            str(item)
-            for item in care_forbidden
-            if str(item).strip()
-        ]
+        normalized_forbidden = _normalize_care_labels(care_forbidden)
         if normalized_forbidden:
             profile.care_forbidden = normalized_forbidden
+            profile.care_evidence_level = "visible"
+            profile.field_sources["care_forbidden"] = "manual_fields"
             applied = True
 
     risks = manual_fields.get("risks")
@@ -286,37 +294,27 @@ def _apply_manual_fields(
     return profile
 
 
-def _fallback_profile(raw: ClothingInput, notes: list[str]) -> ClothingProfile:
-    source_text = raw.extra.get("normalized_source_text") or "\n".join(
-        part
-        for part in (raw.name, raw.shop_name, raw.tag_text, raw.user_description)
-        if part
-    )
-    materials = _extract_materials(source_text)
-    colors = _extract_colors(source_text)
-    care_forbidden = _extract_care_forbidden(source_text)
-    risks = _extract_risks(source_text)
-
-    known_fields = sum(bool(value) for value in (materials, colors, care_forbidden))
-    confidence = min(0.72, 0.35 + known_fields * 0.12)
-
+def _empty_profile(
+    raw: ClothingInput,
+    *,
+    extraction_status: str,
+    extraction_error: str = "",
+    notes: list[str] | None = None,
+) -> ClothingProfile:
+    source_text = raw.extra.get("normalized_source_text") or raw.name
     source_notes = list(raw.extra.get("source_notes", []))
-    source_notes.extend(notes)
-    if not materials:
-        source_notes.append("material not found by rule fallback")
-
+    source_notes.extend(notes or [])
     return ClothingProfile(
         item_id=_profile_id(source_text or raw.name),
         name=raw.name or "未命名衣物",
         user_note=str(
             raw.user_note or raw.extra.get("user_note") or raw.user_description or ""
         ).strip(),
-        material_ratios=materials,
-        colors=colors,
-        care_forbidden=care_forbidden,
-        risks=risks,
-        confidence=round(confidence, 2),
+        risks=_unknown_risks(),
+        confidence=0.0,
         source_notes=source_notes,
+        extraction_status=extraction_status,
+        extraction_error=extraction_error,
     )
 
 
@@ -325,42 +323,53 @@ def _profile_from_llm(raw: ClothingInput, payload: dict[str, Any]) -> ClothingPr
         return None
 
     source_text = raw.extra.get("normalized_source_text") or raw.name
-    fallback = _fallback_profile(raw, ["rule fallback merged with LLM output"])
 
     material_ratios = {
         str(key).lower(): ratio
         for key, value in dict(payload.get("material_ratios") or {}).items()
         if (ratio := _normalize_ratio(value)) is not None
     }
-    risks = {
+    risks = _unknown_risks()
+    risks.update({
         str(key): _risk_level(value)
         for key, value in dict(payload.get("risks") or {}).items()
-    }
-    for key, value in fallback.risks.items():
-        risks.setdefault(key, value)
+    })
 
     try:
-        confidence = float(payload.get("confidence", fallback.confidence))
+        confidence = float(payload.get("confidence", 0.0))
     except (TypeError, ValueError):
-        confidence = fallback.confidence
+        confidence = 0.0
 
     llm_missing = [str(field) for field in payload.get("missing_fields") or []]
     profile = ClothingProfile(
         item_id=_profile_id(source_text),
-        name=str(payload.get("name") or raw.name or fallback.name),
-        user_note=fallback.user_note,
-        material_ratios=material_ratios or fallback.material_ratios,
-        colors=[str(color).lower() for color in payload.get("colors") or fallback.colors],
-        care_forbidden=[
-            str(item) for item in payload.get("care_forbidden") or fallback.care_forbidden
-        ],
+        name=str(payload.get("name") or raw.name or "未命名衣物"),
+        user_note=str(
+            raw.user_note or raw.extra.get("user_note") or raw.user_description or ""
+        ).strip(),
+        material_ratios=material_ratios,
+        colors=[str(color).lower() for color in payload.get("colors") or []],
+        care_forbidden=_normalize_care_labels(payload.get("care_forbidden")),
         risks=risks,
-        confidence=max(fallback.confidence, min(confidence, 1.0)),
+        confidence=max(0.0, min(confidence, 1.0)),
         source_notes=[
             str(note)
             for note in payload.get("source_notes")
-            or fallback.source_notes
+            or raw.extra.get("source_notes", [])
+            or ["LLM returned usable JSON"]
         ],
+        image_type=_image_type(payload.get("image_type")),
+        material_evidence_level=_evidence_level(
+            payload.get("material_evidence_level")
+        ),
+        care_evidence_level=_evidence_level(payload.get("care_evidence_level")),
+        recommended_wash=str(payload.get("recommended_wash") or ""),
+        field_sources={
+            str(key): str(value)
+            for key, value in dict(payload.get("field_sources") or {}).items()
+        },
+        agent_trace=_string_list(payload.get("agent_trace")),
+        extraction_status="llm_success",
     )
     return _with_missing_fields(profile, llm_missing)
 
@@ -381,6 +390,179 @@ def _complete_with_optional_images(
         raise
 
 
+_PROFILE_PAYLOAD_KEYS = {
+    "name",
+    "material_ratios",
+    "colors",
+    "care_forbidden",
+    "risks",
+    "missing_fields",
+}
+
+
+def _payload_has_profile_fields(payload: dict[str, Any]) -> bool:
+    return bool(_PROFILE_PAYLOAD_KEYS.intersection(payload))
+
+
+def _payload_confidence(payload: dict[str, Any]) -> float:
+    try:
+        return max(0.0, min(float(payload.get("confidence", 0.0)), 1.0))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _extend_unique(target: list[str], values: list[str]) -> None:
+    seen = set(target)
+    for value in values:
+        if value not in seen:
+            target.append(value)
+            seen.add(value)
+
+
+def _merge_inference_payload(
+    profile: ClothingProfile,
+    payload: dict[str, Any],
+) -> ClothingProfile:
+    material_ratios = {
+        str(key).lower(): ratio
+        for key, value in dict(payload.get("material_ratios") or {}).items()
+        if (ratio := _normalize_ratio(value)) is not None
+    }
+    material_evidence = _evidence_level(payload.get("material_evidence_level"))
+    if material_ratios and profile.material_evidence_level != "visible":
+        profile.material_ratios = material_ratios
+        profile.material_evidence_level = material_evidence
+        profile.field_sources["material_ratios"] = "care_inference"
+
+    care_forbidden = _normalize_care_labels(payload.get("care_forbidden"))
+    care_evidence = _evidence_level(payload.get("care_evidence_level"))
+    if care_forbidden and profile.care_evidence_level != "visible":
+        if profile.care_forbidden:
+            _extend_unique(profile.care_forbidden, care_forbidden)
+        else:
+            profile.care_forbidden = care_forbidden
+        profile.care_evidence_level = care_evidence
+        profile.field_sources["care_forbidden"] = "care_inference"
+
+    risks = payload.get("risks")
+    if isinstance(risks, dict):
+        profile.risks.update(
+            {str(key): _risk_level(value) for key, value in risks.items()}
+        )
+        profile.field_sources["risks"] = "care_inference"
+
+    if payload.get("recommended_wash"):
+        profile.recommended_wash = str(payload["recommended_wash"])
+        profile.field_sources["recommended_wash"] = "care_inference"
+
+    _extend_unique(profile.source_notes, _string_list(payload.get("source_notes")))
+    profile.confidence = max(profile.confidence, _payload_confidence(payload))
+    return _with_missing_fields(
+        profile,
+        [str(field) for field in payload.get("missing_fields") or profile.missing_fields],
+    )
+
+
+def _profile_from_image_agents(
+    enriched: ClothingInput,
+    client: LLMClient,
+    source_text: str,
+) -> ClothingProfile:
+    router_response = _complete_with_optional_images(
+        client,
+        build_image_router_prompt(source_text),
+        enriched.image_refs,
+    )
+    router_payload, router_error = _parse_json_object(router_response.text)
+    if router_error:
+        profile = _empty_profile(
+            enriched,
+            extraction_status="llm_invalid_json",
+            extraction_error=router_error,
+            notes=[f"ImageRouterAgent failed: {router_error}"],
+        )
+        profile.agent_trace.append("image_router")
+        return _with_missing_fields(profile, profile.missing_fields)
+
+    if not router_payload:
+        if router_response.raw.get("error"):
+            error = str(router_response.raw["error"])
+            profile = _empty_profile(
+                enriched,
+                extraction_status="llm_error",
+                extraction_error=error,
+                notes=[f"ImageRouterAgent unavailable: {error}"],
+            )
+        else:
+            profile = _empty_profile(
+                enriched,
+                extraction_status="llm_empty_response",
+                extraction_error="ImageRouterAgent returned empty JSON",
+                notes=["ImageRouterAgent returned empty JSON"],
+            )
+        profile.agent_trace.append("image_router")
+        return _with_missing_fields(profile, profile.missing_fields)
+
+    if not router_payload.get("image_type") and _payload_has_profile_fields(router_payload):
+        profile = _profile_from_llm(enriched, router_payload)
+        if profile is None:
+            profile = _empty_profile(
+                enriched,
+                extraction_status="llm_empty_response",
+                extraction_error="LLM returned no usable fields",
+                notes=["Legacy vision response contained no usable fields"],
+            )
+        return profile
+
+    image_type = _image_type(router_payload.get("image_type"))
+    extraction_response = _complete_with_optional_images(
+        client,
+        build_typed_extraction_prompt(source_text, image_type),
+        enriched.image_refs,
+    )
+    extraction_payload, extraction_error = _parse_json_object(extraction_response.text)
+    if extraction_error:
+        profile = _empty_profile(
+            enriched,
+            extraction_status="llm_invalid_json",
+            extraction_error=extraction_error,
+            notes=[f"TypedExtractionAgent failed: {extraction_error}"],
+        )
+        profile.image_type = image_type
+        profile.agent_trace.extend(["image_router", "typed_extractor"])
+        return _with_missing_fields(profile, profile.missing_fields)
+
+    extraction_payload["image_type"] = image_type
+    profile = _profile_from_llm(enriched, extraction_payload)
+    if profile is None:
+        profile = _empty_profile(
+            enriched,
+            extraction_status="llm_empty_response",
+            extraction_error="TypedExtractionAgent returned no usable fields",
+            notes=["TypedExtractionAgent returned no usable fields"],
+        )
+        profile.image_type = image_type
+    profile.agent_trace[:] = ["image_router", "typed_extractor"]
+    _extend_unique(profile.source_notes, _string_list(router_payload.get("source_notes")))
+
+    if profile.material_ratios and profile.material_evidence_level == "visible":
+        profile.field_sources["material_ratios"] = "typed_extractor"
+    if profile.care_forbidden and profile.care_evidence_level == "visible":
+        profile.field_sources["care_forbidden"] = "typed_extractor"
+
+    inference_response = _complete_with_optional_images(
+        client,
+        build_care_inference_prompt(extraction_payload, image_type),
+        enriched.image_refs,
+    )
+    inference_payload, inference_error = _parse_json_object(inference_response.text)
+    profile.agent_trace.append("care_inference")
+    if inference_error:
+        profile.source_notes.append(f"CareInferenceAgent failed: {inference_error}")
+        return _with_missing_fields(profile, profile.missing_fields)
+    return _merge_inference_payload(profile, inference_payload)
+
+
 def extract_clothing_info(
     raw: ClothingInput,
     llm_client: LLMClient | None = None,
@@ -389,27 +571,77 @@ def extract_clothing_info(
     enriched = enrich_product_info(raw)
     source_text = enriched.extra.get("normalized_source_text", enriched.name)
     client = llm_client or create_default_llm_client()
+    if enriched.image_refs:
+        try:
+            profile = _profile_from_image_agents(enriched, client, source_text)
+        except Exception as exc:
+            profile = _empty_profile(
+                enriched,
+                extraction_status="llm_error",
+                extraction_error=str(exc),
+                notes=[f"LLM unavailable: {exc}; deterministic rules were not used"],
+            )
+        profile = _apply_manual_fields(profile, enriched.extra.get("manual_fields"))
+        return _with_missing_fields(profile, profile.missing_fields)
+
     prompt = build_extraction_prompt(source_text)
 
     try:
         response = _complete_with_optional_images(client, prompt, enriched.image_refs)
     except Exception as exc:
-        profile = _fallback_profile(enriched, [f"LLM unavailable: {exc}"])
+        profile = _empty_profile(
+            enriched,
+            extraction_status="llm_error",
+            extraction_error=str(exc),
+            notes=[f"LLM unavailable: {exc}; deterministic rules were not used"],
+        )
         profile = _apply_manual_fields(profile, enriched.extra.get("manual_fields"))
         return _with_missing_fields(profile, profile.missing_fields)
 
-    payload = _parse_json_object(response.text)
+    payload, parse_error = _parse_json_object(response.text)
+    if parse_error:
+        profile = _empty_profile(
+            enriched,
+            extraction_status="llm_invalid_json",
+            extraction_error=parse_error,
+            notes=[f"{parse_error}; deterministic rules were not used"],
+        )
+        profile = _apply_manual_fields(profile, enriched.extra.get("manual_fields"))
+        return _with_missing_fields(profile, profile.missing_fields)
+
+    if not payload:
+        if response.raw.get("error"):
+            status = "llm_error"
+            error = str(response.raw["error"])
+            note = f"LLM unavailable: {error}; deterministic rules were not used"
+        elif response.provider == "local-noop":
+            status = "llm_unavailable"
+            error = "No API key configured"
+            note = "LLM unavailable: no API key configured; deterministic rules were not used"
+        else:
+            status = "llm_empty_response"
+            error = "LLM returned an empty JSON object"
+            note = "LLM returned empty JSON; deterministic rules were not used"
+        profile = _empty_profile(
+            enriched,
+            extraction_status=status,
+            extraction_error=error,
+            notes=[note],
+        )
+        profile = _apply_manual_fields(profile, enriched.extra.get("manual_fields"))
+        return _with_missing_fields(profile, profile.missing_fields)
+
     profile = _profile_from_llm(enriched, payload)
     if profile is not None:
         profile = _apply_manual_fields(profile, enriched.extra.get("manual_fields"))
         return _with_missing_fields(profile, profile.missing_fields)
 
-    notes = ["LLM returned no usable JSON; rule fallback used"]
-    if response.raw.get("error"):
-        notes.append(f"LLM unavailable: {response.raw['error']}")
-    elif response.provider == "local-fallback":
-        notes.append("LLM unavailable: no API key configured")
-    profile = _fallback_profile(enriched, notes)
+    profile = _empty_profile(
+        enriched,
+        extraction_status="llm_empty_response",
+        extraction_error="LLM returned no usable fields",
+        notes=["LLM returned no usable fields; deterministic rules were not used"],
+    )
     profile = _apply_manual_fields(profile, enriched.extra.get("manual_fields"))
     return _with_missing_fields(profile, profile.missing_fields)
 

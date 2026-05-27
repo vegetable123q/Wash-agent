@@ -6,7 +6,13 @@ import unittest
 from unittest.mock import patch
 
 from backend.clothing_extractor import build_wardrobe_item, extract_clothing_info
-from backend.llm_client import build_extraction_prompt, create_default_llm_client
+from backend.llm_client import (
+    build_care_inference_prompt,
+    build_extraction_prompt,
+    build_image_router_prompt,
+    build_typed_extraction_prompt,
+    create_default_llm_client,
+)
 from backend.models import ClothingInput, LLMResponse, RiskLevel, WashMethod
 from backend.product_info import enrich_product_info
 
@@ -39,6 +45,29 @@ class FakeVisionLLMClient:
         return LLMResponse(text=self.text, provider="fake-vision", model="unit-test")
 
 
+class ScriptedVisionLLMClient:
+    def __init__(self, responses: list[dict[str, object]]) -> None:
+        self.responses = list(responses)
+        self.prompts: list[str] = []
+        self.image_refs: list[list[str]] = []
+
+    def complete(
+        self,
+        prompt: str,
+        *,
+        temperature: float = 0.0,
+        image_refs: list[str] | None = None,
+    ) -> LLMResponse:
+        self.prompts.append(prompt)
+        self.image_refs.append(list(image_refs or []))
+        payload = self.responses.pop(0)
+        return LLMResponse(
+            text=json.dumps(payload, ensure_ascii=False),
+            provider="scripted-vision",
+            model="unit-test",
+        )
+
+
 class BrokenLLMClient:
     def complete(self, prompt: str, *, temperature: float = 0.0) -> LLMResponse:
         raise RuntimeError("network unavailable")
@@ -53,6 +82,24 @@ class BModuleTests(unittest.TestCase):
         self.assertIn("care_forbidden", prompt)
         self.assertIn("灰色连帽卫衣", prompt)
         self.assertIn("不要输出店铺", prompt)
+
+    def test_image_agent_prompts_have_separate_responsibilities(self) -> None:
+        router_prompt = build_image_router_prompt("image refs only")
+        label_prompt = build_typed_extraction_prompt("tag photo", "care_label")
+        garment_prompt = build_typed_extraction_prompt("jacket photo", "garment_photo")
+        inference_prompt = build_care_inference_prompt(
+            {"name": "jacket", "missing_fields": ["material_ratios"]},
+            "garment_photo",
+        )
+
+        self.assertIn("ImageRouterAgent", router_prompt)
+        self.assertIn("image_type", router_prompt)
+        self.assertIn("TypedExtractionAgent", label_prompt)
+        self.assertIn("OCR", label_prompt)
+        self.assertIn("care symbols", label_prompt)
+        self.assertIn("visual fabric", garment_prompt)
+        self.assertIn("CareInferenceAgent", inference_prompt)
+        self.assertIn("best-effort", inference_prompt)
 
     def test_enrich_product_info_normalizes_source_text(self) -> None:
         raw = ClothingInput(
@@ -83,6 +130,8 @@ class BModuleTests(unittest.TestCase):
         )
 
         self.assertEqual(profile.user_note, "备注：运动后常穿，洗过一次轻微缩水")
+        self.assertEqual(profile.extraction_status, "llm_error")
+        self.assertIn("network unavailable", profile.extraction_error)
         self.assertNotIn("店铺", " ".join(profile.source_notes))
 
     def test_user_note_field_is_preferred_over_legacy_description(self) -> None:
@@ -97,6 +146,7 @@ class BModuleTests(unittest.TestCase):
         )
 
         self.assertEqual(profile.user_note, "备注：明天要穿")
+        self.assertEqual(profile.extraction_status, "llm_error")
 
     def test_build_wardrobe_item_prepares_profile_for_c_module(self) -> None:
         profile = extract_clothing_info(
@@ -198,6 +248,150 @@ class BModuleTests(unittest.TestCase):
         self.assertEqual(profile.material_ratios["polyester"], 0.92)
         self.assertIn("black", profile.colors)
 
+    def test_image_extraction_uses_router_extractor_and_inference_agents(self) -> None:
+        fake = ScriptedVisionLLMClient(
+            [
+                {
+                    "image_type": "garment_photo",
+                    "confidence": 0.93,
+                    "source_notes": ["router saw a garment photo"],
+                },
+                {
+                    "name": "black white layered tee",
+                    "material_ratios": {},
+                    "colors": ["black", "white"],
+                    "care_forbidden": [],
+                    "risks": {"color_bleed": "high"},
+                    "confidence": 0.6,
+                    "source_notes": ["extractor saw contrast panels"],
+                    "missing_fields": ["material_ratios", "care_forbidden"],
+                },
+                {
+                    "material_ratios": {"cotton": 0.8, "polyester": 0.2},
+                    "material_evidence_level": "inferred",
+                    "care_forbidden": [
+                        "do_not_bleach",
+                        "do_not_tumble_dry",
+                        "wash_separately",
+                    ],
+                    "care_evidence_level": "inferred",
+                    "risks": {
+                        "shrink": "medium",
+                        "color_bleed": "high",
+                        "deform": "low",
+                        "pilling": "medium",
+                        "dryer_damage": "medium",
+                    },
+                    "confidence": 0.72,
+                    "source_notes": ["inference filled likely jersey care"],
+                    "missing_fields": [],
+                },
+            ]
+        )
+
+        profile = extract_clothing_info(
+            ClothingInput(name="layered tee", image_refs=["uploads/layered.png"]),
+            llm_client=fake,
+        )
+
+        self.assertEqual(len(fake.prompts), 3)
+        self.assertIn("ImageRouterAgent", fake.prompts[0])
+        self.assertIn("TypedExtractionAgent", fake.prompts[1])
+        self.assertIn("CareInferenceAgent", fake.prompts[2])
+        self.assertEqual(fake.image_refs, [["uploads/layered.png"]] * 3)
+        self.assertEqual(profile.image_type, "garment_photo")
+        self.assertEqual(profile.agent_trace, [
+            "image_router",
+            "typed_extractor",
+            "care_inference",
+        ])
+        self.assertEqual(profile.material_ratios["cotton"], 0.8)
+        self.assertIn("wash_separately", profile.care_forbidden)
+        self.assertEqual(profile.material_evidence_level, "inferred")
+        self.assertEqual(profile.care_evidence_level, "inferred")
+        self.assertEqual(profile.missing_fields, [])
+
+    def test_visible_extraction_is_not_overwritten_by_inference_agent(self) -> None:
+        fake = ScriptedVisionLLMClient(
+            [
+                {"image_type": "care_label"},
+                {
+                    "name": "polyester dress",
+                    "material_ratios": {"polyester": 1.0},
+                    "material_evidence_level": "visible",
+                    "colors": ["blue"],
+                    "care_forbidden": [],
+                    "risks": {},
+                    "confidence": 0.9,
+                    "missing_fields": ["care_forbidden"],
+                },
+                {
+                    "material_ratios": {"cotton": 0.8, "polyester": 0.2},
+                    "material_evidence_level": "inferred",
+                    "care_forbidden": ["do_not_bleach", "do_not_tumble_dry"],
+                    "care_evidence_level": "inferred",
+                    "risks": {"dryer_damage": "high"},
+                    "confidence": 0.7,
+                    "missing_fields": [],
+                },
+            ]
+        )
+
+        profile = extract_clothing_info(
+            ClothingInput(name="dress", image_refs=["uploads/label.jpg"]),
+            llm_client=fake,
+        )
+
+        self.assertEqual(profile.material_ratios, {"polyester": 1.0})
+        self.assertEqual(profile.material_evidence_level, "visible")
+        self.assertIn("do_not_tumble_dry", profile.care_forbidden)
+        self.assertEqual(profile.care_evidence_level, "inferred")
+
+    def test_care_forbidden_labels_are_canonicalized(self) -> None:
+        fake = ScriptedVisionLLMClient(
+            [
+                {"image_type": "garment_photo"},
+                {
+                    "name": "contrast tee",
+                    "material_ratios": {},
+                    "colors": ["black", "white"],
+                    "care_forbidden": ["no tumble dry"],
+                    "risks": {},
+                    "confidence": 0.5,
+                    "missing_fields": ["material_ratios"],
+                },
+                {
+                    "material_ratios": {"cotton": 0.8, "polyester": 0.2},
+                    "material_evidence_level": "inferred",
+                    "care_forbidden": [
+                        "wash_with_hot_water",
+                        "bleach",
+                        "use laundry bag",
+                        "made_up_label",
+                    ],
+                    "care_evidence_level": "inferred",
+                    "risks": {},
+                    "confidence": 0.7,
+                    "missing_fields": [],
+                },
+            ]
+        )
+
+        profile = extract_clothing_info(
+            ClothingInput(name="contrast tee", image_refs=["uploads/tee.jpg"]),
+            llm_client=fake,
+        )
+
+        self.assertEqual(
+            profile.care_forbidden,
+            [
+                "do_not_tumble_dry",
+                "avoid_hot_water",
+                "do_not_bleach",
+                "use_laundry_bag",
+            ],
+        )
+
     def test_openai_client_builds_multimodal_payload_without_network(self) -> None:
         import base64
         import tempfile
@@ -266,7 +460,7 @@ class BModuleTests(unittest.TestCase):
         self.assertEqual(response.text, "{}")
         self.assertIn("unsupported image type", response.raw["error"].lower())
 
-    def test_extract_clothing_info_falls_back_to_rules_when_llm_fails(self) -> None:
+    def test_extract_clothing_info_does_not_fall_back_to_rules_when_llm_fails(self) -> None:
         profile = extract_clothing_info(
             ClothingInput(
                 name="优衣库灰色连帽卫衣",
@@ -277,15 +471,16 @@ class BModuleTests(unittest.TestCase):
         )
 
         self.assertEqual(profile.name, "优衣库灰色连帽卫衣")
-        self.assertIn("cotton", profile.material_ratios)
-        self.assertIn("gray", profile.colors)
-        self.assertIn("dark", profile.colors)
-        self.assertEqual(profile.risks["shrink"], RiskLevel.HIGH)
-        self.assertEqual(profile.risks["dryer_damage"], RiskLevel.HIGH)
-        self.assertLess(profile.confidence, 0.8)
-        self.assertIn("LLM unavailable", " ".join(profile.source_notes))
+        self.assertEqual(profile.material_ratios, {})
+        self.assertEqual(profile.colors, [])
+        self.assertEqual(profile.care_forbidden, [])
+        self.assertEqual(profile.risks["shrink"], RiskLevel.UNKNOWN)
+        self.assertEqual(profile.confidence, 0.0)
+        self.assertEqual(profile.extraction_status, "llm_error")
+        self.assertIn("network unavailable", profile.extraction_error)
+        self.assertIn("material_ratios", profile.missing_fields)
 
-    def test_manual_fields_fill_missing_image_data_after_fallback(self) -> None:
+    def test_manual_fields_fill_missing_image_data_when_llm_fails(self) -> None:
         profile = extract_clothing_info(
             ClothingInput(
                 name="针织衫",
@@ -307,6 +502,7 @@ class BModuleTests(unittest.TestCase):
         self.assertEqual(profile.colors, ["light"])
         self.assertIn("hand_wash_only", profile.care_forbidden)
         self.assertEqual(profile.risks["deform"], RiskLevel.HIGH)
+        self.assertEqual(profile.extraction_status, "llm_error")
         self.assertNotIn("material_ratios", profile.missing_fields)
 
     def test_llm_missing_fields_are_preserved_when_still_missing(self) -> None:
@@ -339,22 +535,24 @@ class BModuleTests(unittest.TestCase):
         self.assertIn("material_ratios", profile.missing_fields)
         self.assertIn("colors", profile.missing_fields)
         self.assertIn("material_ratios", profile.user_fill_suggestions)
+        self.assertEqual(profile.extraction_status, "llm_error")
 
-    def test_rule_fallback_parses_material_percentages_without_bleach_color_noise(self) -> None:
+    def test_invalid_llm_json_returns_explicit_status_without_rules(self) -> None:
         profile = extract_clothing_info(
             ClothingInput(
                 name="灰色连帽卫衣",
                 tag_text="棉 78% 聚酯纤维 22% 不可漂白",
                 user_description="深色，高温烘干后缩水",
             ),
-            llm_client=BrokenLLMClient(),
+            llm_client=FakeLLMClient("not json at all"),
         )
 
-        self.assertAlmostEqual(profile.material_ratios["cotton"], 0.78)
-        self.assertAlmostEqual(profile.material_ratios["polyester"], 0.22)
-        self.assertIn("gray", profile.colors)
-        self.assertIn("dark", profile.colors)
-        self.assertNotIn("white", profile.colors)
+        self.assertEqual(profile.material_ratios, {})
+        self.assertEqual(profile.colors, [])
+        self.assertEqual(profile.care_forbidden, [])
+        self.assertEqual(profile.extraction_status, "llm_invalid_json")
+        self.assertIn("No JSON object", profile.extraction_error)
+        self.assertIn("material_ratios", profile.missing_fields)
 
     def test_create_default_llm_client_is_safe_without_api_key(self) -> None:
         env_without_keys = {
@@ -367,7 +565,7 @@ class BModuleTests(unittest.TestCase):
 
             response = client.complete("hello")
 
-        self.assertEqual(response.provider, "local-fallback")
+        self.assertEqual(response.provider, "local-noop")
         self.assertEqual(response.text, "{}")
 
 
