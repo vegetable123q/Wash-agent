@@ -4,7 +4,10 @@ import json
 import unittest
 from unittest.mock import patch
 
-from backend.clothing_extraction.extractor import build_wardrobe_item, extract_clothing_info
+from backend.clothing_extraction.extractor import (
+    build_wardrobe_item,
+    extract_clothing_info,
+)
 from backend.clothing_extraction.llm_client import (
     GeminiV1BetaLLMClient,
     build_care_inference_prompt,
@@ -13,7 +16,12 @@ from backend.clothing_extraction.llm_client import (
     build_typed_extraction_prompt,
     create_configured_llm_client,
 )
-from backend.shared.models import ClothingInput, LLMResponse, RiskLevel, WashMethod
+from backend.shared.models import (
+    ClothingInput,
+    LLMResponse,
+    RiskLevel,
+    WashMethod,
+)
 from backend.clothing_extraction.product_info import enrich_product_info
 
 
@@ -94,12 +102,19 @@ class ClothingExtractionTests(unittest.TestCase):
 
         self.assertIn("ImageRouterAgent", router_prompt)
         self.assertIn("image_type", router_prompt)
+        self.assertIn("visible_regions", router_prompt)
+        self.assertIn("recommended_next_agents", router_prompt)
         self.assertIn("TypedExtractionAgent", label_prompt)
         self.assertIn("OCR", label_prompt)
         self.assertIn("care symbols", label_prompt)
+        self.assertIn("care_warnings", label_prompt)
+        self.assertIn("care_recommendations", label_prompt)
+        self.assertIn("strict constraints", label_prompt)
         self.assertIn("visual fabric", garment_prompt)
         self.assertIn("CareInferenceAgent", inference_prompt)
         self.assertIn("best-effort", inference_prompt)
+        self.assertIn("do not override visible evidence", inference_prompt)
+        self.assertIn("Do not leave material_ratios empty", inference_prompt)
 
     def test_enrich_product_info_normalizes_source_text(self) -> None:
         raw = ClothingInput(
@@ -470,6 +485,161 @@ class ClothingExtractionTests(unittest.TestCase):
                 "do_not_dry_clean",
             ],
         )
+        self.assertEqual(
+            profile.care_warnings,
+            [
+                "avoid_hot_water",
+                "do_not_bleach",
+                "do_not_iron",
+                "do_not_dry_clean",
+            ],
+        )
+
+    def test_care_actions_are_split_into_warnings_and_recommendations(self) -> None:
+        fake = ScriptedVisionLLMClient(
+            [
+                {"image_type": "garment_photo"},
+                {
+                    "name": "contrast tee",
+                    "material_ratios": {},
+                    "colors": ["black", "white"],
+                    "care_forbidden": [],
+                    "risks": {},
+                    "confidence": 0.55,
+                    "missing_fields": ["material_ratios", "care_forbidden"],
+                },
+                {
+                    "material_ratios": {"cotton": 0.7, "polyester": 0.3},
+                    "material_evidence_level": "inferred",
+                    "care_warnings": ["no tumble dry"],
+                    "care_recommendations": [
+                        "wash separately",
+                        "use laundry bag",
+                        "gentle wash",
+                        "air dry",
+                    ],
+                    "care_symbols": {
+                        "bleach": "no bleach",
+                        "natural_dry": "dry flat",
+                    },
+                    "care_symbol_evidence": {
+                        "bleach": "inferred",
+                        "natural_dry": "inferred",
+                    },
+                    "care_evidence_level": "inferred",
+                    "risks": {},
+                    "confidence": 0.7,
+                    "missing_fields": [],
+                },
+            ]
+        )
+
+        profile = extract_clothing_info(
+            ClothingInput(name="contrast tee", image_refs=["uploads/tee.png"]),
+            llm_client=fake,
+        )
+
+        self.assertEqual(
+            profile.care_warnings,
+            ["do_not_tumble_dry", "do_not_bleach"],
+        )
+        self.assertEqual(
+            profile.care_recommendations,
+            [
+                "wash_separately",
+                "use_laundry_bag",
+                "gentle_cycle",
+                "air_dry",
+                "flat_dry",
+            ],
+        )
+        self.assertEqual(
+            profile.care_forbidden,
+            [
+                "do_not_tumble_dry",
+                "do_not_bleach",
+                "wash_separately",
+                "use_laundry_bag",
+                "gentle_cycle",
+                "air_dry",
+                "flat_dry",
+            ],
+        )
+
+    def test_visible_care_symbol_resolves_conflicting_inferred_warning(self) -> None:
+        fake = ScriptedVisionLLMClient(
+            [
+                {"image_type": "care_label"},
+                {
+                    "name": "labeled shirt",
+                    "material_ratios": {"cotton": 1.0},
+                    "material_evidence_level": "visible",
+                    "colors": ["white"],
+                    "care_symbols": {"tumble_dry": "low tumble dry"},
+                    "care_symbol_evidence": {"tumble_dry": "visible"},
+                    "care_evidence_level": "visible",
+                    "risks": {},
+                    "confidence": 0.82,
+                    "missing_fields": ["care_symbols.wash_temperature"],
+                },
+                {
+                    "care_warnings": ["no tumble dry"],
+                    "care_symbols": {"tumble_dry": "do not tumble dry"},
+                    "care_symbol_evidence": {"tumble_dry": "inferred"},
+                    "care_evidence_level": "inferred",
+                    "risks": {},
+                    "confidence": 0.71,
+                    "missing_fields": [],
+                },
+            ]
+        )
+
+        profile = extract_clothing_info(
+            ClothingInput(name="labeled shirt", image_refs=["uploads/label.png"]),
+            llm_client=fake,
+        )
+
+        self.assertEqual(profile.care_symbols["tumble_dry"], "low_heat")
+        self.assertEqual(profile.care_symbol_evidence["tumble_dry"], "visible")
+        self.assertNotIn("do_not_tumble_dry", profile.care_warnings)
+        self.assertNotIn("do_not_tumble_dry", profile.care_forbidden)
+        self.assertIn("care_symbols.wash_temperature", profile.missing_fields)
+
+    def test_manual_care_warning_is_preserved_over_visible_symbol(self) -> None:
+        fake = ScriptedVisionLLMClient(
+            [
+                {"image_type": "care_label"},
+                {
+                    "name": "labeled shirt",
+                    "material_ratios": {"cotton": 1.0},
+                    "material_evidence_level": "visible",
+                    "colors": ["white"],
+                    "care_symbols": {"tumble_dry": "low tumble dry"},
+                    "care_symbol_evidence": {"tumble_dry": "visible"},
+                    "care_evidence_level": "visible",
+                    "risks": {},
+                    "confidence": 0.82,
+                    "missing_fields": [],
+                },
+                {
+                    "risks": {},
+                    "confidence": 0.71,
+                    "missing_fields": [],
+                },
+            ]
+        )
+
+        profile = extract_clothing_info(
+            ClothingInput(
+                name="labeled shirt",
+                image_refs=["uploads/label.png"],
+                extra={"manual_fields": {"care_warnings": ["no tumble dry"]}},
+            ),
+            llm_client=fake,
+        )
+
+        self.assertIn("do_not_tumble_dry", profile.care_warnings)
+        self.assertIn("do_not_tumble_dry", profile.care_forbidden)
 
     def test_gemini_v1beta_client_builds_generate_content_path_without_network(self) -> None:
         captured: dict[str, object] = {}
@@ -495,8 +665,9 @@ class ClothingExtractionTests(unittest.TestCase):
 
         client = GeminiV1BetaLLMClient(
             apikey="test-key",
-            base_url="https://modelhub.ailemac.com/v1beta",
+            base_url="https://rjmodel.rjupc.com/v1beta",
             model="gemini-3.1-pro-preview",
+            role="user",
         )
 
         with patch("urllib.request.urlopen", fake_urlopen):
@@ -504,12 +675,13 @@ class ClothingExtractionTests(unittest.TestCase):
 
         self.assertEqual(
             captured["url"],
-            "https://modelhub.ailemac.com/v1beta/models/"
+            "https://rjmodel.rjupc.com/v1beta/models/"
             "gemini-3.1-pro-preview:generateContent",
         )
         self.assertEqual(captured["headers"]["X-goog-api-key"], "test-key")
         payload = captured["payload"]
         self.assertEqual(payload["generationConfig"]["responseMimeType"], "application/json")
+        self.assertEqual(payload["contents"][0]["role"], "user")
         self.assertEqual(payload["contents"][0]["parts"][0], {"text": "extract"})
         self.assertEqual(response.provider, "gemini-v1beta")
         self.assertEqual(response.text, '{"ok":true}')
@@ -540,8 +712,9 @@ class ClothingExtractionTests(unittest.TestCase):
             image_path.write_bytes(base64.b64decode("iVBORw0KGgo="))
             client = GeminiV1BetaLLMClient(
                 apikey="test-key",
-                base_url="https://modelhub.ailemac.com/v1beta",
+                base_url="https://rjmodel.rjupc.com/v1beta",
                 model="gemini-3.1-pro-preview",
+                role="user",
             )
 
             with patch("urllib.request.urlopen", fake_urlopen):
@@ -666,9 +839,10 @@ class ClothingExtractionTests(unittest.TestCase):
             config_path.write_text(
                 json.dumps(
                     {
-                        "baseUrl": "https://modelhub.ailemac.com/v1beta",
-                        "apikey": "configured-test-key",
+                        "base_url": "https://rjmodel.rjupc.com/v1beta",
+                        "api_key": "configured-test-key",
                         "model_name": "gemini-3.1-pro-preview",
+                        "role": "user",
                     }
                 ),
                 encoding="utf-8",
@@ -677,21 +851,59 @@ class ClothingExtractionTests(unittest.TestCase):
                 client = create_configured_llm_client()
 
         self.assertEqual(client.apikey, "configured-test-key")
-        self.assertEqual(client.base_url, "https://modelhub.ailemac.com/v1beta")
+        self.assertEqual(client.base_url, "https://rjmodel.rjupc.com/v1beta")
         self.assertEqual(client.model, "gemini-3.1-pro-preview")
+        self.assertEqual(client.role, "user")
 
-    def test_create_configured_llm_client_requires_baseurl_and_apikey(self) -> None:
+    def test_api_config_example_uses_desktop_field_names_with_blank_key(self) -> None:
+        from pathlib import Path
+
+        example = json.loads(
+            Path("config/api_config.example.json").read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(
+            example["base_url"],
+            "https://rjmodel.rjupc.com/v1beta",
+        )
+        self.assertEqual(example["api_key"], "")
+        self.assertEqual(example["model_name"], "gemini-3.1-pro-preview")
+        self.assertEqual(example["role"], "user")
+        self.assertEqual(set(example), {"base_url", "api_key", "model_name", "role"})
+
+    def test_create_configured_llm_client_requires_api_key(self) -> None:
         import tempfile
         from pathlib import Path
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             config_path = Path(tmp_dir) / "api_config.json"
             config_path.write_text(
-                json.dumps({"baseUrl": "https://modelhub.ailemac.com/v1beta"}),
+                json.dumps(
+                    {
+                        "base_url": "https://rjmodel.rjupc.com/v1beta",
+                        "api_key": "",
+                        "model_name": "gemini-3.1-pro-preview",
+                        "role": "user",
+                    }
+                ),
                 encoding="utf-8",
             )
             with patch("backend.clothing_extraction.llm_client._CONFIG_PATH", config_path):
-                with self.assertRaisesRegex(ValueError, "apikey"):
+                with self.assertRaisesRegex(ValueError, "api_key"):
+                    create_configured_llm_client()
+
+    def test_create_configured_llm_client_requires_base_url_and_model_name(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config_path = Path(tmp_dir) / "api_config.json"
+            config_path.write_text(
+                json.dumps({"api_key": "configured-test-key"}),
+                encoding="utf-8",
+            )
+            with patch("backend.clothing_extraction.llm_client._CONFIG_PATH", config_path):
+                with self.assertRaisesRegex(ValueError, "base_url"):
                     create_configured_llm_client()
 
 

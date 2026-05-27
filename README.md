@@ -31,7 +31,9 @@
 - `material_evidence_level`：材质来源等级，取值为 `visible`、`inferred`、`uncertain` 或 `unknown`。
 - `care_symbols`：按常见水洗标维度结构化后的标签，例如水洗方式、水温、漂白、翻转烘干、熨烫、干洗和自然晾干。
 - `care_symbol_evidence`：与 `care_symbols` 一一对应，标注每个洗护标签是图片/吊牌可见、模型推断，还是不确定。
-- `care_forbidden`
+- `care_warnings`：严格禁忌或强约束，例如不可漂白、不可烘干、不可机洗、只能手洗。
+- `care_recommendations`：建议动作，例如冷水洗、分开洗、装洗衣袋、轻柔程序、自然晾干。
+- `care_forbidden`：兼容字段，等于 `care_warnings` 和 `care_recommendations` 的归一化合并，旧调用方仍可继续读取。
 - `care_evidence_level`：整体洗护信息来源等级。
 - `risks`
 - `confidence`
@@ -73,7 +75,25 @@
 - `inferred`：基于衣物种类、材质、颜色拼接、涂层、填充物等合理推断。
 - `uncertain`：模型只能给粗略建议，建议用户补拍吊牌或手动确认。
 
-展示给用户时，建议优先展示 `visible`；`inferred` 和 `uncertain` 应以“建议/推测”口吻呈现。`care_forbidden` 是兼容字段，由 `care_symbols` 和模型输出归一化得到，用于快速给出不可漂白、不可烘干、避免热水等禁忌提醒。
+展示给用户时，建议优先展示 `visible`；`inferred` 和 `uncertain` 应以“建议/推测”口吻呈现。严格禁忌看 `care_warnings`，柔性建议看 `care_recommendations`。
+
+洗护动作现在会拆成两类，避免把“禁忌”和“建议”混在一起：
+
+```json
+{
+  "care_warnings": ["do_not_bleach", "do_not_tumble_dry"],
+  "care_recommendations": ["wash_separately", "use_laundry_bag", "gentle_cycle"],
+  "care_forbidden": [
+    "do_not_bleach",
+    "do_not_tumble_dry",
+    "wash_separately",
+    "use_laundry_bag",
+    "gentle_cycle"
+  ]
+}
+```
+
+推荐新模块优先消费 `care_warnings` 和 `care_recommendations`。`care_forbidden` 仅用于兼容旧流程或快速展示合并后的提醒。B 模块还会做一次确定性一致性校验：如果吊牌可见标签显示“低温烘干”，后续推断里出现的 `do_not_tumble_dry` 会被丢弃，避免推断覆盖可见事实。
 
 如果图片或文字中缺少关键信息，模块会返回 `missing_fields` 和 `user_fill_suggestions`，用于前端提示用户补拍吊牌或手动填写。
 
@@ -100,29 +120,31 @@ wardrobe_item = build_wardrobe_item(profile)
 
 ### 大模型 API 配置
 
-推荐复制示例配置文件后本地修改：
+`config/api_config.json` 不会被提交到 git，适合放自己的 API 地址和密钥。首次运行可以从桌面已有配置复制：
 
 ```powershell
-Copy-Item config/api_config.example.json config/api_config.json
+Copy-Item D:\桌面\api_config.json config\api_config.json
 ```
 
-`config/api_config.json` 不会被提交到 git，适合放自己的 API 地址和密钥：
+仓库只提交 `config/api_config.example.json`，字段结构如下。除 `api_key` 本地填写外，其余字段保持团队统一的 Gemini 访问方式：
 
 ```json
 {
-  "baseUrl": "https://modelhub.ailemac.com/v1beta",
-  "apikey": "sk-your-api-key-here",
-  "model_name": "gemini-3.1-pro-preview"
+  "base_url": "https://rjmodel.rjupc.com/v1beta",
+  "api_key": "",
+  "model_name": "gemini-3.1-pro-preview",
+  "role": "user"
 }
 ```
 
 字段说明：
 
-- `baseUrl`：ModelHub / Gemini v1beta 根地址，当前固定使用 `https://modelhub.ailemac.com/v1beta`。
-- `apikey`：ModelHub API key。
-- `model_name`：模型名。
+- `base_url`：课程统一的 Gemini API 根地址，客户端会请求 `models/{model_name}:generateContent`。
+- `api_key`：个人 API key，只放在本地 `config/api_config.json`。
+- `model_name`：统一模型名。
+- `role`：Gemini `contents` 中使用的角色，通常为 `user`。
 
-客户端只读取 `config/api_config.json`，不读取环境变量，也不使用其他字段名。缺少 `baseUrl`、`apikey` 或 `model_name` 时会显式报错。
+客户端只读取 `config/api_config.json`，不读取环境变量，也不使用其他字段名。缺少 `base_url`、`api_key`、`model_name` 或 `role` 时会显式报错。
 
 ### 本地验证
 

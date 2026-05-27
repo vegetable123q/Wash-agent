@@ -88,6 +88,8 @@ class ClothingProfile:
     material_ratios: dict[str, float] = field(default_factory=dict)
     colors: list[str] = field(default_factory=list)
     care_forbidden: list[str] = field(default_factory=list)
+    care_warnings: list[str] = field(default_factory=list)
+    care_recommendations: list[str] = field(default_factory=list)
     risks: dict[str, RiskLevel] = field(default_factory=dict)
     confidence: float = 0.0
     source_notes: list[str] = field(default_factory=list)

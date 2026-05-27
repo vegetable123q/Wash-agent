@@ -44,6 +44,28 @@ _CANONICAL_CARE_LABELS = {
     "wash_separately",
 }
 
+_CARE_WARNING_LABELS = {
+    "avoid_hot_water",
+    "do_not_bleach",
+    "do_not_dry_clean",
+    "do_not_iron",
+    "do_not_machine_wash",
+    "do_not_tumble_dry",
+    "do_not_wash",
+    "dry_clean_only",
+    "hand_wash_only",
+    "low_temperature_only",
+}
+
+_CARE_RECOMMENDATION_LABELS = {
+    "air_dry",
+    "cold_wash",
+    "flat_dry",
+    "gentle_cycle",
+    "use_laundry_bag",
+    "wash_separately",
+}
+
 _CARE_LABEL_ALIASES = {
     "bleach": "do_not_bleach",
     "no_bleach": "do_not_bleach",
@@ -53,6 +75,7 @@ _CARE_LABEL_ALIASES = {
     "tumble_dry": "do_not_tumble_dry",
     "no_tumble_dry": "do_not_tumble_dry",
     "no tumble dry": "do_not_tumble_dry",
+    "do not tumble dry": "do_not_tumble_dry",
     "not_tumble_dry": "do_not_tumble_dry",
     "不可烘干": "do_not_tumble_dry",
     "不能烘干": "do_not_tumble_dry",
@@ -72,7 +95,12 @@ _CARE_LABEL_ALIASES = {
     "separate colors": "wash_separately",
     "分开洗": "wash_separately",
     "gentle wash": "gentle_cycle",
+    "gentle": "gentle_cycle",
     "gentle_cycle_only": "gentle_cycle",
+    "line dry": "air_dry",
+    "hang dry": "air_dry",
+    "dry in shade": "air_dry",
+    "shade dry": "air_dry",
     "hand wash": "hand_wash_only",
     "handwash": "hand_wash_only",
     "手洗": "hand_wash_only",
@@ -284,6 +312,21 @@ def _normalize_care_labels(value: Any) -> list[str]:
     return labels
 
 
+def _split_care_labels(labels: list[str]) -> tuple[list[str], list[str]]:
+    warnings: list[str] = []
+    recommendations: list[str] = []
+    warning_seen: set[str] = set()
+    recommendation_seen: set[str] = set()
+    for label in labels:
+        if label in _CARE_WARNING_LABELS and label not in warning_seen:
+            warnings.append(label)
+            warning_seen.add(label)
+        elif label in _CARE_RECOMMENDATION_LABELS and label not in recommendation_seen:
+            recommendations.append(label)
+            recommendation_seen.add(label)
+    return warnings, recommendations
+
+
 def _canonical_care_symbol(category: str, value: Any) -> str:
     token = str(value or "").strip().lower()
     if not token:
@@ -316,14 +359,14 @@ def _normalize_care_symbols(value: Any) -> dict[str, str]:
 def _normalize_care_symbol_evidence(
     value: Any,
     care_symbols: dict[str, str],
-    fallback: str,
+    overall_evidence_level: str,
 ) -> dict[str, str]:
     source = value if isinstance(value, dict) else {}
-    fallback_level = _evidence_level(fallback)
+    inherited_level = _evidence_level(overall_evidence_level)
     evidence: dict[str, str] = {}
     for category in care_symbols:
         level = _evidence_level(source.get(category))
-        evidence[category] = level if level != "unknown" else fallback_level
+        evidence[category] = level if level != "unknown" else inherited_level
     return evidence
 
 
@@ -333,6 +376,60 @@ def _care_forbidden_from_symbols(care_symbols: dict[str, str]) -> list[str]:
         for item in care_symbols.items()
         if (forbidden := _CARE_SYMBOL_FORBIDDEN.get(item))
     ]
+
+
+def _visible_symbol_conflicts(category: str, symbol: str) -> set[str]:
+    if category == "bleach" and symbol in {"allowed", "non_chlorine_only"}:
+        return {"do_not_bleach"}
+    if category == "tumble_dry" and symbol in {
+        "allowed",
+        "low_heat",
+        "normal_heat",
+        "high_heat",
+    }:
+        return {"do_not_tumble_dry"}
+    if category == "iron" and symbol in {"low_heat", "medium_heat", "high_heat"}:
+        return {"do_not_iron"}
+    if category == "dry_clean" and symbol in {"allowed", "dry_clean_only"}:
+        return {"do_not_dry_clean"}
+    if category == "dry_clean" and symbol == "do_not_dry_clean":
+        return {"dry_clean_only"}
+    if category == "wash_method" and symbol == "machine_wash":
+        return {"do_not_machine_wash", "do_not_wash", "hand_wash_only"}
+    if category == "wash_method" and symbol == "do_not_wash":
+        return {"hand_wash_only", "do_not_machine_wash"}
+    return set()
+
+
+def _drop_conflicting_inferred_actions(
+    profile: ClothingProfile,
+    labels: list[str],
+) -> list[str]:
+    manual_action_keys = {"care_forbidden", "care_warnings", "care_recommendations"}
+    if any(profile.field_sources.get(key) == "manual_fields" for key in manual_action_keys):
+        return labels
+
+    conflicting: set[str] = set()
+    for category, symbol in profile.care_symbols.items():
+        if profile.care_symbol_evidence.get(category) == "visible":
+            conflicting.update(_visible_symbol_conflicts(category, symbol))
+    if not conflicting:
+        return labels
+    return [label for label in labels if label not in conflicting]
+
+
+def _sync_care_actions(profile: ClothingProfile) -> ClothingProfile:
+    labels: list[str] = []
+    _extend_unique(labels, profile.care_forbidden)
+    _extend_unique(labels, profile.care_warnings)
+    _extend_unique(labels, profile.care_recommendations)
+    _extend_unique(labels, _care_forbidden_from_symbols(profile.care_symbols))
+    labels = _drop_conflicting_inferred_actions(profile, labels)
+    warnings, recommendations = _split_care_labels(labels)
+    profile.care_warnings[:] = warnings
+    profile.care_recommendations[:] = recommendations
+    profile.care_forbidden[:] = [*warnings, *recommendations]
+    return profile
 
 
 def _unknown_risks() -> dict[str, RiskLevel]:
@@ -347,7 +444,7 @@ def _unknown_risks() -> dict[str, RiskLevel]:
 
 def _missing_fields_for_profile(profile: ClothingProfile) -> list[str]:
     missing: list[str] = []
-    if not profile.material_ratios:
+    if not _has_known_material(profile.material_ratios):
         missing.append("material_ratios")
     if not profile.colors:
         missing.append("colors")
@@ -356,10 +453,18 @@ def _missing_fields_for_profile(profile: ClothingProfile) -> list[str]:
     return missing
 
 
+def _has_known_material(material_ratios: dict[str, float]) -> bool:
+    return any(
+        material != "unknown" and ratio > 0
+        for material, ratio in material_ratios.items()
+    )
+
+
 def _with_missing_fields(
     profile: ClothingProfile,
     requested: list[str] | None = None,
 ) -> ClothingProfile:
+    _sync_care_actions(profile)
     computed = _missing_fields_for_profile(profile)
     computed_set = set(computed)
     still_relevant_requested = [
@@ -431,15 +536,33 @@ def _apply_manual_fields(
             profile.field_sources["care_forbidden"] = "manual_fields"
             applied = True
 
+    care_warnings = _normalize_care_labels(manual_fields.get("care_warnings"))
+    if care_warnings:
+        profile.care_warnings = [
+            label for label in care_warnings if label in _CARE_WARNING_LABELS
+        ]
+        profile.care_evidence_level = "visible"
+        profile.field_sources["care_warnings"] = "manual_fields"
+        applied = True
+
+    care_recommendations = _normalize_care_labels(
+        manual_fields.get("care_recommendations")
+    )
+    if care_recommendations:
+        profile.care_recommendations = [
+            label
+            for label in care_recommendations
+            if label in _CARE_RECOMMENDATION_LABELS
+        ]
+        profile.care_evidence_level = "visible"
+        profile.field_sources["care_recommendations"] = "manual_fields"
+        applied = True
+
     care_symbols = _normalize_care_symbols(manual_fields.get("care_symbols"))
     if care_symbols:
         profile.care_symbols.update(care_symbols)
         profile.care_symbol_evidence.update(
             {category: "visible" for category in care_symbols}
-        )
-        _extend_unique(
-            profile.care_forbidden,
-            _care_forbidden_from_symbols(care_symbols),
         )
         profile.care_evidence_level = "visible"
         profile.field_sources["care_symbols"] = "manual_fields"
@@ -507,6 +630,16 @@ def _profile_from_llm(raw: ClothingInput, payload: dict[str, Any]) -> ClothingPr
     llm_missing = [str(field) for field in payload.get("missing_fields") or []]
     care_symbols = _normalize_care_symbols(payload.get("care_symbols"))
     care_evidence_level = _evidence_level(payload.get("care_evidence_level"))
+    care_warnings = [
+        label
+        for label in _normalize_care_labels(payload.get("care_warnings"))
+        if label in _CARE_WARNING_LABELS
+    ]
+    care_recommendations = [
+        label
+        for label in _normalize_care_labels(payload.get("care_recommendations"))
+        if label in _CARE_RECOMMENDATION_LABELS
+    ]
     profile = ClothingProfile(
         item_id=_profile_id(source_text),
         name=str(payload.get("name") or raw.name or "未命名衣物"),
@@ -516,6 +649,8 @@ def _profile_from_llm(raw: ClothingInput, payload: dict[str, Any]) -> ClothingPr
         material_ratios=material_ratios,
         colors=[str(color).lower() for color in payload.get("colors") or []],
         care_forbidden=_normalize_care_labels(payload.get("care_forbidden")),
+        care_warnings=care_warnings,
+        care_recommendations=care_recommendations,
         risks=risks,
         confidence=max(0.0, min(confidence, 1.0)),
         source_notes=[
@@ -543,10 +678,6 @@ def _profile_from_llm(raw: ClothingInput, payload: dict[str, Any]) -> ClothingPr
         agent_trace=_string_list(payload.get("agent_trace")),
         extraction_status="llm_success",
     )
-    _extend_unique(
-        profile.care_forbidden,
-        _care_forbidden_from_symbols(profile.care_symbols),
-    )
     return _with_missing_fields(profile, llm_missing)
 
 
@@ -558,12 +689,7 @@ def _complete_with_optional_images(
     kwargs: dict[str, Any] = {"temperature": 0.0}
     if image_refs:
         kwargs["image_refs"] = image_refs
-    try:
-        return client.complete(prompt, **kwargs)
-    except TypeError as exc:
-        if "image_refs" in kwargs and "image_refs" in str(exc):
-            return client.complete(prompt, temperature=0.0)
-        raise
+    return client.complete(prompt, **kwargs)
 
 
 _PROFILE_PAYLOAD_KEYS = {
@@ -571,6 +697,9 @@ _PROFILE_PAYLOAD_KEYS = {
     "material_ratios",
     "colors",
     "care_forbidden",
+    "care_warnings",
+    "care_recommendations",
+    "care_symbols",
     "risks",
     "missing_fields",
 }
@@ -611,6 +740,16 @@ def _merge_inference_payload(
         profile.field_sources["material_ratios"] = "care_inference"
 
     care_forbidden = _normalize_care_labels(payload.get("care_forbidden"))
+    care_warnings = [
+        label
+        for label in _normalize_care_labels(payload.get("care_warnings"))
+        if label in _CARE_WARNING_LABELS
+    ]
+    care_recommendations = [
+        label
+        for label in _normalize_care_labels(payload.get("care_recommendations"))
+        if label in _CARE_RECOMMENDATION_LABELS
+    ]
     care_evidence = _evidence_level(payload.get("care_evidence_level"))
     if care_forbidden and profile.care_evidence_level != "visible":
         if profile.care_forbidden:
@@ -619,6 +758,12 @@ def _merge_inference_payload(
             profile.care_forbidden = care_forbidden
         profile.care_evidence_level = care_evidence
         profile.field_sources["care_forbidden"] = "care_inference"
+
+    if (care_warnings or care_recommendations) and profile.care_evidence_level != "visible":
+        _extend_unique(profile.care_warnings, care_warnings)
+        _extend_unique(profile.care_recommendations, care_recommendations)
+        profile.care_evidence_level = care_evidence
+        profile.field_sources["care_actions"] = "care_inference"
 
     care_symbols = _normalize_care_symbols(payload.get("care_symbols"))
     if care_symbols:
@@ -631,10 +776,6 @@ def _merge_inference_payload(
             if profile.care_evidence_level != "visible" or category not in profile.care_symbols:
                 profile.care_symbols[category] = symbol
                 profile.care_symbol_evidence[category] = care_symbol_evidence[category]
-        _extend_unique(
-            profile.care_forbidden,
-            _care_forbidden_from_symbols(care_symbols),
-        )
         if profile.care_evidence_level != "visible":
             profile.care_evidence_level = care_evidence
         profile.field_sources["care_symbols"] = "care_inference"
@@ -809,10 +950,6 @@ def extract_clothing_info(
             status = "llm_error"
             error = str(response.raw["error"])
             note = f"LLM unavailable: {error}; deterministic rules were not used"
-        elif response.provider == "local-noop":
-            status = "llm_unavailable"
-            error = "No API key configured"
-            note = "LLM unavailable: no API key configured; deterministic rules were not used"
         else:
             status = "llm_empty_response"
             error = "LLM returned an empty JSON object"
