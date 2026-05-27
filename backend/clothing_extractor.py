@@ -313,6 +313,20 @@ def _normalize_care_symbols(value: Any) -> dict[str, str]:
     return normalized
 
 
+def _normalize_care_symbol_evidence(
+    value: Any,
+    care_symbols: dict[str, str],
+    fallback: str,
+) -> dict[str, str]:
+    source = value if isinstance(value, dict) else {}
+    fallback_level = _evidence_level(fallback)
+    evidence: dict[str, str] = {}
+    for category in care_symbols:
+        level = _evidence_level(source.get(category))
+        evidence[category] = level if level != "unknown" else fallback_level
+    return evidence
+
+
 def _care_forbidden_from_symbols(care_symbols: dict[str, str]) -> list[str]:
     return [
         forbidden
@@ -420,6 +434,9 @@ def _apply_manual_fields(
     care_symbols = _normalize_care_symbols(manual_fields.get("care_symbols"))
     if care_symbols:
         profile.care_symbols.update(care_symbols)
+        profile.care_symbol_evidence.update(
+            {category: "visible" for category in care_symbols}
+        )
         _extend_unique(
             profile.care_forbidden,
             _care_forbidden_from_symbols(care_symbols),
@@ -488,6 +505,8 @@ def _profile_from_llm(raw: ClothingInput, payload: dict[str, Any]) -> ClothingPr
         confidence = 0.0
 
     llm_missing = [str(field) for field in payload.get("missing_fields") or []]
+    care_symbols = _normalize_care_symbols(payload.get("care_symbols"))
+    care_evidence_level = _evidence_level(payload.get("care_evidence_level"))
     profile = ClothingProfile(
         item_id=_profile_id(source_text),
         name=str(payload.get("name") or raw.name or "未命名衣物"),
@@ -506,11 +525,16 @@ def _profile_from_llm(raw: ClothingInput, payload: dict[str, Any]) -> ClothingPr
             or ["LLM returned usable JSON"]
         ],
         image_type=_image_type(payload.get("image_type")),
-        care_symbols=_normalize_care_symbols(payload.get("care_symbols")),
+        care_symbols=care_symbols,
+        care_symbol_evidence=_normalize_care_symbol_evidence(
+            payload.get("care_symbol_evidence"),
+            care_symbols,
+            care_evidence_level,
+        ),
         material_evidence_level=_evidence_level(
             payload.get("material_evidence_level")
         ),
-        care_evidence_level=_evidence_level(payload.get("care_evidence_level")),
+        care_evidence_level=care_evidence_level,
         recommended_wash=str(payload.get("recommended_wash") or ""),
         field_sources={
             str(key): str(value)
@@ -598,9 +622,15 @@ def _merge_inference_payload(
 
     care_symbols = _normalize_care_symbols(payload.get("care_symbols"))
     if care_symbols:
+        care_symbol_evidence = _normalize_care_symbol_evidence(
+            payload.get("care_symbol_evidence"),
+            care_symbols,
+            care_evidence,
+        )
         for category, symbol in care_symbols.items():
             if profile.care_evidence_level != "visible" or category not in profile.care_symbols:
                 profile.care_symbols[category] = symbol
+                profile.care_symbol_evidence[category] = care_symbol_evidence[category]
         _extend_unique(
             profile.care_forbidden,
             _care_forbidden_from_symbols(care_symbols),

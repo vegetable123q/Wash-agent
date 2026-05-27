@@ -28,14 +28,52 @@ B 模块只负责“数据获取与结构化”，不负责衣柜存储、机器
 - `user_note`
 - `material_ratios`
 - `colors`
+- `material_evidence_level`：材质来源等级，取值为 `visible`、`inferred`、`uncertain` 或 `unknown`。
+- `care_symbols`：按常见水洗标维度结构化后的标签，例如水洗方式、水温、漂白、翻转烘干、熨烫、干洗和自然晾干。
+- `care_symbol_evidence`：与 `care_symbols` 一一对应，标注每个洗护标签是图片/吊牌可见、模型推断，还是不确定。
 - `care_forbidden`
+- `care_evidence_level`：整体洗护信息来源等级。
 - `risks`
 - `confidence`
+- `image_type`：图片类型判断结果，例如 `garment_photo`、`care_label`、`tag_photo`、`product_page`、`mixed`。
+- `agent_trace`：图片输入经过的 Agent 阶段，例如 `image_router -> typed_extractor -> care_inference`。
 - `missing_fields`
 - `user_fill_suggestions`
 - `source_notes`
 - `extraction_status`
 - `extraction_error`
+
+`care_symbols` 使用固定维度，便于后续洗衣方案模块消费：
+
+```json
+{
+  "wash_method": "machine_wash",
+  "wash_temperature": "30c",
+  "bleach": "do_not_bleach",
+  "tumble_dry": "low_heat",
+  "iron": "do_not_iron",
+  "dry_clean": "do_not_dry_clean",
+  "natural_dry": "line_dry"
+}
+```
+
+每个 `care_symbols` 标签都会在 `care_symbol_evidence` 中有对应等级：
+
+```json
+{
+  "wash_temperature": "visible",
+  "tumble_dry": "inferred",
+  "iron": "uncertain"
+}
+```
+
+含义：
+
+- `visible`：来自吊牌、洗护标、商品页明确可见文字或符号。
+- `inferred`：基于衣物种类、材质、颜色拼接、涂层、填充物等合理推断。
+- `uncertain`：模型只能给粗略建议，建议用户补拍吊牌或手动确认。
+
+展示给用户时，建议优先展示 `visible`；`inferred` 和 `uncertain` 应以“建议/推测”口吻呈现。`care_forbidden` 是兼容字段，由 `care_symbols` 和模型输出归一化得到，用于快速给出不可漂白、不可烘干、避免热水等禁忌提醒。
 
 如果图片或文字中缺少关键信息，模块会返回 `missing_fields` 和 `user_fill_suggestions`，用于前端提示用户补拍吊牌或手动填写。
 

@@ -416,6 +416,15 @@ class BModuleTests(unittest.TestCase):
                         "dry_clean": "no dry clean",
                         "unknown_category": "ignored",
                     },
+                    "care_symbol_evidence": {
+                        "wash_method": "visible",
+                        "wash_temperature": "inferred",
+                        "bleach": "visible",
+                        "tumble_dry": "inferred",
+                        "iron": "visible",
+                        "dry_clean": "inferred",
+                        "unknown_category": "visible",
+                    },
                     "care_forbidden": ["wash_with_hot_water"],
                     "care_evidence_level": "inferred",
                     "risks": {},
@@ -439,6 +448,17 @@ class BModuleTests(unittest.TestCase):
                 "tumble_dry": "low_heat",
                 "iron": "do_not_iron",
                 "dry_clean": "do_not_dry_clean",
+            },
+        )
+        self.assertEqual(
+            profile.care_symbol_evidence,
+            {
+                "wash_method": "visible",
+                "wash_temperature": "inferred",
+                "bleach": "visible",
+                "tumble_dry": "inferred",
+                "iron": "visible",
+                "dry_clean": "inferred",
             },
         )
         self.assertEqual(

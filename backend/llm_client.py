@@ -161,6 +161,7 @@ def build_extraction_prompt(source_text: str) -> str:
   "colors": ["white", "gray", "dark"],
   "care_forbidden": ["do_not_bleach", "do_not_tumble_dry"],
   "care_symbols": {{"wash_method": "machine_wash|hand_wash_only|do_not_wash", "wash_temperature": "cold|30c|40c|60c|95c", "bleach": "allowed|non_chlorine_only|do_not_bleach", "tumble_dry": "allowed|low_heat|normal_heat|high_heat|do_not_tumble_dry", "iron": "low_heat|medium_heat|high_heat|do_not_iron", "dry_clean": "allowed|dry_clean_only|do_not_dry_clean", "natural_dry": "line_dry|flat_dry|drip_dry|shade_dry"}},
+  "care_symbol_evidence": {{"wash_method": "visible|inferred|uncertain", "wash_temperature": "visible|inferred|uncertain", "bleach": "visible|inferred|uncertain", "tumble_dry": "visible|inferred|uncertain", "iron": "visible|inferred|uncertain", "dry_clean": "visible|inferred|uncertain", "natural_dry": "visible|inferred|uncertain"}},
   "risks": {{"shrink": "low|medium|high|unknown", "color_bleed": "low|medium|high|unknown", "deform": "low|medium|high|unknown", "pilling": "low|medium|high|unknown", "dryer_damage": "low|medium|high|unknown"}},
   "confidence": 0.0,
   "source_notes": ["简短说明信息来自哪里"],
@@ -171,6 +172,7 @@ def build_extraction_prompt(source_text: str) -> str:
 - material_ratios 使用英文小写材质键，比例为 0 到 1；不知道比例时给合理估计。
 - colors 使用英文小写颜色词；深色可用 "dark"，浅色可用 "light"。
 - care_symbols 按常见水洗标维度输出：wash_method、wash_temperature、bleach、tumble_dry、iron、dry_clean、natural_dry；只输出能看见或能合理推断的维度。
+- care_symbol_evidence 必须为 care_symbols 中的每个维度标注 visible、inferred 或 uncertain。
 - care_forbidden 只能使用这些 canonical labels：do_not_bleach, do_not_tumble_dry, do_not_wash, hand_wash_only, dry_clean_only, do_not_dry_clean, do_not_iron, do_not_machine_wash, avoid_hot_water, cold_wash, low_temperature_only, wash_separately, use_laundry_bag, gentle_cycle, air_dry, flat_dry；不要输出其他标签。
 - risks 的等级只能是 low、medium、high、unknown。
 - confidence 为 0 到 1。
@@ -252,6 +254,7 @@ Return JSON only:
   "colors": ["black", "white"],
   "care_forbidden": ["do_not_bleach", "do_not_tumble_dry"],
   "care_symbols": {{"wash_method": "machine_wash|hand_wash_only|do_not_wash", "wash_temperature": "cold|30c|40c|60c|95c", "bleach": "allowed|non_chlorine_only|do_not_bleach", "tumble_dry": "allowed|low_heat|normal_heat|high_heat|do_not_tumble_dry", "iron": "low_heat|medium_heat|high_heat|do_not_iron", "dry_clean": "allowed|dry_clean_only|do_not_dry_clean", "natural_dry": "line_dry|flat_dry|drip_dry|shade_dry"}},
+  "care_symbol_evidence": {{"wash_method": "visible|inferred|uncertain", "wash_temperature": "visible|inferred|uncertain", "bleach": "visible|inferred|uncertain", "tumble_dry": "visible|inferred|uncertain", "iron": "visible|inferred|uncertain", "dry_clean": "visible|inferred|uncertain", "natural_dry": "visible|inferred|uncertain"}},
   "care_evidence_level": "visible|unknown",
   "risks": {{"shrink": "low|medium|high|unknown", "color_bleed": "low|medium|high|unknown", "deform": "low|medium|high|unknown", "pilling": "low|medium|high|unknown", "dryer_damage": "low|medium|high|unknown"}},
   "confidence": 0.0,
@@ -259,6 +262,7 @@ Return JSON only:
   "missing_fields": ["material_ratios", "care_forbidden"]
 }}
 care_symbols must follow common clothing-care label dimensions: wash_method, wash_temperature, bleach, tumble_dry, iron, dry_clean, natural_dry. Use canonical values only.
+care_symbol_evidence must include one visible|inferred|uncertain value for every emitted care_symbols key.
 Allowed care_forbidden labels: do_not_bleach, do_not_tumble_dry, do_not_wash, hand_wash_only, dry_clean_only, do_not_dry_clean, do_not_iron, do_not_machine_wash, avoid_hot_water, cold_wash, low_temperature_only, wash_separately, use_laundry_bag, gentle_cycle, air_dry, flat_dry. Omit unknown labels.
 
 Input/source context:
@@ -284,6 +288,7 @@ Return JSON only:
   "material_evidence_level": "inferred|uncertain|visible",
   "care_forbidden": ["do_not_bleach", "do_not_tumble_dry", "wash_separately", "use_laundry_bag"],
   "care_symbols": {{"wash_method": "machine_wash|hand_wash_only|do_not_wash", "wash_temperature": "cold|30c|40c|60c|95c", "bleach": "allowed|non_chlorine_only|do_not_bleach", "tumble_dry": "allowed|low_heat|normal_heat|high_heat|do_not_tumble_dry", "iron": "low_heat|medium_heat|high_heat|do_not_iron", "dry_clean": "allowed|dry_clean_only|do_not_dry_clean", "natural_dry": "line_dry|flat_dry|drip_dry|shade_dry"}},
+  "care_symbol_evidence": {{"wash_method": "visible|inferred|uncertain", "wash_temperature": "visible|inferred|uncertain", "bleach": "visible|inferred|uncertain", "tumble_dry": "visible|inferred|uncertain", "iron": "visible|inferred|uncertain", "dry_clean": "visible|inferred|uncertain", "natural_dry": "visible|inferred|uncertain"}},
   "care_evidence_level": "inferred|uncertain|visible",
   "recommended_wash": "short practical Chinese wash advice",
   "risks": {{"shrink": "low|medium|high", "color_bleed": "low|medium|high", "deform": "low|medium|high", "pilling": "low|medium|high", "dryer_damage": "low|medium|high"}},
@@ -292,6 +297,7 @@ Return JSON only:
   "missing_fields": []
 }}
 care_symbols must follow common clothing-care label dimensions: wash_method, wash_temperature, bleach, tumble_dry, iron, dry_clean, natural_dry. Use canonical values only.
+care_symbol_evidence must include one visible|inferred|uncertain value for every emitted care_symbols key.
 Allowed care_forbidden labels: do_not_bleach, do_not_tumble_dry, do_not_wash, hand_wash_only, dry_clean_only, do_not_dry_clean, do_not_iron, do_not_machine_wash, avoid_hot_water, cold_wash, low_temperature_only, wash_separately, use_laundry_bag, gentle_cycle, air_dry, flat_dry. Omit unknown labels.
 
 Image type: {image_type}
