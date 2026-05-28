@@ -144,11 +144,45 @@ Copy-Item config/api_config.example.json config/api_config.json
 
 客户端只读取 `config/api_config.json`，不读取环境变量，也不使用其他字段名。缺少 `baseUrl`、`apikey` 或 `model_name` 时会显式报错。
 
+## 衣柜记忆与洗护频率
+
+衣柜模块负责保存用户衣物、维护穿着次数、洗涤历史和用户备注，并根据当前洗衣约束生成洗护频率建议。
+
+相关文件：
+
+- `backend/wardrobe/store.py`：衣柜数据读写、增删改查、穿着次数和洗涤历史维护。
+- `backend/wardrobe/frequency_advisor.py`：根据 `WardrobeItem` 和 `LaundryConstraints` 生成 `FrequencyAdvice`。
+- `data/wardrobe_sample.json`：衣柜样例数据。
+- `docs/c_delivery.md`：C 模块交付说明。
+
+基本用法：
+
+```python
+from backend.shared.models import LaundryConstraints, WashMethod, WashRecord
+from backend.wardrobe.store import WardrobeStore
+from backend.wardrobe.frequency_advisor import advise_all_frequencies
+
+store = WardrobeStore("data/wardrobe_sample.json")
+items = store.list_items()
+
+constraints = LaundryConstraints(urgent_item_ids=["wm-white-tee-001"])
+advice = advise_all_frequencies(items, constraints)
+
+store.record_wear("wm-white-tee-001")
+store.add_wash_record(
+    "wm-white-tee-001",
+    WashRecord(washed_at="2026-05-28", method=WashMethod.MACHINE_WASH),
+)
+
+本模块只负责衣柜记忆与洗护频率，不调用 LLM，不读取洗衣机状态，不生成最终洗衣方案或报告。
+
 ### 本地验证
 
 本项目统一使用 `uv` 管理依赖和运行命令，不使用 `requirements.txt`。
 
 ```powershell
 uv run python -m unittest tests.test_clothing_extraction -v
+uv run python -m unittest tests.test_c_module -v
 uv run python -m unittest discover -v
+uv run python scripts/demo_c_module.py
 ```
