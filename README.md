@@ -216,9 +216,16 @@ pricing_rules = {
 基本用法：
 
 ```python
+from backend.campus.context import build_campus_context
+from backend.campus.machine_api import LaundryMachineClient
 from backend.laundry.planner import plan_laundry
 from backend.reports.generator import generate_report
 from backend.shared.models import LaundryConstraints
+
+campus_context = build_campus_context(
+    LaundryMachineClient("data/machines_mock.json"),
+    {"machine_rules_path": "config/machine_rules.json"},
+)
 
 constraints = LaundryConstraints(
     selected_item_ids=["wm-white-tee-001", "wm-black-jeans-001"],
@@ -229,6 +236,12 @@ plan = plan_laundry(items, constraints, campus_context)
 report = generate_report(plan, items, campus_context)
 ```
 
+校园上下文模块当前支持本地 mock 机器数据和显式规则文件：
+
+- `data/machines_mock.json`：`machines` 列表，每条记录必须包含 `machine_id`、`location`、`machine_type` 和 `status`。
+- `config/machine_rules.json`：必须包含 `pricing_rules["wash_programs"]`，需要烘干时还要包含对应的 `pricing_rules["dryer_programs"]`。
+- `build_campus_context()` 不会猜测规则路径；调用方必须传入 `machine_rules_path`。
+
 ### 本地验证
 
 本项目统一使用 `uv` 管理依赖和运行命令，不使用 `requirements.txt`。
@@ -236,7 +249,9 @@ report = generate_report(plan, items, campus_context)
 ```powershell
 uv run python -m unittest tests.test_clothing_extraction -v
 uv run python -m unittest tests.test_c_module -v
+uv run python -m unittest tests.test_d_module -v
 uv run python -m unittest tests.test_e_module -v
+uv run python -m unittest tests.test_full_integration -v
 uv run python -m unittest discover -v
 uv run python scripts/demo_c_module.py
 ```

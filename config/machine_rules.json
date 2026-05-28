@@ -1,5 +1,28 @@
 {
-  "washer_types": {},
-  "dryer_modes": {},
-  "pricing": {}
+  "pricing_rules": {
+    "wash_programs": {
+      "standard": {
+        "price_yuan": 4.0,
+        "duration_minutes": 35
+      },
+      "large": {
+        "price_yuan": 6.0,
+        "duration_minutes": 45
+      },
+      "gentle": {
+        "price_yuan": 4.0,
+        "duration_minutes": 30
+      }
+    },
+    "dryer_programs": {
+      "low": {
+        "price_yuan": 2.0,
+        "duration_minutes": 25
+      }
+    }
+  },
+  "drying_context": {
+    "balcony_available": true,
+    "ventilation": "normal"
+  }
 }

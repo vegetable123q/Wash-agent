@@ -1,6 +1,6 @@
 # Wash Agent 结构设计文档
 
-日期：2026-05-27
+日期：2026-05-28
 
 ## 目标
 
@@ -154,7 +154,9 @@ Wash-agent/
 
 - `machine_api.py` 负责统一机器状态接口和机器数据解析。
 - `context.py` 负责组合机器、价格、等待时间、天气、阳台、湿度等上下文。
-- `machine_rules.json` 保存机器容量、模式、价格和时长等配置。
+- `machines_mock.json` 使用 `machines` 列表保存显式机器记录，机器类型和状态必须能映射到 `MachineType` 与 `MachineStatus`。
+- `machine_rules.json` 使用 `pricing_rules` 保存洗衣和烘干程序的价格与时长，并可包含 `drying_context`。
+- `build_campus_context()` 要求调用方显式传入 `machine_rules_path`，缺少规则文件、`pricing_rules` 或机器必要字段时抛出错误。
 
 不应该做：
 
@@ -210,8 +212,8 @@ Wash-agent/
    - 无图片时，继续使用文本抽取 prompt。
 5. `backend.wardrobe.store.WardrobeStore.upsert_item()` 写入衣柜。
 6. 页面构造 `LaundryConstraints`。
-7. `backend.campus.machine_api.LaundryMachineClient.list_machines()` 获取机器状态。
-8. `backend.campus.context.build_campus_context()` 组合校园上下文。
+7. `backend.campus.machine_api.LaundryMachineClient.list_machines()` 获取并校验机器状态。
+8. `backend.campus.context.build_campus_context()` 用显式 `machine_rules_path` 组合校园上下文。
 9. `backend.wardrobe.frequency_advisor.advise_frequency()` 给每件衣物洗护优先级。
 10. `backend.laundry.planner.plan_laundry()` 输出 `LaundryPlan`。
     - 调用方需提供显式价格与时长规则，例如 `pricing_rules["wash_programs"]["standard"]` 和 `pricing_rules["dryer_programs"]["low"]`。
