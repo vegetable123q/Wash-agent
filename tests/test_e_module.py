@@ -10,6 +10,7 @@ from backend.shared.models import (
     DryMethod,
     LaundryConstraints,
     MachineInfo,
+    MachineQueueEstimate,
     MachineStatus,
     MachineType,
     RiskLevel,
@@ -46,30 +47,53 @@ def _item(
 
 
 def _campus_context() -> CampusContext:
+    machines = [
+        MachineInfo(
+            machine_id="washer-1",
+            location="Dorm A",
+            machine_type=MachineType.STANDARD_WASHER,
+            status=MachineStatus.AVAILABLE,
+            modes=["standard", "gentle"],
+        ),
+        MachineInfo(
+            machine_id="washer-large-1",
+            location="Dorm A",
+            machine_type=MachineType.LARGE_WASHER,
+            status=MachineStatus.AVAILABLE,
+            modes=["large"],
+        ),
+        MachineInfo(
+            machine_id="dryer-1",
+            location="Dorm A",
+            machine_type=MachineType.DRYER,
+            status=MachineStatus.AVAILABLE,
+            modes=["low"],
+        ),
+    ]
     return CampusContext(
-        available_machines=[
-            MachineInfo(
-                machine_id="washer-1",
-                location="Dorm A",
+        all_machines=machines,
+        available_machines=machines,
+        queue_estimates=[
+            MachineQueueEstimate(
                 machine_type=MachineType.STANDARD_WASHER,
-                status=MachineStatus.AVAILABLE,
-                modes=["standard", "gentle"],
+                total_count=1,
+                available_count=1,
+                running_count=0,
+                out_of_service_count=0,
+                unknown_count=0,
+                estimated_wait_minutes=0,
             ),
-            MachineInfo(
-                machine_id="washer-large-1",
-                location="Dorm A",
+            MachineQueueEstimate(
                 machine_type=MachineType.LARGE_WASHER,
-                status=MachineStatus.AVAILABLE,
-                modes=["large"],
-            ),
-            MachineInfo(
-                machine_id="dryer-1",
-                location="Dorm A",
-                machine_type=MachineType.DRYER,
-                status=MachineStatus.AVAILABLE,
-                modes=["low"],
+                total_count=1,
+                available_count=1,
+                running_count=0,
+                out_of_service_count=0,
+                unknown_count=0,
+                estimated_wait_minutes=0,
             ),
         ],
+        drying_context={"balcony_available": True, "ventilation": "normal"},
         pricing_rules={
             "wash_programs": {
                 "standard": {"price_yuan": 4.0, "duration_minutes": 35},
@@ -123,7 +147,13 @@ class EModuleTests(unittest.TestCase):
         self.assertEqual(buckets_by_id["hand-wash"].item_ids, ["wool-sweater"])
         self.assertEqual(buckets_by_id["large-bedding"].program, "large")
         self.assertEqual(buckets_by_id["hand-wash"].wash_method, WashMethod.HAND_WASH)
+        self.assertEqual(buckets_by_id["light-standard"].detergent_ml, 24.0)
+        self.assertEqual(buckets_by_id["dark-standard"].detergent_ml, 24.0)
+        self.assertEqual(buckets_by_id["large-bedding"].detergent_ml, 40.0)
+        self.assertEqual(buckets_by_id["hand-wash"].detergent_ml, 8.0)
         self.assertTrue(buckets_by_id["dark-standard"].use_laundry_bag)
+        self.assertIn("推荐使用 washer-1", " ".join(buckets_by_id["light-standard"].warnings))
+        self.assertIn("推荐使用 washer-large-1", " ".join(buckets_by_id["large-bedding"].warnings))
         self.assertTrue(all(bucket.dry_method == DryMethod.AIR_DRY for bucket in plan.buckets))
         self.assertEqual(plan.estimated_cost_yuan, 14.0)
         self.assertEqual(plan.estimated_duration_minutes, 115)
@@ -152,7 +182,34 @@ class EModuleTests(unittest.TestCase):
         self.assertEqual(buckets_by_id["hand-wash"].dry_method, DryMethod.AIR_DRY)
         self.assertEqual(plan.estimated_cost_yuan, 6.0)
         self.assertEqual(plan.estimated_duration_minutes, 60)
+        self.assertIn("推荐使用 dryer-1", " ".join(buckets_by_id["light-standard"].warnings))
         self.assertIn("不可烘干", " ".join(buckets_by_id["hand-wash"].warnings))
+
+    def test_air_dry_and_budget_warnings_use_explicit_context(self) -> None:
+        context = _campus_context()
+        context.drying_context = {"balcony_available": False, "ventilation": "poor"}
+        items = [
+            _item("white-tee", "白色纯棉 T 恤", colors=["white"], materials={"cotton": 1.0}),
+            _item("gray-tee", "浅灰 T 恤", colors=["gray"], materials={"cotton": 1.0}),
+        ]
+
+        plan = plan_laundry(
+            items,
+            LaundryConstraints(
+                selected_item_ids=["white-tee", "gray-tee"],
+                allow_dryer=False,
+                budget_yuan=2.0,
+            ),
+            context,
+        )
+
+        bucket = plan.buckets[0]
+        warning_text = " ".join(plan.global_warnings)
+        self.assertEqual(bucket.detergent_ml, 30.0)
+        self.assertIn("无阳台", warning_text)
+        self.assertIn("poor", warning_text)
+        self.assertIn("超过预算", warning_text)
+        self.assertIn("推迟非急用标准洗批次", warning_text)
 
     def test_missing_selected_item_is_explicit_error(self) -> None:
         items = [_item("white-tee", "白色纯棉 T 恤", colors=["white"], materials={"cotton": 1.0})]
@@ -205,7 +262,14 @@ class EModuleTests(unittest.TestCase):
         self.assertEqual(report.title, "本次校园洗衣方案")
         self.assertIn("白色纯棉 T 恤", report.sections["洗衣步骤"])
         self.assertIn("黑色牛仔裤", report.sections["洗衣步骤"])
+        self.assertIn("原因：浅色普通机洗衣物集中标准洗", report.sections["洗衣步骤"])
+        self.assertIn("深色或高掉色风险衣物单独处理", report.sections["洗衣步骤"])
         self.assertIn("8.0", report.sections["费用和时间"])
+        self.assertIn("计费批次", report.sections["费用和时间"])
+        self.assertIn("洗衣液：24.0 ml", report.sections["洗衣步骤"])
+        self.assertIn("Dorm A 标准洗衣机", report.sections["机器环境"])
+        self.assertIn("排队估算", report.sections["机器环境"])
+        self.assertIn("晾晒条件", report.sections["机器环境"])
         self.assertTrue(any("自然晾干" in note for note in report.savings_notes))
         self.assertTrue(any("掉色" in note for note in report.risk_notes))
 

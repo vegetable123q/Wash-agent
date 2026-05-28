@@ -254,6 +254,7 @@ E 模块负责把已选择的衣柜衣物和校园上下文转换成可执行洗
 - `backend/laundry/planner.py`：分桶、洗衣模式、烘干方式、费用时间和风险提醒。
 - `backend/reports/generator.py`：把 `LaundryPlan` 转换成 `WashReport`。
 - `tests/test_e_module.py`：E 模块真实单元测试。
+- `docs/e_demo_script.md`：E 模块 3-5 分钟演示录屏脚本。
 
 `plan_laundry()` 不读取页面状态、不调用 LLM、不读取机器文件。调用方必须显式传入：
 
@@ -301,6 +302,8 @@ constraints = LaundryConstraints(
 plan = plan_laundry(items, constraints, campus_context)
 report = generate_report(plan, items, campus_context)
 ```
+
+`plan_laundry()` 会在现有 `LaundryBucket` 字段中写入洗衣液用量，并通过 warnings 给出推荐机器、自然晾干条件和预算提示。`generate_report()` 会保留移动端直接消费的 `WashReport.sections` 结构，并在报告中解释每个分桶原因、洗衣液用量、计费批次、机器位置、排队估算、晾晒条件、风险控制和节水节电省钱价值。
 
 校园上下文模块当前支持本地 mock 机器数据和显式规则文件：
 

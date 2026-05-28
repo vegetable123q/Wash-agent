@@ -2,7 +2,18 @@
 
 from __future__ import annotations
 
-from backend.shared.models import CampusContext, DryMethod, LaundryPlan, WardrobeItem, WashMethod, WashReport
+from backend.shared.models import (
+    CampusContext,
+    DryMethod,
+    LaundryBucket,
+    LaundryPlan,
+    MachineInfo,
+    MachineQueueEstimate,
+    MachineType,
+    WardrobeItem,
+    WashMethod,
+    WashReport,
+)
 
 
 def generate_report(
@@ -33,13 +44,18 @@ def _steps_section(plan: LaundryPlan, item_names: dict[str, str]) -> str:
         names = [_item_name(item_id, item_names) for item_id in bucket.item_ids]
         parts = [
             f"{index}. {'、'.join(names)}",
+            f"原因：{_bucket_reason(bucket)}",
             f"洗护方式：{_wash_method_text(bucket.wash_method)}",
         ]
         if bucket.program:
             parts.append(f"程序：{bucket.program}")
+        if bucket.detergent_ml is not None:
+            parts.append(f"洗衣液：{bucket.detergent_ml} ml")
         if bucket.use_laundry_bag:
             parts.append("使用洗衣袋")
         parts.append(f"干燥：{_dry_method_text(bucket.dry_method)}")
+        if bucket.warnings:
+            parts.append(f"提醒：{'；'.join(bucket.warnings)}")
         lines.append("；".join(parts) + "。")
     return "\n".join(lines)
 
@@ -49,12 +65,34 @@ def _cost_time_section(plan: LaundryPlan) -> str:
         raise ValueError("plan estimated_cost_yuan is required for report generation")
     if plan.estimated_duration_minutes is None:
         raise ValueError("plan estimated_duration_minutes is required for report generation")
-    return f"预计费用 {plan.estimated_cost_yuan} 元，预计机器占用时间 {plan.estimated_duration_minutes} 分钟。"
+    charged_batches = _charged_batches(plan)
+    if charged_batches:
+        batch_text = "；".join(charged_batches)
+    else:
+        batch_text = "本次没有共享洗衣机或烘干机计费批次"
+    return (
+        f"预计费用 {plan.estimated_cost_yuan} 元，预计机器占用时间 {plan.estimated_duration_minutes} 分钟。"
+        f"计费批次：{batch_text}。"
+    )
 
 
 def _campus_section(campus_context: CampusContext) -> str:
-    machine_count = len(campus_context.available_machines)
-    return f"本次报告基于传入的校园上下文生成，当前可用机器记录 {machine_count} 台。"
+    machines = campus_context.all_machines or campus_context.available_machines
+    available_count = len(campus_context.available_machines)
+    machine_count = len(machines)
+    locations = _available_machine_locations(campus_context.available_machines)
+    queues = _queue_summary(campus_context.queue_estimates)
+    drying = _drying_context_summary(campus_context.drying_context)
+    parts = [
+        f"本次报告基于传入的校园上下文生成，当前可用机器记录 {available_count} 台，机器总记录 {machine_count} 台。",
+    ]
+    if locations:
+        parts.append(f"可用位置：{locations}。")
+    if queues:
+        parts.append(f"排队估算：{queues}。")
+    if drying:
+        parts.append(f"晾晒条件：{drying}。")
+    return "\n".join(parts)
 
 
 def _risk_section(plan: LaundryPlan) -> str:
@@ -86,6 +124,65 @@ def _risk_notes(plan: LaundryPlan) -> list[str]:
     return _dedupe(notes)
 
 
+def _bucket_reason(bucket: LaundryBucket) -> str:
+    reasons = {
+        "do-not-wash": "洗护标签或用户偏好提示不可水洗",
+        "dry-clean": "该批次需要专业干洗",
+        "hand-wash": "材质或风险提示不适合共享洗衣机",
+        "large-bedding": "床品体积大，使用大件批次减少过载和返洗",
+        "dark-standard": "深色或高掉色风险衣物单独处理，避免串色",
+        "light-standard": "浅色普通机洗衣物集中标准洗",
+    }
+    return reasons.get(bucket.bucket_id, f"{bucket.bucket_id} 批次")
+
+
+def _charged_batches(plan: LaundryPlan) -> list[str]:
+    batches: list[str] = []
+    for bucket in plan.buckets:
+        if bucket.wash_method == WashMethod.MACHINE_WASH:
+            batches.append(f"{bucket.bucket_id} 使用 {bucket.program} 洗")
+        if bucket.dry_method == DryMethod.LOW_HEAT_DRYER:
+            batches.append(f"{bucket.bucket_id} 低温烘干")
+    return batches
+
+
+def _available_machine_locations(machines: list[MachineInfo]) -> str:
+    if not machines:
+        return ""
+    grouped: dict[str, list[str]] = {}
+    for machine in machines:
+        key = f"{machine.location} {_machine_type_text(machine.machine_type)}".strip()
+        grouped.setdefault(key, []).append(machine.machine_id)
+    return "；".join(
+        f"{location_type} {len(machine_ids)} 台"
+        for location_type, machine_ids in grouped.items()
+    )
+
+
+def _queue_summary(estimates: list[MachineQueueEstimate]) -> str:
+    if not estimates:
+        return ""
+    summaries: list[str] = []
+    for estimate in estimates:
+        wait = "未知" if estimate.estimated_wait_minutes is None else f"{estimate.estimated_wait_minutes} 分钟"
+        summaries.append(
+            f"{_machine_type_text(estimate.machine_type)} 可用 {estimate.available_count}/{estimate.total_count}，预计等待 {wait}"
+        )
+    return "；".join(summaries)
+
+
+def _drying_context_summary(drying_context: dict[str, object]) -> str:
+    if not drying_context:
+        return ""
+    parts: list[str] = []
+    if "balcony_available" in drying_context:
+        balcony = "有阳台" if drying_context["balcony_available"] is True else "无阳台"
+        parts.append(balcony)
+    if "ventilation" in drying_context:
+        parts.append(f"通风 {drying_context['ventilation']}")
+    return "，".join(parts)
+
+
 def _item_name(item_id: str, item_names: dict[str, str]) -> str:
     if item_id not in item_names:
         raise ValueError(f"report item id not found: {item_id}")
@@ -112,6 +209,18 @@ def _dry_method_text(method: DryMethod) -> str:
         DryMethod.UNKNOWN: "未知",
     }
     return labels[method]
+
+
+def _machine_type_text(machine_type: MachineType) -> str:
+    labels = {
+        MachineType.SMALL_WASHER: "小型洗衣机",
+        MachineType.STANDARD_WASHER: "标准洗衣机",
+        MachineType.LARGE_WASHER: "大件洗衣机",
+        MachineType.SHOE_WASHER: "洗鞋机",
+        MachineType.DRYER: "烘干机",
+        MachineType.UNKNOWN: "未知机器",
+    }
+    return labels[machine_type]
 
 
 def _dedupe(items: list[str]) -> list[str]:
