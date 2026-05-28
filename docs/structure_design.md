@@ -27,6 +27,9 @@ Wash-agent/
     structure_design.md
   backend/
     __init__.py
+    api/
+      __init__.py
+      server.py
     shared/
       __init__.py
       models.py
@@ -43,6 +46,7 @@ Wash-agent/
       __init__.py
       machine_api.py
       context.py
+      weather.py
     laundry/
       __init__.py
       planner.py
@@ -72,6 +76,47 @@ Wash-agent/
     test_full_integration.py
     test_clothing_extraction.py
 ```
+
+## 2026-05-28 移动端接入边界更新
+
+本节覆盖上方移动端前端视觉工程的早期静态原型描述。
+
+### 本地移动端 API
+
+文件：
+
+- `backend/api/server.py`
+
+应该做：
+
+- 提供 `/api/mobile/summary`、`/api/wardrobe/items` 和 `/api/weather/current` 等本地 HTTP JSON 边界。
+- 编排已有后端模块，把 `WardrobeStore`、`CampusContext`、`LaundryPlan` 和 `WashReport` 转成前端可消费的 JSON。
+- 在服务不可用或天气接口失败时返回显式 `status` / `error` 字段，不生成猜测天气或机器数据。
+
+不应该做：
+
+- 不在 API 层实现衣物抽取、洗衣规则、机器解析、天气解析或报告文案。
+- 不直接操作衣柜 JSON 细节，衣柜读写必须通过 `WardrobeStore`。
+
+### 移动端前端
+
+文件：
+
+- `frontend/`
+
+应该做：
+
+- 构建手机版 WashMate Campus 交互界面和 Capacitor Android 包装。
+- 通过 `/api/*` 调用本地移动端 API，不直接导入或调用后端业务函数。
+- 保存仅限当前设备的界面偏好和个人洗衣上下文，例如宿舍楼、最晚取衣时间和烘干偏好；后续接入账号系统后再迁移到后端 profile API。
+- 图片选择当前只保留文件名用于本地衣柜记录，不上传二进制图片内容。
+- 后端不可用时必须在 UI 上明确标记为前端预览状态。
+
+不应该做：
+
+- 不直接调用外部网络服务。
+- 不保存密钥、令牌、真实账号凭证或遥测数据。
+- 不在前端重复实现洗衣规则、衣物抽取、机器解析、天气解析或报告生成逻辑。
 
 ## 模块职责
 

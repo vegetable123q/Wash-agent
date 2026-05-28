@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from backend.weather.current import fetch_tsinghua_weather
+from backend.campus.weather import fetch_tsinghua_weather
 
 
 class CurrentWeatherTests(unittest.TestCase):

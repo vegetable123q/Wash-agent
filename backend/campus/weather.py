@@ -1,4 +1,4 @@
-"""Current weather adapter for the mobile experience."""
+"""Current weather adapter for campus context."""
 
 from __future__ import annotations
 

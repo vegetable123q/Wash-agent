@@ -15,10 +15,10 @@ from typing import Any, Callable
 
 from backend.campus.context import build_campus_context
 from backend.campus.machine_api import LaundryMachineClient
+from backend.campus.weather import fetch_tsinghua_weather
 from backend.laundry.planner import plan_laundry
 from backend.reports.generator import generate_report
 from backend.shared.models import ClothingProfile, LaundryConstraints, RiskLevel, WardrobeItem, WashMethod
-from backend.weather.current import fetch_tsinghua_weather
 from backend.wardrobe.store import WardrobeStore
 
 
@@ -98,7 +98,7 @@ def add_wardrobe_item(
     )
     item = WardrobeItem(
         profile=profile,
-        preferred_method=WashMethod.MACHINE_WASH,
+        preferred_method=WashMethod.UNKNOWN,
         user_notes=user_notes,
     )
     WardrobeStore(store_path).upsert_item(item)

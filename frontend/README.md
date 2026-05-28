@@ -6,8 +6,8 @@ This folder contains the mobile-only frontend visual design for WashMate Campus.
 
 - Mobile frontend design with an optional local backend API connection.
 - The app calls `/api/mobile/summary` when the backend API is running.
-- If the backend API is unavailable, the app falls back to static preview data.
-- No secrets, analytics, telemetry, or upload behavior.
+- If the backend API is unavailable, the UI marks itself as a frontend preview state.
+- No secrets, analytics, telemetry, or binary image uploads. The current image picker stores only the selected file name in local wardrobe records.
 - Capacitor is configured so the web build can be wrapped as an Android app.
 
 ## Local Preview
@@ -15,6 +15,8 @@ This folder contains the mobile-only frontend visual design for WashMate Campus.
 Start the backend API in one terminal:
 
 ```powershell
+cd ..
+uv sync
 cd frontend
 npm run dev:api
 ```

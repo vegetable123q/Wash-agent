@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev:api": "cd .. && python -m backend.api.server --host 127.0.0.1 --port 8000",
+    "dev:api": "cd .. && uv run python -m backend.api.server --host 127.0.0.1 --port 8000",
     "dev": "vite --host 127.0.0.1",
     "build": "tsc && vite build",
     "test": "vitest run",

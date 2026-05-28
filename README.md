@@ -4,9 +4,10 @@
 
 ## 手机版前端视觉工程
 
-移动端实现位于 `frontend/`，使用 Vite + React + TypeScript + Capacitor。当前版本已提供本地后端接入：前端会请求 `/api/mobile/summary`，由 `backend.api.server` 调用衣柜、校园机器上下文、洗衣计划和报告模块生成页面摘要；未启动后端 API 时会回退到静态预览数据。
+移动端实现位于 `frontend/`，使用 Vite + React + TypeScript + Capacitor。当前版本已提供本地后端接入：前端会请求 `/api/mobile/summary`，由 `backend.api.server` 调用衣柜、校园机器上下文、洗衣计划和报告模块生成页面摘要；未启动后端 API 时页面会明确标记为前端预览状态。
 
 ```powershell
+uv sync
 cd frontend
 npm install
 npm run dev:api

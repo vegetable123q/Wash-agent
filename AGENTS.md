@@ -56,10 +56,19 @@ Use:
 
 - `backend/campus/machine_api.py`
 - `backend/campus/context.py`
+- `backend/campus/weather.py`
 - `data/machines_mock.json`
 - `config/machine_rules.json`
 
 Put laundry machine status parsing, machine configuration, price/time/capacity rules, weather or drying context, and campus-level context assembly here. Do not put garment material risk logic or final report wording here.
+
+### Local Mobile API
+
+Use:
+
+- `backend/api/server.py`
+
+Put local HTTP endpoints for the mobile frontend here. This layer may orchestrate existing backend modules and convert dataclasses into JSON responses for the frontend. Do not put clothing extraction rules, wardrobe persistence details, machine parsing, laundry planning rules, report wording, or weather parsing logic here.
 
 ### Laundry Planning
 
