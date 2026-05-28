@@ -172,6 +172,8 @@ Wash-agent/
 
 - 根据衣物、用户约束和校园上下文生成 `LaundryPlan`。
 - 负责手洗、机洗、干洗判断，分桶规则，模式推荐，洗衣袋、洗衣液、烘干强度、防串色、防缩水和公共洗衣卫生策略。
+- 第一版确定性实现要求调用方显式传入所选衣物、可用机器和 `CampusContext.pricing_rules` 中的洗衣/烘干价格与时长；缺少所选衣物、机器、价格或时长时抛出错误，不生成默认方案。
+- 当前分桶规则按不可水洗、干洗、手洗、床品大件、深色/掉色风险和浅色标准批次拆分。
 
 不应该做：
 
@@ -190,6 +192,7 @@ Wash-agent/
 
 - 把 `LaundryPlan`、衣物列表和校园上下文转换成 `WashReport`。
 - 负责用户可读文案、风险说明、节水节电省钱说明和操作步骤。
+- 报告只解释 planner 已生成的方案，不重新分桶、不重算洗衣决策。
 
 不应该做：
 
@@ -211,6 +214,7 @@ Wash-agent/
 8. `backend.campus.context.build_campus_context()` 组合校园上下文。
 9. `backend.wardrobe.frequency_advisor.advise_frequency()` 给每件衣物洗护优先级。
 10. `backend.laundry.planner.plan_laundry()` 输出 `LaundryPlan`。
+    - 调用方需提供显式价格与时长规则，例如 `pricing_rules["wash_programs"]["standard"]` 和 `pricing_rules["dryer_programs"]["low"]`。
 11. `backend.reports.generator.generate_report()` 输出 `WashReport`。
 12. `app.py` 渲染方案和报告。
 
