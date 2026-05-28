@@ -86,7 +86,11 @@ class FullIntegrationTests(unittest.TestCase):
                         "dryer_programs": {
                             "low": {"price_yuan": 2.0, "duration_minutes": 25},
                         },
-                    }
+                    },
+                    "drying_context": {
+                        "balcony_available": True,
+                        "ventilation": "normal",
+                    },
                 },
             )
 
@@ -113,8 +117,16 @@ class FullIntegrationTests(unittest.TestCase):
             ["hand-wash", "large-bedding", "dark-standard", "light-standard"],
         )
         self.assertEqual(plan.estimated_cost_yuan, 14.0)
+        buckets_by_id = {bucket.bucket_id: bucket for bucket in plan.buckets}
+        self.assertEqual(buckets_by_id["large-bedding"].detergent_ml, 40.0)
+        self.assertIn("推荐使用 washer-large-1", " ".join(buckets_by_id["large-bedding"].warnings))
         self.assertIn("白色纯棉 T 恤", report.sections["洗衣步骤"])
+        self.assertIn("洗衣液：", report.sections["洗衣步骤"])
         self.assertIn("当前可用机器记录 3 台", report.sections["机器环境"])
+        self.assertIn("可用位置", report.sections["机器环境"])
+        self.assertIn("排队估算", report.sections["机器环境"])
+        self.assertIn("晾晒条件", report.sections["机器环境"])
+        self.assertIn("计费批次", report.sections["费用和时间"])
 
 
 if __name__ == "__main__":

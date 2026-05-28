@@ -26,6 +26,11 @@ _DRY_CLEAN_TERMS = {"dry_clean_only", "dry clean only", "只能干洗", "干洗"
 _DO_NOT_WASH_TERMS = {"do_not_wash", "不可水洗", "不能水洗"}
 _DO_NOT_DRY_TERMS = {"do_not_tumble_dry", "do_not_dry", "不可烘干", "不能烘干"}
 _HIGH_DRY_RISK_KEYS = {"shrink", "deform", "dryer_damage"}
+_HAND_WASH_DETERGENT_ML_PER_ITEM = 8.0
+_STANDARD_DETERGENT_ML_BASE = 18.0
+_STANDARD_DETERGENT_ML_PER_ITEM = 6.0
+_LARGE_DETERGENT_ML_BASE = 32.0
+_LARGE_DETERGENT_ML_PER_ITEM = 8.0
 
 
 def plan_laundry(
@@ -124,18 +129,23 @@ def _build_bucket(
             bucket_id=bucket_id,
             item_ids=_item_ids(items),
             wash_method=WashMethod.HAND_WASH,
+            detergent_ml=_detergent_ml(bucket_id, items),
             use_laundry_bag=True,
             dry_method=DryMethod.AIR_DRY,
-            warnings=_hand_wash_warnings(items),
+            warnings=_hand_wash_warnings(items, campus_context),
         )
 
     program = "large" if bucket_id == "large-bedding" else "standard"
     machine_type = MachineType.LARGE_WASHER if bucket_id == "large-bedding" else MachineType.STANDARD_WASHER
-    _require_available_machine(campus_context.available_machines, machine_type, program)
+    machine = _require_available_machine(campus_context.available_machines, machine_type, program)
     _require_wash_program(campus_context, program)
 
     dry_method, dry_warnings = _drying_decision(items, constraints, campus_context)
-    warnings = _machine_bucket_warnings(bucket_id, items) + dry_warnings
+    warnings = (
+        _machine_bucket_warnings(bucket_id, items)
+        + [_machine_recommendation_warning(machine, program)]
+        + dry_warnings
+    )
 
     return LaundryBucket(
         bucket_id=bucket_id,
@@ -143,6 +153,7 @@ def _build_bucket(
         wash_method=WashMethod.MACHINE_WASH,
         machine_type=machine_type,
         program=program,
+        detergent_ml=_detergent_ml(bucket_id, items),
         use_laundry_bag=bucket_id == "dark-standard" or _any_recommends_bag(items),
         dry_method=dry_method,
         warnings=warnings,
@@ -155,13 +166,15 @@ def _drying_decision(
     campus_context: CampusContext,
 ) -> tuple[DryMethod, list[str]]:
     if not constraints.allow_dryer:
-        return DryMethod.AIR_DRY, ["用户未允许烘干，本批次自然晾干。"]
+        return DryMethod.AIR_DRY, ["用户未允许烘干，本批次自然晾干。"] + _air_dry_context_warnings(campus_context)
     unsafe = [item.profile.name for item in items if _dryer_unsafe(item)]
     if unsafe:
-        return DryMethod.AIR_DRY, [f"{'、'.join(unsafe)} 不可烘干或存在高温损伤风险，改为自然晾干。"]
-    _require_available_machine(campus_context.available_machines, MachineType.DRYER, "low")
+        return DryMethod.AIR_DRY, [
+            f"{'、'.join(unsafe)} 不可烘干或存在高温损伤风险，改为自然晾干。"
+        ] + _air_dry_context_warnings(campus_context)
+    dryer = _require_available_machine(campus_context.available_machines, MachineType.DRYER, "low")
     _require_dryer_program(campus_context, "low")
-    return DryMethod.LOW_HEAT_DRYER, []
+    return DryMethod.LOW_HEAT_DRYER, [_machine_recommendation_warning(dryer, "low")]
 
 
 def _estimate_cost(buckets: list[LaundryBucket], campus_context: CampusContext) -> float:
@@ -192,18 +205,19 @@ def _global_warnings(
     warnings: list[str] = []
     if constraints.budget_yuan is not None and estimated_cost > constraints.budget_yuan:
         warnings.append(f"预计费用 {estimated_cost} 元超过预算 {constraints.budget_yuan} 元。")
+        warnings.append("若需压低费用，可推迟非急用标准洗批次，并优先保留手洗、自然晾干和高卫生需求衣物。")
     for bucket in buckets:
         warnings.extend(bucket.warnings)
     return _dedupe(warnings)
 
 
-def _require_available_machine(machines: list[MachineInfo], machine_type: MachineType, program: str) -> None:
+def _require_available_machine(machines: list[MachineInfo], machine_type: MachineType, program: str) -> MachineInfo:
     for machine in machines:
         if machine.machine_type != machine_type or machine.status != MachineStatus.AVAILABLE:
             continue
         if not machine.modes or program not in machine.modes:
             continue
-        return
+        return machine
     raise ValueError(f"no available machine for {machine_type.value} program {program}")
 
 
@@ -255,12 +269,41 @@ def _machine_bucket_warnings(bucket_id: str, items: list[WardrobeItem]) -> list[
     return _dedupe(warnings)
 
 
-def _hand_wash_warnings(items: list[WardrobeItem]) -> list[str]:
+def _hand_wash_warnings(items: list[WardrobeItem], campus_context: CampusContext) -> list[str]:
     warnings = ["该批次不进入共享洗衣机，建议冷水轻柔手洗并自然晾干。"]
     for item in items:
         if _contains_any(_search_text(item), _DO_NOT_DRY_TERMS) or _dryer_unsafe(item):
             warnings.append(f"{item.profile.name} 不可烘干或高温风险较高。")
+    warnings.extend(_air_dry_context_warnings(campus_context))
     return _dedupe(warnings)
+
+
+def _detergent_ml(bucket_id: str, items: list[WardrobeItem]) -> float | None:
+    item_count = len(items)
+    if bucket_id == "hand-wash":
+        return round(item_count * _HAND_WASH_DETERGENT_ML_PER_ITEM, 1)
+    if bucket_id == "large-bedding":
+        return round(_LARGE_DETERGENT_ML_BASE + item_count * _LARGE_DETERGENT_ML_PER_ITEM, 1)
+    if bucket_id in {"dark-standard", "light-standard"}:
+        return round(_STANDARD_DETERGENT_ML_BASE + item_count * _STANDARD_DETERGENT_ML_PER_ITEM, 1)
+    return None
+
+
+def _machine_recommendation_warning(machine: MachineInfo, program: str) -> str:
+    return f"推荐使用 {machine.machine_id}，位置 {machine.location}，程序 {program}。"
+
+
+def _air_dry_context_warnings(campus_context: CampusContext) -> list[str]:
+    context = campus_context.drying_context
+    warnings: list[str] = []
+    if not context:
+        return warnings
+    if context.get("balcony_available") is False:
+        warnings.append("当前晾晒条件显示无阳台，自然晾干批次需要预留更长时间或选择通风位置。")
+    ventilation = str(context.get("ventilation") or "").strip().lower()
+    if ventilation and ventilation not in {"normal", "good", "strong", "良好", "通风良好"}:
+        warnings.append(f"当前通风条件为 {context['ventilation']}，自然晾干可能变慢。")
+    return warnings
 
 
 def _dryer_unsafe(item: WardrobeItem) -> bool:
