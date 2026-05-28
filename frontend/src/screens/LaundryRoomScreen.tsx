@@ -14,9 +14,10 @@ interface LaundryRoomScreenProps {
   mobileSummary?: MobileSummary | null;
   userProfile?: UserProfile;
   onNavigate: (screen: ScreenId) => void;
+  onViewMachine?: (machineId: string) => void;
 }
 
-export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate }: LaundryRoomScreenProps) {
+export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate, onViewMachine }: LaundryRoomScreenProps) {
   const backendMachines = mobileSummary?.campus_context.all_machines ?? [];
   const backendQueues = mobileSummary?.campus_context.queue_estimates ?? [];
   const hasBackend = backendMachines.length > 0;
@@ -108,7 +109,7 @@ export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate }: La
                   key={machine.machine_id}
                   className="machine-card"
                   accent={toneForMachineStatus(machine.status)}
-                  onClick={() => onNavigate("machineDetail")}
+                  onClick={() => (onViewMachine ? onViewMachine(machine.machine_id) : onNavigate("machineDetail"))}
                 >
                   <div>
                     <div className="machine-title">
@@ -128,7 +129,7 @@ export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate }: La
                   key={machine.id}
                   className="machine-card"
                   accent={machine.tone}
-                  onClick={() => onNavigate("machineDetail")}
+                  onClick={() => (onViewMachine ? onViewMachine(machine.id) : onNavigate("machineDetail"))}
                 >
                   <div>
                     <div className="machine-title">

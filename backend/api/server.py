@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import hmac
 import json
+import os
 import re
+from urllib.parse import unquote
 from uuid import uuid4
 from dataclasses import asdict, is_dataclass
 from enum import Enum
@@ -58,6 +61,7 @@ def build_mobile_summary(
     return {
         "source": "backend",
         "weather": weather,
+        "campus_towers": list_campus_towers(repo_root)["towers"],
         "wardrobe": {"items": [_wardrobe_item_summary(item) for item in items]},
         "campus_context": _to_jsonable(campus_context),
         "constraints": _to_jsonable(constraints),
@@ -105,16 +109,53 @@ def add_wardrobe_item(
     return {"status": "created", "item": _wardrobe_item_summary(item)}
 
 
-def run_server(host: str = "127.0.0.1", port: int = 8000, root: Path | str | None = None) -> None:
+def delete_wardrobe_item(
+    item_id: str,
+    *,
+    root: Path | str | None = None,
+    wardrobe_path: Path | str | None = None,
+) -> dict[str, Any]:
+    """Delete one user wardrobe item through the local API boundary."""
+
+    normalized_item_id = str(item_id or "").strip()
+    if not normalized_item_id:
+        raise ValueError("item_id is required")
+    repo_root = Path(root) if root is not None else Path(__file__).resolve().parents[2]
+    store_path = Path(wardrobe_path) if wardrobe_path is not None else repo_root / "data" / "wardrobe_sample.json"
+    try:
+        WardrobeStore(store_path).delete_item(normalized_item_id)
+    except KeyError as exc:
+        raise ValueError(str(exc)) from exc
+    return {"status": "deleted", "item_id": normalized_item_id}
+
+
+def list_campus_towers(root: Path | str | None = None) -> dict[str, Any]:
+    """Return selectable campus dormitory/tower choices for the mobile profile form."""
+
+    repo_root = Path(root) if root is not None else Path(__file__).resolve().parents[2]
+    machines_path = repo_root / "data" / "machines_mock.json"
+    towers = LaundryMachineClient(machines_path).list_towers()
+    return {"towers": [_tower_summary(tower) for tower in towers]}
+
+
+def run_server(
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    root: Path | str | None = None,
+    api_token: str | None = None,
+) -> None:
     """Run the local development API server."""
 
     repo_root = Path(root) if root is not None else Path(__file__).resolve().parents[2]
+    configured_api_token = _required_api_token(api_token)
 
     class MobileApiHandler(BaseHTTPRequestHandler):
         def do_OPTIONS(self) -> None:
             self._send_empty(HTTPStatus.NO_CONTENT)
 
         def do_GET(self) -> None:
+            if not self._authorize_request():
+                return
             path = self.path.split("?", 1)[0]
             if path == "/api/mobile/summary":
                 self._send_json(HTTPStatus.OK, build_mobile_summary(repo_root))
@@ -126,12 +167,17 @@ def run_server(host: str = "127.0.0.1", port: int = 8000, root: Path | str | Non
             if path == "/api/weather/current":
                 self._send_json(HTTPStatus.OK, fetch_tsinghua_weather())
                 return
+            if path == "/api/campus/towers":
+                self._send_json(HTTPStatus.OK, list_campus_towers(repo_root))
+                return
             self._send_json(
                 HTTPStatus.NOT_FOUND,
                 {"error": "not_found", "message": f"Unknown path: {self.path}"},
             )
 
         def do_POST(self) -> None:
+            if not self._authorize_request():
+                return
             path = self.path.split("?", 1)[0]
             if path == "/api/wardrobe/items":
                 try:
@@ -141,6 +187,25 @@ def run_server(host: str = "127.0.0.1", port: int = 8000, root: Path | str | Non
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": "bad_request", "message": str(exc)})
                     return
                 self._send_json(HTTPStatus.CREATED, result)
+                return
+            self._send_json(
+                HTTPStatus.NOT_FOUND,
+                {"error": "not_found", "message": f"Unknown path: {self.path}"},
+            )
+
+        def do_DELETE(self) -> None:
+            if not self._authorize_request():
+                return
+            path = self.path.split("?", 1)[0]
+            prefix = "/api/wardrobe/items/"
+            if path.startswith(prefix):
+                try:
+                    item_id = unquote(path.removeprefix(prefix))
+                    result = delete_wardrobe_item(item_id, root=repo_root)
+                except ValueError as exc:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"error": "not_found", "message": str(exc)})
+                    return
+                self._send_json(HTTPStatus.OK, result)
                 return
             self._send_json(
                 HTTPStatus.NOT_FOUND,
@@ -177,10 +242,19 @@ def run_server(host: str = "127.0.0.1", port: int = 8000, root: Path | str | Non
                 raise ValueError("JSON body must be an object")
             return payload
 
+        def _authorize_request(self) -> bool:
+            if _request_is_authorized(self.headers.get("Authorization"), configured_api_token):
+                return True
+            self._send_json(
+                HTTPStatus.UNAUTHORIZED,
+                {"error": "unauthorized", "message": "Valid Bearer token is required"},
+            )
+            return False
+
         def _send_cors_headers(self) -> None:
             self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
     server = ThreadingHTTPServer((host, port), MobileApiHandler)
     print(f"WashMate API listening on http://{host}:{port}/api/mobile/summary")
@@ -203,6 +277,15 @@ def _wardrobe_item_summary(item: WardrobeItem) -> dict[str, Any]:
         "preferred_method": item.preferred_method.value,
         "wash_count": len(item.wash_history),
         "user_notes": list(item.user_notes),
+    }
+
+
+def _tower_summary(tower: Any) -> dict[str, Any]:
+    return {
+        "name": tower.name,
+        "tower_key": tower.tower_key,
+        "provider": tower.provider,
+        "provider_keys": dict(tower.provider_keys),
     }
 
 
@@ -244,13 +327,30 @@ def _to_jsonable(value: Any) -> Any:
     return value
 
 
+def _required_api_token(value: str | None = None) -> str:
+    token = str(value if value is not None else os.environ.get("WASH_API_TOKEN", "")).strip()
+    if not token:
+        raise ValueError("WASH_API_TOKEN is required to run the mobile API")
+    return token
+
+
+def _request_is_authorized(authorization_header: str | None, configured_api_token: str) -> bool:
+    if not authorization_header:
+        return False
+    scheme, separator, token = authorization_header.partition(" ")
+    if separator != " " or scheme.lower() != "bearer":
+        return False
+    return hmac.compare_digest(token.strip(), configured_api_token)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the WashMate local mobile API")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--root", default=str(Path(__file__).resolve().parents[2]))
+    parser.add_argument("--api-token", default=None, help="Bearer token for mobile API requests. Defaults to WASH_API_TOKEN.")
     args = parser.parse_args()
-    run_server(args.host, args.port, args.root)
+    run_server(args.host, args.port, args.root, api_token=args.api_token)
 
 
 if __name__ == "__main__":

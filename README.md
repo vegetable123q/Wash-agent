@@ -4,12 +4,19 @@
 
 ## 手机版前端视觉工程
 
-移动端实现位于 `frontend/`，使用 Vite + React + TypeScript + Capacitor。当前版本已提供本地后端接入：前端会请求 `/api/mobile/summary`，由 `backend.api.server` 调用衣柜、校园机器上下文、洗衣计划和报告模块生成页面摘要；未启动后端 API 时页面会明确标记为前端预览状态。
+移动端实现位于 `frontend/`，使用 Vite + React + TypeScript + Capacitor。当前版本已提供受 token 保护的后端接入：用户必须在“我的”页手动输入 API 地址和 API token，前端才会请求 `/api/mobile/summary`；APK 不内置真实 API 地址或密钥。后端由 `backend.api.server` 调用衣柜、校园机器上下文、洗衣计划和报告模块生成页面摘要；未配置或无法连接后端 API 时页面会明确标记为待配置 API 或前端预览状态。衣柜支持新增和删除后端衣物，个人页使用后端楼栋列表选择宿舍楼。
 
 ```powershell
 uv sync
 cd frontend
 npm install
+npm run dev:api
+```
+
+启动 API 前必须显式提供 token：
+
+```powershell
+$env:WASH_API_TOKEN="your-token"
 npm run dev:api
 ```
 
@@ -23,7 +30,7 @@ npm run build
 npm run cap:sync
 ```
 
-本机已配置 JDK 21 和 Android SDK 35，可直接生成 debug APK：
+生成 debug APK 需要本机安装 JDK 21、Android SDK 35、Android Build Tools 35.0.0，并在 `frontend/android/local.properties` 中配置 `sdk.dir`：
 
 ```powershell
 cd frontend
@@ -31,6 +38,9 @@ npm run apk:debug
 ```
 
 生成文件位于 `frontend/android/app/build/outputs/apk/debug/app-debug.apk`。
+如果要在 Android 模拟器中连接本机后端，先设置 `WASH_API_TOKEN` 并运行 `npm run dev:api:emulator`，再运行 `npm run apk:debug:emulator`；打开 APK 后在“我的”页输入 API 地址 `http://10.0.2.2:8000` 和同一个 token。
+
+Release APK 由 GitHub Actions 在 `main` 分支 push 后自动构建并发布。发布构建不内置 API 地址或 token，且 release 默认禁止明文 HTTP；生产 API 应使用 HTTPS，并在服务端配置 `WASH_API_TOKEN`。`preview` 分支用于提交和修改预览，只运行测试和前端构建，不发布 APK。
 
 ## 衣物核心洗护信息抽取
 

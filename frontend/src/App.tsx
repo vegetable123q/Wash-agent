@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchMobileSummary, type MobileSummary } from "./api/mobileSummary";
+import {
+  clearApiConnectionConfig,
+  hasCompleteApiConnectionConfig,
+  loadApiConnectionConfig,
+  saveApiConnectionConfig,
+  type ApiConnectionConfig,
+} from "./api/apiConnection";
+import { deleteWardrobeItem, fetchMobileSummary, type BackendMachine, type MobileSummary, type WardrobeSummaryItem } from "./api/mobileSummary";
 import { BottomNav, StatusBar } from "./components/AppChrome";
-import type { ScreenId, TabId } from "./data/washMateContent";
+import { machines, wardrobeItems, type MachineView, type ScreenId, type TabId, type WardrobeItemView } from "./data/washMateContent";
 import { AddClothingScreen } from "./screens/AddClothingScreen";
 import { ClothingDetailScreen } from "./screens/ClothingDetailScreen";
 import { LaundryRoomScreen } from "./screens/LaundryRoomScreen";
@@ -40,8 +47,11 @@ const screenTime: Record<ScreenId, string> = {
 export default function App() {
   const [screen, setScreen] = useState<ScreenId>("today");
   const [mobileSummary, setMobileSummary] = useState<MobileSummary | null>(null);
-  const [backendStatus, setBackendStatus] = useState<"loading" | "connected" | "offline">("loading");
+  const [backendStatus, setBackendStatus] = useState<"unconfigured" | "loading" | "connected" | "offline">("unconfigured");
   const [userProfile, setUserProfile] = useState<UserProfile>(() => loadUserProfile());
+  const [apiConfig, setApiConfig] = useState<ApiConnectionConfig>(() => loadApiConnectionConfig());
+  const [selectedClothingId, setSelectedClothingId] = useState("");
+  const [selectedMachineId, setSelectedMachineId] = useState("");
   const activeTab = parentTab[screen];
 
   const goBack = () => setScreen(parentTab[screen]);
@@ -50,9 +60,32 @@ export default function App() {
   const handleProfileSave = (profile: UserProfile) => {
     setUserProfile(saveUserProfile(profile));
   };
+  const handleApiConfigSave = (config: ApiConnectionConfig) => {
+    const savedConfig = saveApiConnectionConfig(config);
+    setApiConfig(savedConfig);
+  };
+  const handleApiConfigClear = () => {
+    setApiConfig(clearApiConnectionConfig());
+    setMobileSummary(null);
+    setBackendStatus("unconfigured");
+  };
+  const viewClothingDetail = (itemId: string) => {
+    setSelectedClothingId(itemId);
+    setScreen("clothingDetail");
+  };
+  const viewMachineDetail = (machineId: string) => {
+    setSelectedMachineId(machineId);
+    setScreen("machineDetail");
+  };
 
   const refreshMobileSummary = async () => {
-    return fetchMobileSummary()
+    if (!hasCompleteApiConnectionConfig(apiConfig)) {
+      setMobileSummary(null);
+      setBackendStatus("unconfigured");
+      return;
+    }
+    setBackendStatus("loading");
+    return fetchMobileSummary(apiConfig)
       .then((summary) => {
         setMobileSummary(summary);
         setBackendStatus("connected");
@@ -62,9 +95,25 @@ export default function App() {
       });
   };
 
+  const handleDeleteWardrobeItem = async (itemId: string) => {
+    await deleteWardrobeItem(itemId, apiConfig);
+    if (selectedClothingId === itemId) {
+      setSelectedClothingId("");
+    }
+    await refreshMobileSummary();
+  };
+
   useEffect(() => {
     let active = true;
-    fetchMobileSummary()
+    if (!hasCompleteApiConnectionConfig(apiConfig)) {
+      setMobileSummary(null);
+      setBackendStatus("unconfigured");
+      return () => {
+        active = false;
+      };
+    }
+    setBackendStatus("loading");
+    fetchMobileSummary(apiConfig)
       .then((summary) => {
         if (!active) {
           return;
@@ -80,9 +129,16 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [apiConfig]);
 
   const content = useMemo(() => {
+    const selectedBackendItem: WardrobeSummaryItem | null =
+      mobileSummary?.wardrobe.items.find((item) => item.item_id === selectedClothingId) ?? null;
+    const selectedStaticItem: WardrobeItemView | null = wardrobeItems.find((item) => item.id === selectedClothingId) ?? null;
+    const selectedBackendMachine: BackendMachine | null =
+      mobileSummary?.campus_context.all_machines.find((machine) => machine.machine_id === selectedMachineId) ?? null;
+    const selectedStaticMachine: MachineView | null = machines.find((machine) => machine.id === selectedMachineId) ?? null;
+
     switch (screen) {
       case "today":
         return (
@@ -94,23 +150,46 @@ export default function App() {
           />
         );
       case "planDetail":
-        return <PlanDetailScreen onBack={goBack} />;
+        return <PlanDetailScreen onBack={goBack} mobileSummary={mobileSummary} />;
       case "wardrobe":
-        return <WardrobeScreen mobileSummary={mobileSummary} onNavigate={navigate} />;
+        return (
+          <WardrobeScreen
+            mobileSummary={mobileSummary}
+            onNavigate={navigate}
+            onViewItem={viewClothingDetail}
+            onDeleteItem={handleDeleteWardrobeItem}
+          />
+        );
       case "addClothing":
-        return <AddClothingScreen onBack={goBack} onSaved={refreshMobileSummary} />;
+        return <AddClothingScreen apiConfig={apiConfig} onBack={goBack} onSaved={refreshMobileSummary} />;
       case "clothingDetail":
-        return <ClothingDetailScreen onBack={goBack} />;
+        return <ClothingDetailScreen onBack={goBack} backendItem={selectedBackendItem} staticItem={selectedStaticItem} />;
       case "laundryRoom":
-        return <LaundryRoomScreen mobileSummary={mobileSummary} userProfile={userProfile} onNavigate={navigate} />;
+        return (
+          <LaundryRoomScreen
+            mobileSummary={mobileSummary}
+            userProfile={userProfile}
+            onNavigate={navigate}
+            onViewMachine={viewMachineDetail}
+          />
+        );
       case "machineDetail":
-        return <MachineDetailScreen onBack={goBack} />;
+        return <MachineDetailScreen onBack={goBack} backendMachine={selectedBackendMachine} staticMachine={selectedStaticMachine} />;
       case "report":
         return <ReportScreen mobileSummary={mobileSummary} />;
       case "profile":
-        return <ProfileScreen profile={userProfile} onSave={handleProfileSave} />;
+        return (
+          <ProfileScreen
+            profile={userProfile}
+            apiConfig={apiConfig}
+            towerOptions={mobileSummary?.campus_towers ?? []}
+            onSave={handleProfileSave}
+            onSaveApiConfig={handleApiConfigSave}
+            onClearApiConfig={handleApiConfigClear}
+          />
+        );
     }
-  }, [backendStatus, mobileSummary, screen, userProfile]);
+  }, [apiConfig, backendStatus, mobileSummary, screen, selectedClothingId, selectedMachineId, userProfile]);
 
   const isTabScreen = screen === activeTab;
 

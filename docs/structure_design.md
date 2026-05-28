@@ -65,9 +65,16 @@ Wash-agent/
     capacitor.config.ts
     src/
       App.tsx
+      api/
+        apiConnection.ts
+        mobileSummary.ts
       data/
       components/
       screens/
+  .github/
+    workflows/
+      preview.yml
+      release-apk.yml
   tests/
     test_campus_context.py
     test_campus_machine_api.py
@@ -90,6 +97,9 @@ Wash-agent/
 应该做：
 
 - 提供 `/api/mobile/summary`、`/api/wardrobe/items` 和 `/api/weather/current` 等本地 HTTP JSON 边界。
+- 服务启动必须显式配置 API token：调用方传 `api_token` 或设置 `WASH_API_TOKEN`。除 `OPTIONS` 预检外，所有移动端 API 请求必须带 `Authorization: Bearer <token>`；缺失或不匹配返回 `401`，不能降级为匿名访问。
+- 提供 `DELETE /api/wardrobe/items/{item_id}`，让移动端衣柜支持删除已有衣物；删除必须通过 `WardrobeStore.delete_item()`，不存在的衣物返回显式错误，不静默成功。
+- 提供 `/api/campus/towers`，并在 `/api/mobile/summary.campus_towers` 中附带可选宿舍楼列表。移动端个人页使用该列表渲染宿舍楼下拉菜单，保存时同步 `dormName` 和 `towerKey`。
 - 编排已有后端模块，把 `WardrobeStore`、`CampusContext`、`LaundryPlan` 和 `WashReport` 转成前端可消费的 JSON。
 - 在服务不可用或天气接口失败时返回显式 `status` / `error` 字段，不生成猜测天气或机器数据。
 
@@ -108,14 +118,20 @@ Wash-agent/
 
 - 构建手机版 WashMate Campus 交互界面和 Capacitor Android 包装。
 - 通过 `/api/*` 调用本地移动端 API，不直接导入或调用后端业务函数。
+- API 地址和 token 只能来自用户在移动端“我的”页输入并保存在当前设备的运行时配置；release APK 不内置真实 API 地址、API token 或服务端密钥。
+- 所有移动端 API 请求必须带 Bearer token。若 API 地址或 token 未配置，前端不得发起请求，应显示待配置状态。
 - 保存仅限当前设备的界面偏好和个人洗衣上下文，例如宿舍楼、最晚取衣时间和烘干偏好；后续接入账号系统后再迁移到后端 profile API。
 - 图片选择当前只保留文件名用于本地衣柜记录，不上传二进制图片内容。
 - 后端不可用时必须在 UI 上明确标记为前端预览状态。
+- 衣柜页必须同时提供查看详情和删除已有后端衣物的操作；删除中应禁用对应按钮，成功或失败都要显示状态。
+- 添加衣物页的图片入口当前只记录图片文件名，不做移动端二进制上传或前端本地识别；界面文案必须明确这一点，不能标成“已识别”。
+- 衣物详情和机器详情必须展示用户刚选择的后端或预览记录；如果没有对应记录，页面必须显式显示未找到状态，不能静默展示其他样例。
+- 展示型控件不能做成可点击按钮；没有真实行为的详情页按钮必须禁用并给出原因，或改为普通展示元素。
 
 不应该做：
 
 - 不直接调用外部网络服务。
-- 不保存密钥、令牌、真实账号凭证或遥测数据。
+- 不在源码、构建配置或 APK 中保存密钥、令牌、真实账号凭证或遥测数据；用户手动输入的 API token 只作为当前设备运行时连接配置使用。
 - 不在前端重复实现洗衣规则、衣物抽取、机器解析、天气解析或报告生成逻辑。
 
 ## 模块职责
@@ -129,14 +145,36 @@ Wash-agent/
 应该做：
 
 - 搭建手机版 WashMate Campus 前端视觉与本地交互壳。
-- 使用静态演示数据呈现今日方案、衣柜、洗衣房、报告和对应二级页。
+- 使用静态演示数据呈现离线预览；后端摘要存在时优先展示后端衣柜、机器、方案和报告记录。
 - 通过 Capacitor 保留 Android APK 包装路径。
+- Android 调试 APK 使用 `http` scheme 和 cleartext 本地网络访问，以便模拟器通过 `http://10.0.2.2:8000` 调用本机 `backend.api.server`。该配置只用于本地 API 验收，不在前端保存真实账号凭证或密钥。
+- Android release APK 默认禁止 cleartext；生产 API 应使用 HTTPS。debug 变体可启用 cleartext 以支持本地模拟器调试。
 
 不应该做：
 
 - 不调用后端业务函数或外部网络服务。
-- 不保存真实用户数据、密钥或上传内容。
+- 不在源码、构建配置或 APK 中保存真实用户数据、密钥或上传内容。
 - 不在前端重复实现洗衣规则、衣物抽取、机器解析或报告生成逻辑。
+
+### CI/CD 与分支
+
+文件：
+
+- `.github/workflows/preview.yml`
+- `.github/workflows/release-apk.yml`
+- `frontend/android/app/build.gradle`
+
+应该做：
+
+- `preview` 分支用于提交和修改预览；push 或 PR 时运行 Python 单元测试、前端测试和前端 build，不发布 APK。
+- `main` 分支用于发布；push 后运行完整验证、同步 Capacitor、构建签名 release APK，并发布到 GitHub Release。
+- Android release 签名只从 GitHub Secrets 注入：`ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`。keystore 文件不能提交到仓库。
+- Gradle release 签名配置只读取环境变量；debug 构建可不签名 release key。
+
+不应该做：
+
+- 不把 keystore、签名密码、API token 或生产 API 地址写进源码、workflow 明文或 APK 构建参数。
+- 不让 `preview` 自动发布 APK。
 
 ### 页面入口
 
@@ -257,6 +295,7 @@ Wash-agent/
 - 根据衣物、用户约束和校园上下文生成 `LaundryPlan`。
 - 负责手洗、机洗、干洗判断，分桶规则，模式推荐，洗衣袋、洗衣液、烘干强度、防串色、防缩水和公共洗衣卫生策略。
 - 第一版确定性实现要求调用方显式传入所选衣物、可用机器和 `CampusContext.pricing_rules` 中的洗衣/烘干价格与时长；缺少所选衣物、机器、价格或时长时抛出错误，不生成默认方案。
+- 当 `LaundryConstraints` 包含预算或最大等待时间时，在 `LaundryPlan.global_warnings` 中显式说明超预算、等待估算缺失、等待未知或等待超时，不能静默忽略这些约束。
 - 当前分桶规则按不可水洗、干洗、手洗、床品大件、深色/掉色风险和浅色标准批次拆分。
 
 不应该做：

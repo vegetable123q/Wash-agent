@@ -49,7 +49,7 @@ def plan_laundry(
 
     estimated_cost = _estimate_cost(buckets, campus_context)
     estimated_duration = _estimate_duration(buckets, campus_context)
-    global_warnings = _global_warnings(buckets, constraints, estimated_cost)
+    global_warnings = _global_warnings(buckets, constraints, estimated_cost, campus_context)
 
     return LaundryPlan(
         buckets=buckets,
@@ -201,14 +201,50 @@ def _global_warnings(
     buckets: list[LaundryBucket],
     constraints: LaundryConstraints,
     estimated_cost: float,
+    campus_context: CampusContext,
 ) -> list[str]:
     warnings: list[str] = []
     if constraints.budget_yuan is not None and estimated_cost > constraints.budget_yuan:
         warnings.append(f"预计费用 {estimated_cost} 元超过预算 {constraints.budget_yuan} 元。")
         warnings.append("若需压低费用，可推迟非急用标准洗批次，并优先保留手洗、自然晾干和高卫生需求衣物。")
+    warnings.extend(_wait_constraint_warnings(buckets, constraints, campus_context))
     for bucket in buckets:
         warnings.extend(bucket.warnings)
     return _dedupe(warnings)
+
+
+def _wait_constraint_warnings(
+    buckets: list[LaundryBucket],
+    constraints: LaundryConstraints,
+    campus_context: CampusContext,
+) -> list[str]:
+    if constraints.max_wait_minutes is None:
+        return []
+    queue_by_type = {estimate.machine_type: estimate for estimate in campus_context.queue_estimates}
+    warnings: list[str] = []
+    for machine_type in _required_machine_types(buckets):
+        estimate = queue_by_type.get(machine_type)
+        if estimate is None:
+            warnings.append(f"缺少 {machine_type.value} 等待时间估算，无法确认是否满足最大等待 {constraints.max_wait_minutes} 分钟。")
+            continue
+        wait_minutes = estimate.estimated_wait_minutes
+        if wait_minutes is None:
+            warnings.append(f"{machine_type.value} 等待时间未知，无法确认是否满足最大等待 {constraints.max_wait_minutes} 分钟。")
+            continue
+        if wait_minutes > constraints.max_wait_minutes:
+            warnings.append(f"{machine_type.value} 预计等待 {wait_minutes} 分钟超过最大等待 {constraints.max_wait_minutes} 分钟。")
+    return warnings
+
+
+def _required_machine_types(buckets: list[LaundryBucket]) -> list[MachineType]:
+    machine_types: list[MachineType] = []
+    for bucket in buckets:
+        if bucket.wash_method != WashMethod.MACHINE_WASH or bucket.machine_type is None:
+            continue
+        machine_types.append(bucket.machine_type)
+        if bucket.dry_method == DryMethod.LOW_HEAT_DRYER:
+            machine_types.append(MachineType.DRYER)
+    return list(dict.fromkeys(machine_types))
 
 
 def _require_available_machine(machines: list[MachineInfo], machine_type: MachineType, program: str) -> MachineInfo:

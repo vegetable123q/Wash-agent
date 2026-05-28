@@ -4,7 +4,14 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from backend.api.server import add_wardrobe_item, build_mobile_summary
+from backend.api.server import (
+    _request_is_authorized,
+    _required_api_token,
+    add_wardrobe_item,
+    build_mobile_summary,
+    delete_wardrobe_item,
+    list_campus_towers,
+)
 from backend.wardrobe.store import WardrobeStore
 
 
@@ -79,6 +86,42 @@ class MobileApiTests(unittest.TestCase):
 
             saved_names = [saved.profile.name for saved in WardrobeStore(wardrobe_path).list_items()]
             self.assertIn("用户上传的清华紫卫衣", saved_names)
+
+    def test_delete_wardrobe_item_removes_existing_item(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        sample_payload = (root / "data" / "wardrobe_sample.json").read_text(encoding="utf-8")
+
+        with TemporaryDirectory() as temp_dir:
+            wardrobe_path = Path(temp_dir) / "wardrobe.json"
+            wardrobe_path.write_text(sample_payload, encoding="utf-8")
+
+            result = delete_wardrobe_item("wm-black-jeans-001", wardrobe_path=wardrobe_path)
+
+            self.assertEqual(result, {"status": "deleted", "item_id": "wm-black-jeans-001"})
+            saved_ids = [saved.profile.item_id for saved in WardrobeStore(wardrobe_path).list_items()]
+            self.assertNotIn("wm-black-jeans-001", saved_ids)
+
+    def test_list_campus_towers_exposes_selectable_dorms(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+
+        result = list_campus_towers(root)
+
+        names = [tower["name"] for tower in result["towers"]]
+        self.assertIn("紫荆1号楼", names)
+        self.assertIn("南区21号楼", names)
+        first = result["towers"][0]
+        self.assertIn("tower_key", first)
+        self.assertIn("provider_keys", first)
+
+    def test_mobile_api_requires_explicit_token_configuration(self) -> None:
+        with self.assertRaisesRegex(ValueError, "WASH_API_TOKEN is required"):
+            _required_api_token("")
+
+    def test_mobile_api_accepts_only_matching_bearer_token(self) -> None:
+        self.assertTrue(_request_is_authorized("Bearer secret-token", "secret-token"))
+        self.assertFalse(_request_is_authorized("Bearer wrong-token", "secret-token"))
+        self.assertFalse(_request_is_authorized("Basic secret-token", "secret-token"))
+        self.assertFalse(_request_is_authorized(None, "secret-token"))
 
 
 if __name__ == "__main__":

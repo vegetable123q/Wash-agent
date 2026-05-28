@@ -238,6 +238,31 @@ class EModuleTests(unittest.TestCase):
                 CampusContext(available_machines=_campus_context().available_machines, pricing_rules={}),
             )
 
+    def test_budget_and_max_wait_constraints_are_explicit_warnings(self) -> None:
+        items = [_item("white-tee", "白色纯棉 T 恤", colors=["white"], materials={"cotton": 1.0})]
+        context = _campus_context()
+        context.queue_estimates = [
+            MachineQueueEstimate(
+                machine_type=MachineType.STANDARD_WASHER,
+                total_count=1,
+                available_count=0,
+                running_count=1,
+                out_of_service_count=0,
+                unknown_count=0,
+                estimated_wait_minutes=12,
+            )
+        ]
+
+        plan = plan_laundry(
+            items,
+            LaundryConstraints(selected_item_ids=["white-tee"], budget_yuan=2, max_wait_minutes=5),
+            context,
+        )
+
+        warnings = " ".join(plan.global_warnings)
+        self.assertIn("超过预算", warnings)
+        self.assertIn("预计等待 12 分钟超过最大等待 5 分钟", warnings)
+
     def test_report_describes_plan_without_mutating_it(self) -> None:
         items = [
             _item("white-tee", "白色纯棉 T 恤", colors=["white"], materials={"cotton": 1.0}),

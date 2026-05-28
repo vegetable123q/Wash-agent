@@ -1,16 +1,32 @@
 import { Save, UserRound } from "lucide-react";
 import { FormEvent, useState } from "react";
+import type { ApiConnectionConfig } from "../api/apiConnection";
 import { Card, Chip, Page, Section } from "../components/AppChrome";
+import type { CampusTower } from "../api/mobileSummary";
 import type { UserProfile } from "../userProfile";
 
 interface ProfileScreenProps {
   profile: UserProfile;
+  apiConfig: ApiConnectionConfig;
+  towerOptions?: CampusTower[];
   onSave: (profile: UserProfile) => void;
+  onSaveApiConfig: (config: ApiConnectionConfig) => void;
+  onClearApiConfig: () => void;
 }
 
-export function ProfileScreen({ profile, onSave }: ProfileScreenProps) {
+export function ProfileScreen({
+  profile,
+  apiConfig,
+  towerOptions = [],
+  onSave,
+  onSaveApiConfig,
+  onClearApiConfig,
+}: ProfileScreenProps) {
   const [draft, setDraft] = useState(profile);
+  const [apiDraft, setApiDraft] = useState(apiConfig);
   const [saved, setSaved] = useState(false);
+  const [apiSaved, setApiSaved] = useState(false);
+  const selectedDormIsListed = towerOptions.some((tower) => tower.name === draft.dormName);
 
   const updateDraft = (patch: Partial<UserProfile>) => {
     setSaved(false);
@@ -21,6 +37,18 @@ export function ProfileScreen({ profile, onSave }: ProfileScreenProps) {
     event.preventDefault();
     onSave(draft);
     setSaved(true);
+  };
+
+  const handleApiSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    onSaveApiConfig(apiDraft);
+    setApiSaved(true);
+  };
+
+  const handleApiClear = () => {
+    setApiDraft({ apiBaseUrl: "", apiToken: "" });
+    setApiSaved(false);
+    onClearApiConfig();
   };
 
   return (
@@ -58,12 +86,26 @@ export function ProfileScreen({ profile, onSave }: ProfileScreenProps) {
             </label>
             <label>
               <span>宿舍楼</span>
-              <input
+              <select
                 className="input-like"
+                aria-label="宿舍楼"
                 value={draft.dormName}
-                onChange={(event) => updateDraft({ dormName: event.target.value })}
-                placeholder="例如 南区 21 号楼"
-              />
+                onChange={(event) => {
+                  const tower = towerOptions.find((option) => option.name === event.target.value);
+                  updateDraft({
+                    dormName: event.target.value,
+                    towerKey: tower?.tower_key ?? "",
+                  });
+                }}
+              >
+                <option value="">请选择宿舍楼</option>
+                {draft.dormName && !selectedDormIsListed ? <option value={draft.dormName}>{draft.dormName}</option> : null}
+                {towerOptions.map((tower) => (
+                  <option key={`${tower.provider}:${tower.tower_key}`} value={tower.name}>
+                    {tower.name}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
               <span>楼栋编码</span>
@@ -101,10 +143,58 @@ export function ProfileScreen({ profile, onSave }: ProfileScreenProps) {
 
         {saved ? <p className="form-status form-status-ok">个人信息已保存</p> : null}
 
-        <button className="primary-button">
+        <button className="primary-button" type="submit">
           <Save size={18} />
           保存个人信息
         </button>
+      </form>
+
+      <form className="form-stack api-config-form" onSubmit={handleApiSubmit}>
+        <Section title="API 连接">
+          <div className="form-stack">
+            <label>
+              <span>API 地址</span>
+              <input
+                className="input-like"
+                value={apiDraft.apiBaseUrl}
+                onChange={(event) => {
+                  setApiSaved(false);
+                  setApiDraft((current) => ({ ...current, apiBaseUrl: event.target.value }));
+                }}
+                placeholder="例如 https://wash-api.example.com"
+                autoCapitalize="none"
+                autoCorrect="off"
+              />
+            </label>
+            <label>
+              <span>API token</span>
+              <input
+                className="input-like"
+                type="password"
+                value={apiDraft.apiToken}
+                onChange={(event) => {
+                  setApiSaved(false);
+                  setApiDraft((current) => ({ ...current, apiToken: event.target.value }));
+                }}
+                placeholder="由 API 服务管理员提供"
+                autoCapitalize="none"
+                autoCorrect="off"
+              />
+            </label>
+          </div>
+        </Section>
+
+        {apiSaved ? <p className="form-status form-status-ok">API 配置已保存，请回到首页检查连接状态</p> : null}
+
+        <div className="button-row">
+          <button className="primary-button" type="submit">
+            <Save size={18} />
+            保存 API 配置
+          </button>
+          <button className="secondary-button" type="button" onClick={handleApiClear}>
+            清除
+          </button>
+        </div>
       </form>
     </Page>
   );

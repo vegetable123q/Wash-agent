@@ -38,7 +38,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -568,6 +569,31 @@ button.card {
   background: #51206a;
 }
 
+.secondary-button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 850;
+  padding: 0 12px;
+}
+
+.button-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.api-config-form {
+  margin-top: 18px;
+}
+
 .primary-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -595,6 +621,16 @@ button.card {
   border: 1px solid var(--line);
   background: #fff;
   color: var(--thu-purple);
+}
+
+.icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.danger-icon-button {
+  color: var(--red);
+  border-color: #f2c4c0;
 }
 
 .summary-card,
@@ -1092,7 +1128,8 @@ textarea.input-like:focus {
 }
 
 .dryer-cell,
-.mode-grid button {
+.mode-grid button,
+.mode-option {
   min-height: 78px;
   display: grid;
   place-items: center;
@@ -1123,7 +1160,8 @@ textarea.input-like:focus {
   font-weight: 900;
 }
 
-.mode-grid button.selected {
+.mode-grid button.selected,
+.mode-option.selected {
   border-color: #d6b9e2;
   background: var(--thu-purple-3);
   color: var(--thu-purple);
@@ -1132,6 +1170,29 @@ textarea.input-like:focus {
 .contract-list {
   display: grid;
   gap: 9px;
+}
+
+.wardrobe-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.empty-state-card {
+  display: grid;
+  gap: 14px;
+}
+
+.empty-state-card h3 {
+  margin: 0 0 6px;
+}
+
+.empty-state-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
 }
 
 .contract-row {

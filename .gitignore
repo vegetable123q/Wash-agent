@@ -11,9 +11,15 @@ node_modules/
 .vite/
 .gradle/
 local.properties
+artifacts/
+*.jks
+*.keystore
+*.p12
 
 # Virtual environments
 .venv
 
 # Local API credentials
 config/api_config.json
+.env
+.env.*

@@ -1,16 +1,24 @@
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import type { MobileSummary } from "../api/mobileSummary";
 import { Card, Chip, IconAction, MetricCard, Page, Section } from "../components/AppChrome";
 import { ClothingArt } from "../components/ClothingArt";
 import { type ClothingArtKind, type ScreenId, type Tone, wardrobeItems } from "../data/washMateContent";
+import { useState } from "react";
 
 interface WardrobeScreenProps {
   mobileSummary?: MobileSummary | null;
   onNavigate: (screen: ScreenId) => void;
+  onViewItem?: (itemId: string) => void;
+  onDeleteItem?: (itemId: string) => Promise<void>;
 }
 
-export function WardrobeScreen({ mobileSummary, onNavigate }: WardrobeScreenProps) {
+export function WardrobeScreen({ mobileSummary, onNavigate, onViewItem, onDeleteItem }: WardrobeScreenProps) {
+  const [deletingId, setDeletingId] = useState("");
+  const [deleteMessage, setDeleteMessage] = useState("");
+  const [deleteError, setDeleteError] = useState("");
   const backendItems = mobileSummary?.wardrobe.items ?? [];
+  const isBackendSnapshot = Boolean(mobileSummary);
+  const isEmptyBackendWardrobe = isBackendSnapshot && backendItems.length === 0;
   const cards =
     backendItems.length > 0
       ? backendItems.map((item) => ({
@@ -19,6 +27,7 @@ export function WardrobeScreen({ mobileSummary, onNavigate }: WardrobeScreenProp
           description: item.user_note || item.user_notes?.[0] || `${item.wash_count} 次洗涤记录`,
           art: artForName(item.name),
           tag: tagForItem(item),
+          canDelete: true,
         }))
       : wardrobeItems.slice(0, 4).map((item) => ({
           id: item.id,
@@ -26,9 +35,10 @@ export function WardrobeScreen({ mobileSummary, onNavigate }: WardrobeScreenProp
           description: item.description,
           art: item.art,
           tag: item.tags[0],
+          canDelete: false,
         }));
-  const itemCount = backendItems.length > 0 ? String(backendItems.length) : "12";
-  const suggestedCount = backendItems.length > 0 ? String(Math.min(4, backendItems.length)) : "4";
+  const itemCount = isBackendSnapshot ? String(backendItems.length) : "12";
+  const suggestedCount = isBackendSnapshot ? String(Math.min(4, backendItems.length)) : "4";
 
   return (
     <Page>
@@ -47,36 +57,87 @@ export function WardrobeScreen({ mobileSummary, onNavigate }: WardrobeScreenProp
       </div>
 
       <Section title="衣物卡片" action={<Chip tone="teal">本次可选</Chip>}>
-        <div className="wardrobe-grid">
-          {cards.slice(0, 6).map((item) => (
-            <Card key={item.id} className="wardrobe-card" onClick={() => onNavigate("clothingDetail")}>
-              <div className="wardrobe-art-row">
-                <ClothingArt kind={item.art} />
-                <Chip tone={item.tag.tone}>{item.tag.label}</Chip>
-              </div>
-              <div>
-                <h3>{item.name}</h3>
-                <p>{item.description}</p>
-              </div>
-            </Card>
-          ))}
-        </div>
+        {deleteMessage ? <p className="form-status form-status-ok">{deleteMessage}</p> : null}
+        {deleteError ? <p className="form-status form-status-error">{deleteError}</p> : null}
+        {isEmptyBackendWardrobe ? (
+          <Card accent="blue" className="empty-state-card">
+            <div>
+              <h3>还没有衣物记录</h3>
+              <p>添加第一件衣物后，衣柜会显示材质、风险、穿着和洗涤次数。</p>
+            </div>
+            <button type="button" className="secondary-button" onClick={() => onNavigate("addClothing")}>
+              添加第一件衣物
+            </button>
+          </Card>
+        ) : (
+          <div className="wardrobe-grid">
+            {cards.slice(0, 6).map((item) => (
+              <Card key={item.id} className="wardrobe-card">
+                <div className="wardrobe-art-row">
+                  <ClothingArt kind={item.art} />
+                  <Chip tone={item.tag.tone}>{item.tag.label}</Chip>
+                </div>
+                <div>
+                  <h3>{item.name}</h3>
+                  <p>{item.description}</p>
+                </div>
+                <div className="wardrobe-card-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => (onViewItem ? onViewItem(item.id) : onNavigate("clothingDetail"))}
+                  >
+                    查看详情
+                  </button>
+                  {item.canDelete ? (
+                    <button
+                      type="button"
+                      className="icon-button danger-icon-button"
+                      aria-label={`删除 ${item.name}`}
+                      disabled={deletingId === item.id}
+                      onClick={async () => {
+                        if (!onDeleteItem) {
+                          return;
+                        }
+                        setDeletingId(item.id);
+                        setDeleteMessage("");
+                        setDeleteError("");
+                        try {
+                          await onDeleteItem(item.id);
+                          setDeleteMessage(`已删除 ${item.name}`);
+                        } catch (error) {
+                          setDeleteError(error instanceof Error ? error.message : "删除失败");
+                        } finally {
+                          setDeletingId("");
+                        }
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  ) : null}
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
       </Section>
 
-      <Section title="优先级">
-        <Card>
-          <div className="dense-row">
-            <span className="round-icon round-icon-orange">
-              <Plus size={17} />
-            </span>
-            <div>
-              <h3>运动 T 恤建议本次清洗</h3>
-              <p>运动后穿着，明天早课可能要穿。</p>
+      {!isEmptyBackendWardrobe ? (
+        <Section title="优先级">
+          <Card>
+            <div className="dense-row">
+              <span className="round-icon round-icon-orange">
+                <Plus size={17} />
+              </span>
+              <div>
+                <h3>运动 T 恤建议本次清洗</h3>
+                <p>运动后穿着，明天早课可能要穿。</p>
+              </div>
+              <Chip tone="orange">急</Chip>
             </div>
-            <Chip tone="orange">急</Chip>
-          </div>
-        </Card>
-      </Section>
+          </Card>
+        </Section>
+      ) : null}
     </Page>
   );
 }

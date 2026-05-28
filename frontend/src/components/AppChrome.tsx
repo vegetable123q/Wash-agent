@@ -40,7 +40,7 @@ export function TopBar({ title, onBack, action }: TopBarProps) {
   return (
     <div className="top-bar">
       {onBack ? (
-        <button className="icon-button" onClick={onBack} aria-label="返回">
+        <button className="icon-button" type="button" onClick={onBack} aria-label="返回">
           <ArrowLeft size={20} />
         </button>
       ) : (
@@ -72,6 +72,7 @@ export function BottomNav({ active, onNavigate }: BottomNavProps) {
         const Icon = item.icon;
         return (
           <button
+            type="button"
             key={item.id}
             className={`nav-item ${active === item.id ? "active" : ""}`}
             onClick={() => onNavigate(item.id)}
@@ -113,6 +114,7 @@ export function Card({
     <Tag
       className={`card ${accent ? `card-accent card-accent-${accent}` : ""} ${className}`}
       onClick={onClick}
+      {...(onClick ? { type: "button" } : {})}
     >
       {children}
       {onClick ? <ChevronRight className="card-chevron" size={18} /> : null}
@@ -147,7 +149,7 @@ export function MetricCard({ value, label }: { value: string; label: string }) {
 
 export function IconAction({ onClick, label }: { onClick: () => void; label: string }) {
   return (
-    <button className="icon-button" onClick={onClick} aria-label={label}>
+    <button className="icon-button" type="button" onClick={onClick} aria-label={label}>
       <Plus size={20} />
     </button>
   );

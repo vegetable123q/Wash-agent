@@ -1,14 +1,29 @@
 import { Edit3 } from "lucide-react";
+import type { WardrobeSummaryItem } from "../api/mobileSummary";
 import { Card, Chip, MetricCard, Page, Section, TopBar } from "../components/AppChrome";
 import { ClothingArt } from "../components/ClothingArt";
-import { wardrobeItems } from "../data/washMateContent";
+import { type WardrobeItemView } from "../data/washMateContent";
 
 interface ClothingDetailScreenProps {
   onBack: () => void;
+  backendItem?: WardrobeSummaryItem | null;
+  staticItem?: WardrobeItemView | null;
 }
 
-export function ClothingDetailScreen({ onBack }: ClothingDetailScreenProps) {
-  const item = wardrobeItems[1];
+export function ClothingDetailScreen({ onBack, backendItem, staticItem }: ClothingDetailScreenProps) {
+  if (!backendItem && !staticItem) {
+    return (
+      <Page compact>
+        <TopBar title="衣物详情" onBack={onBack} />
+        <Card accent="orange" className="warning-surface">
+          <h2>未找到衣物记录</h2>
+          <p>请从衣柜列表重新选择衣物。</p>
+        </Card>
+      </Page>
+    );
+  }
+
+  const item = backendItem ? detailFromBackend(backendItem) : detailFromStatic(staticItem as WardrobeItemView);
 
   return (
     <Page compact>
@@ -16,7 +31,7 @@ export function ClothingDetailScreen({ onBack }: ClothingDetailScreenProps) {
         title="衣物详情"
         onBack={onBack}
         action={
-          <button className="icon-button" aria-label="编辑衣物">
+          <button className="icon-button" type="button" aria-label="编辑衣物" disabled title="当前详情页仅展示衣物记忆">
             <Edit3 size={18} />
           </button>
         }
@@ -26,7 +41,7 @@ export function ClothingDetailScreen({ onBack }: ClothingDetailScreenProps) {
         <ClothingArt kind={item.art} size="lg" />
         <div>
           <h2>{item.name}</h2>
-          <p>{item.material} · 深色 · 秋冬厚衣物</p>
+          <p>{item.material} · {item.colorText}</p>
           <div className="chip-row">
             {item.tags.map((tag) => (
               <Chip key={tag.label} tone={tag.tone}>
@@ -52,9 +67,9 @@ export function ClothingDetailScreen({ onBack }: ClothingDetailScreenProps) {
               <strong>{item.riskLevel}</strong>
             </div>
             <div className="progress-bar">
-              <span style={{ width: "82%" }} />
+              <span style={{ width: item.riskProgress }} />
             </div>
-            <p>历史备注显示曾缩水，本次建议低温 60 分钟或延长悬挂晾干。</p>
+            <p>{item.riskDescription}</p>
           </div>
         </Card>
       </Section>
@@ -66,21 +81,101 @@ export function ClothingDetailScreen({ onBack }: ClothingDetailScreenProps) {
               <span className="step-token">1</span>
               <div>
                 <h3>与深色衣物同桶</h3>
-                <p>不要和白 T、床单混洗。</p>
+                <p>{item.recommendation}</p>
               </div>
             </div>
             <div className="dense-row">
               <span className="step-token step-token-amber">2</span>
               <div>
-                <h3>标准洗 + 低温烘干</h3>
-                <p>拉好拉链，翻面减少磨损。</p>
+                <h3>洗护记录</h3>
+                <p>{item.historyText}</p>
               </div>
             </div>
           </div>
         </Card>
       </Section>
 
-      <button className="primary-button">加入本次洗衣</button>
+      <button className="primary-button" type="button" disabled title="本次洗衣清单由今日方案生成">
+        加入本次洗衣
+      </button>
     </Page>
   );
+}
+
+function detailFromBackend(item: WardrobeSummaryItem) {
+  const riskValues = Object.values(item.risks);
+  const highRisk = riskValues.includes("high");
+  const mediumRisk = riskValues.includes("medium");
+  const userNote = item.user_note || item.user_notes?.[0] || "没有额外备注";
+  return {
+    name: item.name,
+    art: artForName(item.name),
+    material: materialText(item.material_ratios),
+    colorText: item.colors.length > 0 ? item.colors.join("、") : "颜色未记录",
+    wearCount: item.wear_count_since_wash,
+    washCount: item.wash_count,
+    tags: [
+      highRisk
+        ? { label: "高风险", tone: "red" as const }
+        : mediumRisk
+          ? { label: "需注意", tone: "orange" as const }
+          : { label: "可机洗", tone: "teal" as const },
+    ],
+    riskTitle: riskTitle(item.risks),
+    riskLevel: highRisk ? "高" : mediumRisk ? "中" : "低",
+    riskProgress: highRisk ? "82%" : mediumRisk ? "54%" : "24%",
+    riskDescription: riskValues.length > 0 ? `后端风险字段：${JSON.stringify(item.risks)}` : "后端未记录额外风险。",
+    recommendation: userNote,
+    historyText: `已穿 ${item.wear_count_since_wash} 次，累计洗涤 ${item.wash_count} 次。`,
+  };
+}
+
+function detailFromStatic(item: WardrobeItemView) {
+  return {
+    name: item.name,
+    art: item.art,
+    material: item.material,
+    colorText: item.description,
+    wearCount: item.wearCount,
+    washCount: item.washCount,
+    tags: item.tags,
+    riskTitle: item.riskTitle,
+    riskLevel: item.riskLevel,
+    riskProgress: item.riskLevel === "高" ? "82%" : item.riskLevel === "中" ? "54%" : "24%",
+    riskDescription: item.recommendation,
+    recommendation: item.recommendation,
+    historyText: `已穿 ${item.wearCount} 次，累计洗涤 ${item.washCount} 次。`,
+  };
+}
+
+function materialText(materialRatios: Record<string, number>) {
+  const entries = Object.entries(materialRatios);
+  if (entries.length === 0) {
+    return "材质未记录";
+  }
+  return entries.map(([material, ratio]) => `${material} ${Math.round(ratio * 100)}%`).join("、");
+}
+
+function riskTitle(risks: Record<string, string>) {
+  const keys = Object.keys(risks);
+  return keys.length > 0 ? keys.join("、") : "后端风险画像";
+}
+
+function artForName(name: string) {
+  if (name.includes("裤")) {
+    return "jeans" as const;
+  }
+  if (name.includes("羊毛") || name.includes("开衫")) {
+    return "wool" as const;
+  }
+  if (name.includes("床") || name.includes("被")) {
+    return "bedding" as const;
+  }
+  if (name.includes("运动")) {
+    return "sport" as const;
+  }
+  if (name.includes("卫衣") || name.includes("帽")) {
+    return "hoodie" as const;
+  }
+  return "tee" as const;
 }

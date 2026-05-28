@@ -1,14 +1,16 @@
 import { Camera, Save } from "lucide-react";
 import { FormEvent, useState } from "react";
+import { hasCompleteApiConnectionConfig, type ApiConnectionConfig } from "../api/apiConnection";
 import { createWardrobeItem } from "../api/mobileSummary";
 import { Card, Chip, Page, Section, TopBar } from "../components/AppChrome";
 
 interface AddClothingScreenProps {
+  apiConfig: ApiConnectionConfig;
   onBack: () => void;
   onSaved?: () => void | Promise<void>;
 }
 
-export function AddClothingScreen({ onBack, onSaved }: AddClothingScreenProps) {
+export function AddClothingScreen({ apiConfig, onBack, onSaved }: AddClothingScreenProps) {
   const [mode, setMode] = useState<"photo" | "text">("photo");
   const [name, setName] = useState("优衣库灰色连帽卫衣");
   const [material, setMaterial] = useState("棉混纺");
@@ -18,7 +20,8 @@ export function AddClothingScreen({ onBack, onSaved }: AddClothingScreenProps) {
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState("");
 
-  const canSubmit = name.trim().length > 0 && status !== "saving";
+  const hasApiConfig = hasCompleteApiConnectionConfig(apiConfig);
+  const canSubmit = hasApiConfig && name.trim().length > 0 && status !== "saving";
 
   const resultRows = [
     ["类别", name.trim() || "待填写"],
@@ -35,13 +38,16 @@ export function AddClothingScreen({ onBack, onSaved }: AddClothingScreenProps) {
     setStatus("saving");
     setError("");
     try {
-      await createWardrobeItem({
-        name: name.trim(),
-        material: material.trim(),
-        colors: colors.trim(),
-        note: note.trim(),
-        image_filename: imageFilename,
-      });
+      await createWardrobeItem(
+        {
+          name: name.trim(),
+          material: material.trim(),
+          colors: colors.trim(),
+          note: note.trim(),
+          image_filename: imageFilename,
+        },
+        apiConfig,
+      );
       setStatus("saved");
       await onSaved?.();
     } catch (saveError) {
@@ -55,10 +61,10 @@ export function AddClothingScreen({ onBack, onSaved }: AddClothingScreenProps) {
       <TopBar title="添加衣物" onBack={onBack} />
 
       <div className="segmented">
-        <button className={mode === "photo" ? "active" : ""} onClick={() => setMode("photo")}>
-          拍照识别
+        <button type="button" className={mode === "photo" ? "active" : ""} onClick={() => setMode("photo")}>
+          图片记录
         </button>
-        <button className={mode === "text" ? "active" : ""} onClick={() => setMode("text")}>
+        <button type="button" className={mode === "text" ? "active" : ""} onClick={() => setMode("text")}>
           文字输入
         </button>
       </div>
@@ -66,7 +72,7 @@ export function AddClothingScreen({ onBack, onSaved }: AddClothingScreenProps) {
       <label className="upload-panel">
         <Camera size={32} />
         <strong>{imageFilename || "上传衣物、吊牌或洗护标签"}</strong>
-        <span>{mode === "photo" ? "选择图片后会保存文件名并参与衣柜记录" : "文字输入也可以直接保存"}</span>
+        <span>{mode === "photo" ? "当前移动端只保存图片文件名，洗护抽取以文字字段和后端结果为准" : "文字输入也可以直接保存"}</span>
         <input
           className="file-input"
           type="file"
@@ -112,10 +118,11 @@ export function AddClothingScreen({ onBack, onSaved }: AddClothingScreenProps) {
           </Card>
         </Section>
 
+        {!hasApiConfig ? <p className="form-status form-status-error">请先在“我的”页面输入 API 地址和 token</p> : null}
         {status === "saved" ? <p className="form-status form-status-ok">保存成功，已加入衣柜</p> : null}
         {status === "error" ? <p className="form-status form-status-error">{error}</p> : null}
 
-        <button className="primary-button" disabled={!canSubmit}>
+        <button className="primary-button" type="submit" disabled={!canSubmit}>
           <Save size={18} />
           {status === "saving" ? "正在保存" : "保存到衣柜"}
         </button>

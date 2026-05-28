@@ -5,7 +5,7 @@ import { backendPlanSummary, bucketPlans, todaySummary, type ScreenId } from "..
 import type { UserProfile } from "../userProfile";
 
 interface TodayScreenProps {
-  backendStatus?: "loading" | "connected" | "offline";
+  backendStatus?: "unconfigured" | "loading" | "connected" | "offline";
   mobileSummary?: MobileSummary | null;
   userProfile?: UserProfile;
   onNavigate: (screen: ScreenId) => void;
@@ -54,7 +54,9 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
       ? "后端已连接"
       : backendStatus === "loading"
         ? "连接后端中"
-        : "前端预览";
+        : backendStatus === "unconfigured"
+          ? "待配置 API"
+          : "前端预览";
 
   return (
     <Page>
@@ -64,7 +66,7 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
           <h1>{todaySummary.title}</h1>
           <p>{subtitle}</p>
         </div>
-        <Chip tone={connected ? "teal" : "amber"}>{connected ? statusLabel : todaySummary.weatherBadge}</Chip>
+        <Chip tone={connected ? "teal" : "amber"}>{statusLabel}</Chip>
       </header>
 
       <PrimaryPanel>
@@ -164,7 +166,7 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
       </Section>
 
       <Section title="下一步">
-        <button className="primary-button" onClick={() => onNavigate("planDetail")}>
+        <button className="primary-button" type="button" onClick={() => onNavigate("planDetail")}>
           <Sparkles size={18} />
           查看本次方案
           <ArrowRight size={18} />

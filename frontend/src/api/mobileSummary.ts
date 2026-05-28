@@ -34,21 +34,31 @@ export interface WeatherSnapshot {
   error?: string;
 }
 
+export interface CampusTower {
+  name: string;
+  tower_key: string;
+  provider: string;
+  provider_keys: Record<string, string>;
+}
+
+export interface WardrobeSummaryItem {
+  item_id: string;
+  name: string;
+  user_note?: string;
+  user_notes?: string[];
+  wear_count_since_wash: number;
+  wash_count: number;
+  material_ratios: Record<string, number>;
+  colors: string[];
+  risks: Record<string, string>;
+}
+
 export interface MobileSummary {
   source: "backend";
   weather?: WeatherSnapshot;
+  campus_towers?: CampusTower[];
   wardrobe: {
-    items: Array<{
-      item_id: string;
-      name: string;
-      user_note?: string;
-      user_notes?: string[];
-      wear_count_since_wash: number;
-      wash_count: number;
-      material_ratios: Record<string, number>;
-      colors: string[];
-      risks: Record<string, string>;
-    }>;
+    items: WardrobeSummaryItem[];
   };
   campus_context: {
     all_machines: BackendMachine[];
@@ -81,9 +91,8 @@ export interface MobileSummary {
   };
 }
 
-export async function fetchMobileSummary(): Promise<MobileSummary> {
-  const apiBase = import.meta.env.VITE_API_BASE ?? "";
-  const response = await fetch(`${apiBase}/api/mobile/summary`);
+export async function fetchMobileSummary(config: ApiConnectionConfig = loadApiConnectionConfig()): Promise<MobileSummary> {
+  const response = await fetchMobileApi("/api/mobile/summary", undefined, config);
   if (!response.ok) {
     throw new Error(`Failed to load mobile summary: ${response.status}`);
   }
@@ -98,15 +107,34 @@ export interface WardrobeInput {
   image_filename: string;
 }
 
-export async function createWardrobeItem(input: WardrobeInput) {
-  const apiBase = import.meta.env.VITE_API_BASE ?? "";
-  const response = await fetch(`${apiBase}/api/wardrobe/items`, {
+export async function createWardrobeItem(input: WardrobeInput, config: ApiConnectionConfig = loadApiConnectionConfig()) {
+  const response = await fetchMobileApi("/api/wardrobe/items", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
-  });
+  }, config);
   if (!response.ok) {
     throw new Error(`Failed to save wardrobe item: ${response.status}`);
   }
   return response.json();
 }
+
+export async function deleteWardrobeItem(itemId: string, config: ApiConnectionConfig = loadApiConnectionConfig()) {
+  const response = await fetchMobileApi(`/api/wardrobe/items/${encodeURIComponent(itemId)}`, {
+    method: "DELETE",
+  }, config);
+  if (!response.ok) {
+    throw new Error(`Failed to delete wardrobe item: ${response.status}`);
+  }
+  return response.json();
+}
+
+function fetchMobileApi(path: string, init: RequestInit = {}, config: ApiConnectionConfig): Promise<Response> {
+  if (!hasCompleteApiConnectionConfig(config)) {
+    throw new Error("API connection is not configured");
+  }
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${config.apiToken}`);
+  return fetch(`${config.apiBaseUrl}${path}`, { ...init, headers });
+}
+import { hasCompleteApiConnectionConfig, loadApiConnectionConfig, type ApiConnectionConfig } from "./apiConnection";

@@ -1,13 +1,28 @@
 import { AlertTriangle, Database, WashingMachine } from "lucide-react";
+import type { BackendMachine } from "../api/mobileSummary";
 import { Card, Chip, Page, PrimaryPanel, Section, TopBar } from "../components/AppChrome";
-import { machines } from "../data/washMateContent";
+import { type MachineView } from "../data/washMateContent";
 
 interface MachineDetailScreenProps {
   onBack: () => void;
+  backendMachine?: BackendMachine | null;
+  staticMachine?: MachineView | null;
 }
 
-export function MachineDetailScreen({ onBack }: MachineDetailScreenProps) {
-  const machine = machines.find((item) => item.id === "A02") ?? machines[0];
+export function MachineDetailScreen({ onBack, backendMachine, staticMachine }: MachineDetailScreenProps) {
+  if (!backendMachine && !staticMachine) {
+    return (
+      <Page compact>
+        <TopBar title="机器详情" onBack={onBack} />
+        <Card accent="orange" className="warning-surface">
+          <h2>未找到机器记录</h2>
+          <p>请从洗衣房机器列表重新选择机器。</p>
+        </Card>
+      </Page>
+    );
+  }
+
+  const machine = backendMachine ? detailFromBackend(backendMachine) : detailFromStatic(staticMachine as MachineView);
   const modes = machine.modes.length ? machine.modes.join(" / ") : "无可用模式";
 
   return (
@@ -77,10 +92,10 @@ export function MachineDetailScreen({ onBack }: MachineDetailScreenProps) {
       <Section title="可选模式">
         <div className="mode-grid">
           {machine.modes.map((mode) => (
-            <button key={mode} className={mode === "standard" ? "selected" : ""}>
+            <div key={mode} className={`mode-option ${mode === "standard" ? "selected" : ""}`}>
               <strong>{mode}</strong>
               <span>{mode === "quick" ? "34 分 · 轻薄" : mode === "heavy" ? "58 分 · 厚衣" : "45 分 · 日常"}</span>
-            </button>
+            </div>
           ))}
         </div>
       </Section>
@@ -110,7 +125,54 @@ export function MachineDetailScreen({ onBack }: MachineDetailScreenProps) {
         </Card>
       </Section>
 
-      <button className="primary-button">用于深色衣物桶</button>
+      <button className="primary-button" type="button" disabled title="机器选择由后端 LaundryPlan 决定">
+        用于深色衣物桶
+      </button>
     </Page>
   );
+}
+
+function detailFromBackend(machine: BackendMachine) {
+  return {
+    backendId: machine.machine_id,
+    name: machine.machine_id,
+    location: machine.location,
+    backendType: machine.machine_type,
+    capacity: machine.capacity_kg === null ? "容量未知" : `${machine.capacity_kg}kg`,
+    status: statusText(machine.status),
+    backendStatus: machine.status,
+    remaining: machine.remaining_minutes === null ? "等待未知" : `${machine.remaining_minutes} 分钟`,
+    price: machine.price_yuan === null ? "价格待定" : `¥${machine.price_yuan}`,
+    modes: machine.modes,
+    ruleKey: `machine_types.${machine.machine_type}`,
+  };
+}
+
+function detailFromStatic(machine: MachineView) {
+  return {
+    backendId: machine.backendId,
+    name: machine.name,
+    location: machine.location,
+    backendType: machine.backendType,
+    capacity: machine.capacity,
+    status: machine.status,
+    backendStatus: machine.backendStatus,
+    remaining: machine.remaining,
+    price: machine.price,
+    modes: machine.modes,
+    ruleKey: machine.ruleKey,
+  };
+}
+
+function statusText(status: string) {
+  if (status === "available") {
+    return "空闲";
+  }
+  if (status === "running") {
+    return "运行中";
+  }
+  if (status === "out_of_service") {
+    return "故障";
+  }
+  return "未知";
 }

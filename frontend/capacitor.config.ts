@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: "WashMate Campus",
   webDir: "dist",
   server: {
-    androidScheme: "https",
+    androidScheme: "http",
   },
 };
 
