@@ -144,7 +144,7 @@ Copy-Item config/api_config.example.json config/api_config.json
 
 客户端只读取 `config/api_config.json`，不读取环境变量，也不使用其他字段名。缺少 `baseUrl`、`apikey` 或 `model_name` 时会显式报错。
 
-## 衣柜记忆与洗护频率
+### 衣柜记忆与洗护频率
 
 衣柜模块负责保存用户衣物、维护穿着次数、洗涤历史和用户备注，并根据当前洗衣约束生成洗护频率建议。
 
@@ -173,6 +173,7 @@ store.add_wash_record(
     "wm-white-tee-001",
     WashRecord(washed_at="2026-05-28", method=WashMethod.MACHINE_WASH),
 )
+```
 
 本模块只负责衣柜记忆与洗护频率，不调用 LLM，不读取洗衣机状态，不生成最终洗衣方案或报告。
 
