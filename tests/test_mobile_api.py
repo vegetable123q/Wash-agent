@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 
 from backend.api.server import (
     _request_is_authorized,
-    _required_api_token,
+    _required_api_key,
     add_wardrobe_item,
     build_mobile_summary,
     delete_wardrobe_item,
@@ -122,15 +122,14 @@ class MobileApiTests(unittest.TestCase):
         self.assertIn("tower_key", first)
         self.assertIn("provider_keys", first)
 
-    def test_mobile_api_requires_explicit_token_configuration(self) -> None:
-        with self.assertRaisesRegex(ValueError, "WASH_API_TOKEN is required"):
-            _required_api_token("")
+    def test_mobile_api_requires_explicit_api_key_configuration(self) -> None:
+        with self.assertRaisesRegex(ValueError, "WASH_API_KEY is required"):
+            _required_api_key("")
 
-    def test_mobile_api_accepts_only_matching_bearer_token(self) -> None:
-        self.assertTrue(_request_is_authorized("Bearer secret-token", "secret-token"))
-        self.assertFalse(_request_is_authorized("Bearer wrong-token", "secret-token"))
-        self.assertFalse(_request_is_authorized("Basic secret-token", "secret-token"))
-        self.assertFalse(_request_is_authorized(None, "secret-token"))
+    def test_mobile_api_accepts_only_matching_api_key_header(self) -> None:
+        self.assertTrue(_request_is_authorized("secret-key", "secret-key"))
+        self.assertFalse(_request_is_authorized("wrong-key", "secret-key"))
+        self.assertFalse(_request_is_authorized(None, "secret-key"))
 
 
 def _mock_machine_client(root: Path) -> LaundryMachineClient:

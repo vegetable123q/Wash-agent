@@ -134,7 +134,7 @@ function fetchMobileApi(path: string, init: RequestInit = {}, config: ApiConnect
     throw new Error("API connection is not configured");
   }
   const headers = new Headers(init.headers);
-  headers.set("Authorization", `Bearer ${config.apiToken}`);
-  return fetch(`${config.apiBaseUrl}${path}`, { ...init, headers });
+  headers.set("x-api-key", config.apikey);
+  return fetch(`${config.baseUrl}${path}`, { ...init, headers });
 }
 import { hasCompleteApiConnectionConfig, loadApiConnectionConfig, type ApiConnectionConfig } from "./apiConnection";

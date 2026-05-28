@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AddClothingScreen } from "./AddClothingScreen";
 
 const apiConfig = {
-  apiBaseUrl: "http://127.0.0.1:8000",
-  apiToken: "test-token",
+  baseUrl: "http://127.0.0.1:8000",
+  apikey: "test-key",
 };
 
 describe("AddClothingScreen", () => {
@@ -56,7 +56,7 @@ describe("AddClothingScreen", () => {
     );
     const requestHeaders = fetchMock.mock.calls[0][1]?.headers as Headers;
     expect(requestHeaders.get("Content-Type")).toBe("application/json");
-    expect(requestHeaders.get("Authorization")).toBe("Bearer test-token");
+    expect(requestHeaders.get("x-api-key")).toBe("test-key");
     expect(await screen.findByText("保存成功，已加入衣柜")).toBeInTheDocument();
     expect(onSaved).toHaveBeenCalledTimes(1);
   });
@@ -99,10 +99,10 @@ describe("AddClothingScreen", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<AddClothingScreen apiConfig={{ apiBaseUrl: "", apiToken: "" }} onBack={() => undefined} />);
+    render(<AddClothingScreen apiConfig={{ baseUrl: "", apikey: "" }} onBack={() => undefined} />);
 
     expect(screen.getByRole("button", { name: /保存到衣柜/ })).toBeDisabled();
-    expect(screen.getByText("请先在“我的”页面输入 API 地址和 token")).toBeInTheDocument();
+    expect(screen.getByText("请先在“我的”页面输入 baseUrl 和 apikey")).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

@@ -1,34 +1,24 @@
 export interface ApiConnectionConfig {
-  apiBaseUrl: string;
-  apiToken: string;
+  baseUrl: string;
+  apikey: string;
 }
 
 const STORAGE_KEY = "washmate.apiConnection";
 
 export const emptyApiConnectionConfig: ApiConnectionConfig = {
-  apiBaseUrl: "",
-  apiToken: "",
+  baseUrl: "",
+  apikey: "",
 };
 
 export function loadApiConnectionConfig(): ApiConnectionConfig {
-  if (typeof localStorage === "undefined") {
-    return emptyApiConnectionConfig;
+  if (typeof localStorage !== "undefined") {
+    localStorage.removeItem(STORAGE_KEY);
   }
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    return emptyApiConnectionConfig;
-  }
-  try {
-    return normalizeApiConnectionConfig(JSON.parse(raw));
-  } catch {
-    return emptyApiConnectionConfig;
-  }
+  return emptyApiConnectionConfig;
 }
 
 export function saveApiConnectionConfig(config: ApiConnectionConfig): ApiConnectionConfig {
-  const normalized = normalizeApiConnectionConfig(config);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
-  return normalized;
+  return normalizeApiConnectionConfig(config);
 }
 
 export function clearApiConnectionConfig(): ApiConnectionConfig {
@@ -37,14 +27,14 @@ export function clearApiConnectionConfig(): ApiConnectionConfig {
 }
 
 export function hasCompleteApiConnectionConfig(config: ApiConnectionConfig): boolean {
-  return Boolean(config.apiBaseUrl && config.apiToken);
+  return Boolean(config.baseUrl && config.apikey);
 }
 
 export function normalizeApiConnectionConfig(value: unknown): ApiConnectionConfig {
   const config = typeof value === "object" && value !== null ? (value as Partial<ApiConnectionConfig>) : {};
   return {
-    apiBaseUrl: normalizeApiBaseUrl(config.apiBaseUrl),
-    apiToken: String(config.apiToken ?? "").trim(),
+    baseUrl: normalizeApiBaseUrl(config.baseUrl),
+    apikey: String(config.apikey ?? "").trim(),
   };
 }
 

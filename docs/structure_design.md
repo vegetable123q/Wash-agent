@@ -97,7 +97,7 @@ Wash-agent/
 应该做：
 
 - 提供 `/api/mobile/summary`、`/api/wardrobe/items` 和 `/api/weather/current` 等本地 HTTP JSON 边界。
-- 服务启动必须显式配置 API token：调用方传 `api_token` 或设置 `WASH_API_TOKEN`。除 `OPTIONS` 预检外，所有移动端 API 请求必须带 `Authorization: Bearer <token>`；缺失或不匹配返回 `401`，不能降级为匿名访问。
+- 服务启动必须显式配置 API key：调用方传 `api_key` 或设置 `WASH_API_KEY`。除 `OPTIONS` 预检外，所有移动端 API 请求必须带 `x-api-key`；缺失或不匹配返回 `401`。
 - 提供 `DELETE /api/wardrobe/items/{item_id}`，让移动端衣柜支持删除已有衣物；删除必须通过 `WardrobeStore.delete_item()`，不存在的衣物返回显式错误，不静默成功。
 - 提供 `/api/campus/towers`，并在 `/api/mobile/summary.campus_towers` 中附带可选宿舍楼列表。移动端个人页使用该列表渲染宿舍楼下拉菜单，保存时同步 `dormName` 和 `towerKey`。
 - 编排已有后端模块，把 `WardrobeStore`、`CampusContext`、`LaundryPlan` 和 `WashReport` 转成前端可消费的 JSON。
@@ -118,8 +118,8 @@ Wash-agent/
 
 - 构建手机版 WashMate Campus 交互界面和 Capacitor Android 包装。
 - 通过 `/api/*` 调用本地移动端 API，不直接导入或调用后端业务函数。
-- API 地址和 token 只能来自用户在移动端“我的”页输入并保存在当前设备的运行时配置；release APK 不内置真实 API 地址、API token 或服务端密钥。个人页可以用当前输入测试连接，测试通过后同一配置用于摘要、方案、报告、衣柜新增和衣柜删除请求。
-- 所有移动端 API 请求必须带 Bearer token。若 API 地址或 token 未配置，前端不得发起请求，应显示待配置状态。
+- `baseUrl` 和 `apikey` 只能来自用户在移动端“我的”页输入；release APK 不内置真实 API 地址、API key 或服务端密钥，也不能把用户输入的 `baseUrl` / `apikey` 写入持久化存储。个人页可以用当前输入测试连接，测试通过后同一内存配置用于摘要、方案、报告、衣柜新增和衣柜删除请求。
+- 所有移动端 API 请求必须带 `x-api-key`。若 `baseUrl` 或 `apikey` 未配置，前端不得发起请求，应显示待配置状态。
 - 保存仅限当前设备的界面偏好和个人洗衣上下文，例如宿舍楼、最晚取衣时间和烘干偏好；后续接入账号系统后再迁移到后端 profile API。
 - 图片选择当前只保留文件名用于本地衣柜记录，不上传二进制图片内容。
 - 后端不可用时必须在 UI 上明确标记为前端预览状态。
@@ -131,7 +131,7 @@ Wash-agent/
 不应该做：
 
 - 不直接调用外部网络服务。
-- 不在源码、构建配置或 APK 中保存密钥、令牌、真实账号凭证或遥测数据；用户手动输入的 API token 只作为当前设备运行时连接配置使用。
+- 不在源码、构建配置、APK 或前端持久化存储中保存密钥、令牌、真实账号凭证或遥测数据；用户手动输入的 `baseUrl` 和 `apikey` 只作为本次打开期间的内存连接配置使用。
 - 不在前端重复实现洗衣规则、衣物抽取、机器解析、天气解析或报告生成逻辑。
 
 ## 模块职责
@@ -147,8 +147,7 @@ Wash-agent/
 - 搭建手机版 WashMate Campus 前端视觉与本地交互壳。
 - 使用静态演示数据呈现离线预览；后端摘要存在时优先展示后端衣柜、机器、方案和报告记录。
 - 通过 Capacitor 保留 Android APK 包装路径。
-- Android 调试 APK 使用 `http` scheme 和 cleartext 本地网络访问，以便模拟器通过 `http://10.0.2.2:8000` 调用本机 `backend.api.server`。该配置只用于本地 API 验收，不在前端保存真实账号凭证或密钥。
-- Android release APK 默认禁止 cleartext；生产 API 应使用 HTTPS。debug 变体可启用 cleartext 以支持本地模拟器调试。
+- Android APK 允许用户输入的 `baseUrl` 使用 `http` 或 `https`，以便模拟器通过 `http://10.0.2.2:8000` 调用本机 `backend.api.server`。前端不得保存真实账号凭证或密钥。
 
 不应该做：
 
@@ -173,7 +172,7 @@ Wash-agent/
 
 不应该做：
 
-- 不把 keystore、签名密码、API token 或生产 API 地址写进源码、workflow 明文或 APK 构建参数。
+- 不把 keystore、签名密码、API key 或生产 API 地址写进源码、workflow 明文或 APK 构建参数。
 - 不让 `preview` 自动发布 APK。
 
 ### 页面入口

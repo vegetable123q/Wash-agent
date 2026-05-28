@@ -102,12 +102,17 @@ const backendSummary = {
 };
 
 const apiConfig = {
-  apiBaseUrl: "http://127.0.0.1:8000",
-  apiToken: "test-token",
+  baseUrl: "http://127.0.0.1:8000",
+  apikey: "test-key",
 };
 
-function storeApiConfig() {
-  localStorage.setItem("washmate.apiConnection", JSON.stringify(apiConfig));
+async function enterApiConfig() {
+  fireEvent.click(screen.getByRole("button", { name: /我的/ }));
+  fireEvent.change(screen.getByLabelText("baseUrl"), { target: { value: `${apiConfig.baseUrl}/` } });
+  fireEvent.change(screen.getByLabelText("apikey"), { target: { value: apiConfig.apikey } });
+  fireEvent.click(screen.getByRole("button", { name: /测试连接/ }));
+  expect(await screen.findByText("API 已连接，完整功能可用")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /今日/ }));
 }
 
 describe("App backend integration", () => {
@@ -118,7 +123,6 @@ describe("App backend integration", () => {
   });
 
   it("loads the mobile summary from the backend API and marks the UI as connected", async () => {
-    storeApiConfig();
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -128,6 +132,7 @@ describe("App backend integration", () => {
     );
 
     render(<App />);
+    await enterApiConfig();
 
     expect(await screen.findByText("后端已连接")).toBeInTheDocument();
     expect(screen.getByText("真实后端生成的洗衣方案")).toBeInTheDocument();
@@ -135,7 +140,6 @@ describe("App backend integration", () => {
   });
 
   it("keeps the main mobile navigation and primary actions clickable", async () => {
-    storeApiConfig();
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -145,6 +149,7 @@ describe("App backend integration", () => {
     );
 
     render(<App />);
+    await enterApiConfig();
 
     expect(await screen.findByText("后端已连接")).toBeInTheDocument();
 
@@ -159,7 +164,6 @@ describe("App backend integration", () => {
   });
 
   it("opens detail screens with the selected backend wardrobe item and machine", async () => {
-    storeApiConfig();
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -169,6 +173,7 @@ describe("App backend integration", () => {
     );
 
     render(<App />);
+    await enterApiConfig();
 
     expect(await screen.findByText("后端已连接")).toBeInTheDocument();
 
@@ -186,19 +191,24 @@ describe("App backend integration", () => {
   });
 
   it("shows the offline preview state when the backend API is unavailable", async () => {
-    storeApiConfig();
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
 
     render(<App />);
 
-    expect(await screen.findByText("前端预览")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /我的/ }));
+    fireEvent.change(screen.getByLabelText("baseUrl"), { target: { value: `${apiConfig.baseUrl}/` } });
+    fireEvent.change(screen.getByLabelText("apikey"), { target: { value: apiConfig.apikey } });
+    fireEvent.click(screen.getByRole("button", { name: /测试连接/ }));
+
+    expect(await screen.findByText("API 连接失败，请检查 baseUrl、apikey 或网络")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /今日/ }));
+    expect(screen.getByText("前端预览")).toBeInTheDocument();
     expect(screen.getByText("今晚洗衣")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /衣柜/ }));
     expect(screen.getByText("白色纯棉 T 恤")).toBeInTheDocument();
   });
 
   it("saves personal laundry context and uses the dorm on the laundry room screen", async () => {
-    storeApiConfig();
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -208,6 +218,7 @@ describe("App backend integration", () => {
     );
 
     render(<App />);
+    await enterApiConfig();
 
     expect(await screen.findByText("后端已连接")).toBeInTheDocument();
 
@@ -225,7 +236,6 @@ describe("App backend integration", () => {
   });
 
   it("deletes wardrobe items from the backend instead of only allowing additions", async () => {
-    storeApiConfig();
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
@@ -243,6 +253,7 @@ describe("App backend integration", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
+    await enterApiConfig();
 
     expect(await screen.findByText("后端已连接")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /衣柜/ }));
@@ -255,10 +266,10 @@ describe("App backend integration", () => {
       expect.objectContaining({ method: "DELETE" }),
     );
     const deleteHeaders = fetchMock.mock.calls[1][1]?.headers as Headers;
-    expect(deleteHeaders.get("Authorization")).toBe("Bearer test-token");
+    expect(deleteHeaders.get("x-api-key")).toBe("test-key");
   });
 
-  it("does not call the backend until API settings are entered manually", async () => {
+  it("does not call or store the backend config until baseUrl and apikey are entered manually", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
@@ -268,17 +279,18 @@ describe("App backend integration", () => {
     expect(fetchMock).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: /我的/ }));
-    fireEvent.change(screen.getByLabelText("API 地址"), { target: { value: "http://127.0.0.1:8000/" } });
-    fireEvent.change(screen.getByLabelText("API token"), { target: { value: "test-token" } });
-    fireEvent.click(screen.getByRole("button", { name: /保存 API 配置/ }));
+    fireEvent.change(screen.getByLabelText("baseUrl"), { target: { value: "http://127.0.0.1:8000/" } });
+    fireEvent.change(screen.getByLabelText("apikey"), { target: { value: "test-key" } });
+    fireEvent.click(screen.getByRole("button", { name: /应用 API 配置/ }));
 
-    expect(await screen.findByText("API 配置已保存，请回到首页检查连接状态")).toBeInTheDocument();
+    expect(await screen.findByText("API 配置仅在本次打开期间生效，请测试连接")).toBeInTheDocument();
+    expect(localStorage.getItem("washmate.apiConnection")).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
       "http://127.0.0.1:8000/api/mobile/summary",
       expect.objectContaining({ headers: expect.any(Headers) }),
     );
     const summaryHeaders = fetchMock.mock.calls[0][1]?.headers as Headers;
-    expect(summaryHeaders.get("Authorization")).toBe("Bearer test-token");
+    expect(summaryHeaders.get("x-api-key")).toBe("test-key");
   });
 
   it("uses manually entered API settings for the full mobile backend flow", async () => {
@@ -329,8 +341,8 @@ describe("App backend integration", () => {
     expect(fetchMock).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: /我的/ }));
-    fireEvent.change(screen.getByLabelText("API 地址"), { target: { value: "http://127.0.0.1:8000/" } });
-    fireEvent.change(screen.getByLabelText("API token"), { target: { value: "test-token" } });
+    fireEvent.change(screen.getByLabelText("baseUrl"), { target: { value: "http://127.0.0.1:8000/" } });
+    fireEvent.change(screen.getByLabelText("apikey"), { target: { value: "test-key" } });
     fireEvent.click(screen.getByRole("button", { name: /测试连接/ }));
 
     expect(await screen.findByText("API 已连接，完整功能可用")).toBeInTheDocument();
@@ -338,7 +350,8 @@ describe("App backend integration", () => {
       "http://127.0.0.1:8000/api/mobile/summary",
       expect.objectContaining({ headers: expect.any(Headers) }),
     );
-    expect((fetchMock.mock.calls[0][1]?.headers as Headers).get("Authorization")).toBe("Bearer test-token");
+    expect((fetchMock.mock.calls[0][1]?.headers as Headers).get("x-api-key")).toBe("test-key");
+    expect(localStorage.getItem("washmate.apiConnection")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /今日/ }));
     expect(screen.getByText("后端已连接")).toBeInTheDocument();
@@ -359,7 +372,7 @@ describe("App backend integration", () => {
         expect.objectContaining({ method: "POST" }),
       );
     });
-    expect((fetchMock.mock.calls[1][1]?.headers as Headers).get("Authorization")).toBe("Bearer test-token");
+    expect((fetchMock.mock.calls[1][1]?.headers as Headers).get("x-api-key")).toBe("test-key");
     expect(await screen.findByText("保存成功，已加入衣柜")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "返回" }));
@@ -372,6 +385,6 @@ describe("App backend integration", () => {
         expect.objectContaining({ method: "DELETE" }),
       );
     });
-    expect((fetchMock.mock.calls[3][1]?.headers as Headers).get("Authorization")).toBe("Bearer test-token");
+    expect((fetchMock.mock.calls[3][1]?.headers as Headers).get("x-api-key")).toBe("test-key");
   });
 });

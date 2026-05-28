@@ -148,12 +148,12 @@ def run_server(
     host: str = "127.0.0.1",
     port: int = 8000,
     root: Path | str | None = None,
-    api_token: str | None = None,
+    api_key: str | None = None,
 ) -> None:
     """Run the local development API server."""
 
     repo_root = Path(root) if root is not None else Path(__file__).resolve().parents[2]
-    configured_api_token = _required_api_token(api_token)
+    configured_api_key = _required_api_key(api_key)
 
     class MobileApiHandler(BaseHTTPRequestHandler):
         def do_OPTIONS(self) -> None:
@@ -249,18 +249,18 @@ def run_server(
             return payload
 
         def _authorize_request(self) -> bool:
-            if _request_is_authorized(self.headers.get("Authorization"), configured_api_token):
+            if _request_is_authorized(self.headers.get("x-api-key"), configured_api_key):
                 return True
             self._send_json(
                 HTTPStatus.UNAUTHORIZED,
-                {"error": "unauthorized", "message": "Valid Bearer token is required"},
+                {"error": "unauthorized", "message": "Valid x-api-key header is required"},
             )
             return False
 
         def _send_cors_headers(self) -> None:
             self.send_header("Access-Control-Allow-Origin", "*")
             self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, x-api-key")
 
     server = ThreadingHTTPServer((host, port), MobileApiHandler)
     print(f"WashMate API listening on http://{host}:{port}/api/mobile/summary")
@@ -333,20 +333,17 @@ def _to_jsonable(value: Any) -> Any:
     return value
 
 
-def _required_api_token(value: str | None = None) -> str:
-    token = str(value if value is not None else os.environ.get("WASH_API_TOKEN", "")).strip()
-    if not token:
-        raise ValueError("WASH_API_TOKEN is required to run the mobile API")
-    return token
+def _required_api_key(value: str | None = None) -> str:
+    api_key = str(value if value is not None else os.environ.get("WASH_API_KEY", "")).strip()
+    if not api_key:
+        raise ValueError("WASH_API_KEY is required to run the mobile API")
+    return api_key
 
 
-def _request_is_authorized(authorization_header: str | None, configured_api_token: str) -> bool:
-    if not authorization_header:
+def _request_is_authorized(api_key_header: str | None, configured_api_key: str) -> bool:
+    if not api_key_header:
         return False
-    scheme, separator, token = authorization_header.partition(" ")
-    if separator != " " or scheme.lower() != "bearer":
-        return False
-    return hmac.compare_digest(token.strip(), configured_api_token)
+    return hmac.compare_digest(api_key_header.strip(), configured_api_key)
 
 
 def main() -> None:
@@ -354,9 +351,9 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--root", default=str(Path(__file__).resolve().parents[2]))
-    parser.add_argument("--api-token", default=None, help="Bearer token for mobile API requests. Defaults to WASH_API_TOKEN.")
+    parser.add_argument("--api-key", default=None, help="API key for mobile API requests. Defaults to WASH_API_KEY.")
     args = parser.parse_args()
-    run_server(args.host, args.port, args.root, api_token=args.api_token)
+    run_server(args.host, args.port, args.root, api_key=args.api_key)
 
 
 if __name__ == "__main__":

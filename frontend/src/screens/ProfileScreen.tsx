@@ -71,7 +71,7 @@ export function ProfileScreen({
   };
 
   const handleApiClear = () => {
-    setApiDraft({ apiBaseUrl: "", apiToken: "" });
+    setApiDraft({ baseUrl: "", apikey: "" });
     setApiSaved(false);
     setApiTesting(false);
     onClearApiConfig();
@@ -179,30 +179,30 @@ export function ProfileScreen({
         <Section title="API 连接" action={<Chip tone={apiStatus.tone}>{apiStatus.label}</Chip>}>
           <div className="form-stack">
             <label>
-              <span>API 地址</span>
+              <span>baseUrl</span>
               <input
                 className="input-like"
-                value={apiDraft.apiBaseUrl}
+                value={apiDraft.baseUrl}
                 onChange={(event) => {
                   setApiSaved(false);
-                  setApiDraft((current) => ({ ...current, apiBaseUrl: event.target.value }));
+                  setApiDraft((current) => ({ ...current, baseUrl: event.target.value }));
                 }}
-                placeholder="例如 https://wash-api.example.com"
+                placeholder="例如 http://10.0.2.2:8000"
                 autoCapitalize="none"
                 autoCorrect="off"
               />
             </label>
             <label>
-              <span>API token</span>
+              <span>apikey</span>
               <input
                 className="input-like"
                 type="password"
-                value={apiDraft.apiToken}
+                value={apiDraft.apikey}
                 onChange={(event) => {
                   setApiSaved(false);
-                  setApiDraft((current) => ({ ...current, apiToken: event.target.value }));
+                  setApiDraft((current) => ({ ...current, apikey: event.target.value }));
                 }}
-                placeholder="由 API 服务管理员提供"
+                placeholder="与后端 WASH_API_KEY 一致"
                 autoCapitalize="none"
                 autoCorrect="off"
               />
@@ -210,16 +210,16 @@ export function ProfileScreen({
           </div>
         </Section>
 
-        {apiSaved ? <p className="form-status form-status-ok">API 配置已保存，请回到首页检查连接状态</p> : null}
+        {apiSaved ? <p className="form-status form-status-ok">API 配置仅在本次打开期间生效，请测试连接</p> : null}
         {apiSaved && backendStatus === "connected" ? <p className="form-status form-status-ok">API 已连接，完整功能可用</p> : null}
         {apiSaved && backendStatus === "offline" ? (
-          <p className="form-status form-status-error">API 连接失败，请检查地址、token 或网络</p>
+          <p className="form-status form-status-error">API 连接失败，请检查 baseUrl、apikey 或网络</p>
         ) : null}
 
         <div className="button-row">
           <button className="primary-button" type="submit">
             <Save size={18} />
-            保存 API 配置
+            应用 API 配置
           </button>
           <button className="secondary-button" type="button" onClick={handleApiTest} disabled={!hasApiDraft || apiTesting}>
             <Wifi size={18} />

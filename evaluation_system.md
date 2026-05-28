@@ -223,8 +223,8 @@ npm run apk:debug
 
 ### 已完成自动化验收
 
-- Python unittest：通过，`uv run python -m unittest discover -v`，78 项。
-- Frontend test：通过，`npm test -- --run`，8 个测试文件、18 项；覆盖运行时 API 配置、Bearer token 请求、衣柜删除、宿舍楼选择、图片记录文案、保存中禁用防重复提交、离线预览、空后端衣柜、所选衣物详情、所选机器详情和缺失机器显式状态。
+- Python unittest：通过，`uv run python -m unittest discover -v`，79 项。
+- Frontend test：通过，`npm test -- --run`，8 个测试文件、19 项；覆盖运行时 `baseUrl`/`apikey` 配置、`x-api-key` 请求、API 配置不写入持久化存储、衣柜删除、宿舍楼选择、图片记录文案、保存中禁用防重复提交、离线预览、空后端衣柜、所选衣物详情、所选机器详情和缺失机器显式状态。
 - Frontend build：通过，`npm run build`。
 - Capacitor sync：通过，`npm run cap:sync`。
 - APK debug build：通过，`npm run apk:debug`，生成 `frontend/android/app/build/outputs/apk/debug/app-debug.apk`，文件大小约 4.0M。
@@ -245,9 +245,9 @@ npm run apk:debug
 - P1：今日页离线状态计算了“前端预览”但实际显示天气徽标，用户无法判断后端不可用。已改为直接显示后端连接状态，并用集成测试覆盖。
 - P1：衣物和机器“查看详情”会进入固定样例详情，容易被认为按钮无效或数据错乱。已改为传递所选记录；无对应记录时显示显式未找到状态。
 - P1：APK 能打开但默认无法连接本机后端；`https://localhost` 页面请求 `http://10.0.2.2:8000` 被 WebView mixed content 拦截。已将 Capacitor Android scheme 改为 `http`，Android manifest 显式允许 cleartext 本地 API，并新增 `dev:api:emulator` / `apk:debug:emulator` 脚本复现模拟器验收。
-- P1：release APK 不应内置真实 API 地址或 token。已新增运行时 API 配置页；未输入 API 地址和 token 时前端不发起请求，所有移动端 API 请求携带 `Authorization: Bearer <token>`。
-- P1：移动端 API 不能匿名访问。已要求 `backend.api.server` 启动时显式配置 `WASH_API_TOKEN` 或 `--api-token`，非 `OPTIONS` 请求缺失或 token 不匹配时返回 `401`。
-- P1：debug 为模拟器打开 cleartext 后，release 也会继承明文 HTTP 能力。已改为 debug 允许 cleartext，release `usesCleartextTraffic=false`，生产 API 应使用 HTTPS。
+- P1：release APK 不应内置或保存真实 API 地址或 key。已新增运行时 API 配置页；未输入 `baseUrl` 和 `apikey` 时前端不发起请求，所有移动端 API 请求携带 `x-api-key`，并且该配置只保留在本次打开期间的内存状态中。
+- P1：移动端 API 需要显式 apikey。已要求 `backend.api.server` 启动时显式配置 `WASH_API_KEY` 或 `--api-key`，非 `OPTIONS` 请求缺失或 key 不匹配时返回 `401`。
+- P1：发布 APK 应允许用户输入的 `baseUrl` 直接连接。已改为 debug 和 release 均允许 cleartext，用户只需在“我的”页输入 `baseUrl` 和 `apikey`。
 - P1：提交到 GitHub 后缺少自动 APK 发布链路。已新增 `preview` 分支验证 workflow 和 `main` 分支 signed release APK 发布 workflow；签名 keystore 只从 GitHub Secrets 注入。
 - P1：`LaundryConstraints.max_wait_minutes` 已建模但 planner 未对最大等待时间不足生成显式提醒。已在全局 warning 中补充等待时间缺失、未知和超时提醒，并新增预算不足 + 最大等待不足测试。
 - P1：添加衣物保存遇到慢请求时缺少重复点击回归测试。已新增前端测试覆盖保存中按钮 disabled，重复点击不重复 POST。

@@ -221,5 +221,5 @@ export default function App() {
 }
 
 function apiConfigKey(config: ApiConnectionConfig): string {
-  return `${config.apiBaseUrl}\n${config.apiToken}`;
+  return `${config.baseUrl}\n${config.apikey}`;
 }

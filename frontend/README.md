@@ -5,8 +5,8 @@ This folder contains the mobile-only frontend visual design for WashMate Campus.
 ## Scope
 
 - Mobile frontend design with an optional local backend API connection.
-- The app calls `/api/mobile/summary` only after the user enters an API base URL and API token in the Profile screen, then saves or tests that connection.
-- Release builds do not embed a real API URL or token. Runtime requests use `Authorization: Bearer <token>`.
+- The app calls `/api/mobile/summary` only after the user enters `baseUrl` and `apikey` in the Profile screen, then saves or tests that connection.
+- Release builds do not embed or persist `baseUrl` or `apikey`. Runtime requests use the `x-api-key` header.
 - If the backend API is not configured, the UI marks itself as waiting for API configuration. If a configured API is unavailable, the UI marks itself as a frontend preview state.
 - No analytics, telemetry, or binary image uploads. The current image picker stores only the selected file name in wardrobe records and the UI says so explicitly.
 - Wardrobe records can be added and deleted through the local backend API.
@@ -22,6 +22,7 @@ Start the backend API in one terminal:
 cd ..
 uv sync
 cd frontend
+$env:WASH_API_KEY="<local-api-key>"
 npm run dev:api
 ```
 
@@ -29,39 +30,33 @@ For Android emulator validation, bind the API to all interfaces so the emulator 
 
 ```powershell
 cd frontend
+$env:WASH_API_KEY="<local-api-key>"
 npm run dev:api:emulator
-```
-
-Set `WASH_API_TOKEN` before starting the local API:
-
-```powershell
-$env:WASH_API_TOKEN="<local-token>"
-npm run dev:api
 ```
 
 In the app, open `我的`, set:
 
 ```text
-API 地址: http://127.0.0.1:8000
-API token: <local-token>
+baseUrl: http://127.0.0.1:8000
+apikey: <local-api-key>
 ```
 
-Tap `测试连接` on the same screen. A connected state means the same runtime API settings will be used for summary, plan, report, wardrobe add, and wardrobe delete requests.
+Tap `测试连接` on the same screen. A connected state means the same in-memory API settings will be used for summary, plan, report, wardrobe add, and wardrobe delete requests until the app is closed or refreshed.
 
 For the Android emulator, use:
 
 ```text
-API 地址: http://10.0.2.2:8000
-API token: <local-token>
+baseUrl: http://10.0.2.2:8000
+apikey: <local-api-key>
 ```
 
-For any non-demo deployment, run the backend with an operator-controlled token:
+For any non-demo deployment, run the backend with an operator-controlled API key:
 
 ```powershell
-WASH_API_TOKEN=<shared-secret> uv run python -m backend.api.server --host 0.0.0.0 --port 8000
+WASH_API_KEY=<shared-key> uv run python -m backend.api.server --host 0.0.0.0 --port 8000
 ```
 
-Do not put the production token in `package.json`, source files, or APK build variables.
+Do not put the production API key in `package.json`, source files, or APK build variables.
 
 Start the mobile frontend in another terminal:
 
@@ -116,7 +111,7 @@ frontend/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 The Android project also sets `android.overridePathCheck=true` because this workspace path contains non-ASCII characters.
-Debug APKs allow cleartext traffic so the local emulator can call `http://10.0.2.2:8000` during development validation. Release APKs set `usesCleartextTraffic=false`; production API URLs should use HTTPS.
+Debug and release APKs allow the user-entered `baseUrl` to use either `http` or `https`.
 
 ## Branch and Release Workflow
 

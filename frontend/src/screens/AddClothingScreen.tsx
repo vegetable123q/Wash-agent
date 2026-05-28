@@ -118,7 +118,7 @@ export function AddClothingScreen({ apiConfig, onBack, onSaved }: AddClothingScr
           </Card>
         </Section>
 
-        {!hasApiConfig ? <p className="form-status form-status-error">请先在“我的”页面输入 API 地址和 token</p> : null}
+        {!hasApiConfig ? <p className="form-status form-status-error">请先在“我的”页面输入 baseUrl 和 apikey</p> : null}
         {status === "saved" ? <p className="form-status form-status-ok">保存成功，已加入衣柜</p> : null}
         {status === "error" ? <p className="form-status form-status-error">{error}</p> : null}
 
