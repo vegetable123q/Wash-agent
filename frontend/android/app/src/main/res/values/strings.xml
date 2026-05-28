@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">WashMate Campus</string>
+    <string name="title_activity_main">WashMate Campus</string>
+    <string name="package_name">edu.tsinghua.washmatecampus</string>
+    <string name="custom_url_scheme">edu.tsinghua.washmatecampus</string>
+</resources>

@@ -6,6 +6,12 @@ dist/
 wheels/
 *.egg-info
 
+# Frontend dependencies and generated local files
+node_modules/
+.vite/
+.gradle/
+local.properties
+
 # Virtual environments
 .venv
 

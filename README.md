@@ -2,6 +2,35 @@
 
 面向校园共享洗衣场景的衣物洗护助手。当前代码按语义目录拆分，衣物信息抽取模块负责把用户上传或输入的衣物信息抽取成后续衣柜、洗衣决策、报告模块可使用的结构化数据。
 
+## 手机版前端视觉工程
+
+移动端实现位于 `frontend/`，使用 Vite + React + TypeScript + Capacitor。当前版本已提供本地后端接入：前端会请求 `/api/mobile/summary`，由 `backend.api.server` 调用衣柜、校园机器上下文、洗衣计划和报告模块生成页面摘要；未启动后端 API 时会回退到静态预览数据。
+
+```powershell
+cd frontend
+npm install
+npm run dev:api
+```
+
+另开一个终端：
+
+```powershell
+cd frontend
+npm run dev
+npm test
+npm run build
+npm run cap:sync
+```
+
+本机已配置 JDK 21 和 Android SDK 35，可直接生成 debug APK：
+
+```powershell
+cd frontend
+npm run apk:debug
+```
+
+生成文件位于 `frontend/android/app/build/outputs/apk/debug/app-debug.apk`。
+
 ## 衣物核心洗护信息抽取
 
 衣物抽取模块只负责“数据获取与结构化”，不负责衣柜存储、机器状态、洗衣方案或商品推荐。

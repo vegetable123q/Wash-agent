@@ -1,0 +1,49 @@
+export interface UserProfile {
+  displayName: string;
+  dormName: string;
+  towerKey: string;
+  latestPickupTime: string;
+  allowDryer: boolean;
+}
+
+export const defaultUserProfile: UserProfile = {
+  displayName: "",
+  dormName: "",
+  towerKey: "",
+  latestPickupTime: "22:30",
+  allowDryer: false,
+};
+
+const STORAGE_KEY = "washmate.userProfile";
+
+export function loadUserProfile(): UserProfile {
+  if (typeof localStorage === "undefined") {
+    return defaultUserProfile;
+  }
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) {
+    return defaultUserProfile;
+  }
+  try {
+    return normalizeProfile(JSON.parse(raw));
+  } catch {
+    return defaultUserProfile;
+  }
+}
+
+export function saveUserProfile(profile: UserProfile): UserProfile {
+  const normalized = normalizeProfile(profile);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+  return normalized;
+}
+
+function normalizeProfile(value: unknown): UserProfile {
+  const profile = typeof value === "object" && value !== null ? (value as Partial<UserProfile>) : {};
+  return {
+    displayName: String(profile.displayName ?? "").trim(),
+    dormName: String(profile.dormName ?? "").trim(),
+    towerKey: String(profile.towerKey ?? "").trim(),
+    latestPickupTime: String(profile.latestPickupTime ?? defaultUserProfile.latestPickupTime).trim(),
+    allowDryer: Boolean(profile.allowDryer),
+  };
+}

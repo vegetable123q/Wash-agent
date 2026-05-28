@@ -56,6 +56,14 @@ Wash-agent/
     api_config.example.json
     api_config.json
     machine_rules.json
+  frontend/
+    package.json
+    capacitor.config.ts
+    src/
+      App.tsx
+      data/
+      components/
+      screens/
   tests/
     test_campus_context.py
     test_campus_machine_api.py
@@ -66,6 +74,24 @@ Wash-agent/
 ```
 
 ## 模块职责
+
+### 移动端前端视觉工程
+
+文件：
+
+- `frontend/`
+
+应该做：
+
+- 搭建手机版 WashMate Campus 前端视觉与本地交互壳。
+- 使用静态演示数据呈现今日方案、衣柜、洗衣房、报告和对应二级页。
+- 通过 Capacitor 保留 Android APK 包装路径。
+
+不应该做：
+
+- 不调用后端业务函数或外部网络服务。
+- 不保存真实用户数据、密钥或上传内容。
+- 不在前端重复实现洗衣规则、衣物抽取、机器解析或报告生成逻辑。
 
 ### 页面入口
 
