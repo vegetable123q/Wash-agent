@@ -5,7 +5,7 @@ This folder contains the mobile-only frontend visual design for WashMate Campus.
 ## Scope
 
 - Mobile frontend design with an optional local backend API connection.
-- The app calls `/api/mobile/summary` only after the user enters an API base URL and API token in the Profile screen.
+- The app calls `/api/mobile/summary` only after the user enters an API base URL and API token in the Profile screen, then saves or tests that connection.
 - Release builds do not embed a real API URL or token. Runtime requests use `Authorization: Bearer <token>`.
 - If the backend API is not configured, the UI marks itself as waiting for API configuration. If a configured API is unavailable, the UI marks itself as a frontend preview state.
 - No analytics, telemetry, or binary image uploads. The current image picker stores only the selected file name in wardrobe records and the UI says so explicitly.
@@ -45,6 +45,8 @@ In the app, open `我的`, set:
 API 地址: http://127.0.0.1:8000
 API token: <local-token>
 ```
+
+Tap `测试连接` on the same screen. A connected state means the same runtime API settings will be used for summary, plan, report, wardrobe add, and wardrobe delete requests.
 
 For the Android emulator, use:
 

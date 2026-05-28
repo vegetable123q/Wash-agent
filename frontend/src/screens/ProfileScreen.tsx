@@ -1,32 +1,42 @@
-import { Save, UserRound } from "lucide-react";
+import { Save, UserRound, Wifi } from "lucide-react";
 import { FormEvent, useState } from "react";
-import type { ApiConnectionConfig } from "../api/apiConnection";
+import { hasCompleteApiConnectionConfig, normalizeApiConnectionConfig, type ApiConnectionConfig } from "../api/apiConnection";
 import { Card, Chip, Page, Section } from "../components/AppChrome";
 import type { CampusTower } from "../api/mobileSummary";
 import type { UserProfile } from "../userProfile";
 
+type BackendStatus = "unconfigured" | "loading" | "connected" | "offline";
+
 interface ProfileScreenProps {
   profile: UserProfile;
   apiConfig: ApiConnectionConfig;
+  backendStatus: BackendStatus;
   towerOptions?: CampusTower[];
   onSave: (profile: UserProfile) => void;
-  onSaveApiConfig: (config: ApiConnectionConfig) => void;
+  onSaveApiConfig: (config: ApiConnectionConfig, options?: { skipAutoRefresh?: boolean }) => ApiConnectionConfig;
   onClearApiConfig: () => void;
+  onTestApiConnection: (config: ApiConnectionConfig) => Promise<void> | void;
 }
 
 export function ProfileScreen({
   profile,
   apiConfig,
+  backendStatus,
   towerOptions = [],
   onSave,
   onSaveApiConfig,
   onClearApiConfig,
+  onTestApiConnection,
 }: ProfileScreenProps) {
   const [draft, setDraft] = useState(profile);
   const [apiDraft, setApiDraft] = useState(apiConfig);
   const [saved, setSaved] = useState(false);
   const [apiSaved, setApiSaved] = useState(false);
+  const [apiTesting, setApiTesting] = useState(false);
   const selectedDormIsListed = towerOptions.some((tower) => tower.name === draft.dormName);
+  const normalizedApiDraft = normalizeApiConnectionConfig(apiDraft);
+  const hasApiDraft = hasCompleteApiConnectionConfig(normalizedApiDraft);
+  const apiStatus = apiConnectionStatus(backendStatus, hasCompleteApiConnectionConfig(apiConfig));
 
   const updateDraft = (patch: Partial<UserProfile>) => {
     setSaved(false);
@@ -45,9 +55,25 @@ export function ProfileScreen({
     setApiSaved(true);
   };
 
+  const handleApiTest = async () => {
+    if (!hasApiDraft) {
+      return;
+    }
+    setApiTesting(true);
+    setApiSaved(false);
+    try {
+      const savedConfig = onSaveApiConfig(apiDraft, { skipAutoRefresh: true });
+      await onTestApiConnection(savedConfig);
+      setApiSaved(true);
+    } finally {
+      setApiTesting(false);
+    }
+  };
+
   const handleApiClear = () => {
     setApiDraft({ apiBaseUrl: "", apiToken: "" });
     setApiSaved(false);
+    setApiTesting(false);
     onClearApiConfig();
   };
 
@@ -150,7 +176,7 @@ export function ProfileScreen({
       </form>
 
       <form className="form-stack api-config-form" onSubmit={handleApiSubmit}>
-        <Section title="API 连接">
+        <Section title="API 连接" action={<Chip tone={apiStatus.tone}>{apiStatus.label}</Chip>}>
           <div className="form-stack">
             <label>
               <span>API 地址</span>
@@ -185,11 +211,19 @@ export function ProfileScreen({
         </Section>
 
         {apiSaved ? <p className="form-status form-status-ok">API 配置已保存，请回到首页检查连接状态</p> : null}
+        {apiSaved && backendStatus === "connected" ? <p className="form-status form-status-ok">API 已连接，完整功能可用</p> : null}
+        {apiSaved && backendStatus === "offline" ? (
+          <p className="form-status form-status-error">API 连接失败，请检查地址、token 或网络</p>
+        ) : null}
 
         <div className="button-row">
           <button className="primary-button" type="submit">
             <Save size={18} />
             保存 API 配置
+          </button>
+          <button className="secondary-button" type="button" onClick={handleApiTest} disabled={!hasApiDraft || apiTesting}>
+            <Wifi size={18} />
+            {apiTesting ? "连接中" : "测试连接"}
           </button>
           <button className="secondary-button" type="button" onClick={handleApiClear}>
             清除
@@ -198,4 +232,17 @@ export function ProfileScreen({
       </form>
     </Page>
   );
+}
+
+function apiConnectionStatus(backendStatus: BackendStatus, hasSavedConfig: boolean) {
+  if (!hasSavedConfig || backendStatus === "unconfigured") {
+    return { label: "未配置", tone: "amber" as const };
+  }
+  if (backendStatus === "connected") {
+    return { label: "已连接", tone: "teal" as const };
+  }
+  if (backendStatus === "loading") {
+    return { label: "连接中", tone: "blue" as const };
+  }
+  return { label: "连接失败", tone: "red" as const };
 }

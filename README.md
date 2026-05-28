@@ -4,7 +4,7 @@
 
 ## 手机版前端视觉工程
 
-移动端实现位于 `frontend/`，使用 Vite + React + TypeScript + Capacitor。当前版本已提供受 token 保护的后端接入：用户必须在“我的”页手动输入 API 地址和 API token，前端才会请求 `/api/mobile/summary`；APK 不内置真实 API 地址或密钥。后端由 `backend.api.server` 调用衣柜、校园机器上下文、洗衣计划和报告模块生成页面摘要；未配置或无法连接后端 API 时页面会明确标记为待配置 API 或前端预览状态。衣柜支持新增和删除后端衣物，个人页使用后端楼栋列表选择宿舍楼。
+移动端实现位于 `frontend/`，使用 Vite + React + TypeScript + Capacitor。当前版本已提供受 token 保护的后端接入：用户必须在“我的”页手动输入 API 地址和 API token，并可直接测试连接，前端才会请求 `/api/mobile/summary`；APK 不内置真实 API 地址或密钥。后端由 `backend.api.server` 调用衣柜、校园机器上下文、洗衣计划和报告模块生成页面摘要；未配置或无法连接后端 API 时页面会明确标记为待配置 API 或前端预览状态。衣柜支持新增和删除后端衣物，个人页使用后端楼栋列表选择宿舍楼。
 
 ```powershell
 uv sync

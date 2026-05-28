@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
@@ -279,5 +279,99 @@ describe("App backend integration", () => {
     );
     const summaryHeaders = fetchMock.mock.calls[0][1]?.headers as Headers;
     expect(summaryHeaders.get("Authorization")).toBe("Bearer test-token");
+  });
+
+  it("uses manually entered API settings for the full mobile backend flow", async () => {
+    const addedSummary = {
+      ...backendSummary,
+      wardrobe: {
+        items: [
+          ...backendSummary.wardrobe.items,
+          {
+            item_id: "wm-hoodie-002",
+            name: "优衣库灰色连帽卫衣",
+            wear_count_since_wash: 1,
+            wash_count: 0,
+            material_ratios: { 棉混纺: 1 },
+            colors: ["深色"],
+            risks: {},
+          },
+        ],
+      },
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => backendSummary,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: "created", item_id: "wm-hoodie-002" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => addedSummary,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: "deleted", item_id: "wm-hoodie-002" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => backendSummary,
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("待配置 API")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /我的/ }));
+    fireEvent.change(screen.getByLabelText("API 地址"), { target: { value: "http://127.0.0.1:8000/" } });
+    fireEvent.change(screen.getByLabelText("API token"), { target: { value: "test-token" } });
+    fireEvent.click(screen.getByRole("button", { name: /测试连接/ }));
+
+    expect(await screen.findByText("API 已连接，完整功能可用")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:8000/api/mobile/summary",
+      expect.objectContaining({ headers: expect.any(Headers) }),
+    );
+    expect((fetchMock.mock.calls[0][1]?.headers as Headers).get("Authorization")).toBe("Bearer test-token");
+
+    fireEvent.click(screen.getByRole("button", { name: /今日/ }));
+    expect(screen.getByText("后端已连接")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /查看本次方案/ }));
+    expect(screen.getByText("真实后端生成的洗衣方案")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+    fireEvent.click(screen.getByRole("button", { name: /报告/ }));
+    expect(screen.getByText("真实后端步骤")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /衣柜/ }));
+    fireEvent.click(screen.getByLabelText("添加衣物"));
+    fireEvent.click(screen.getByRole("button", { name: /保存到衣柜/ }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://127.0.0.1:8000/api/wardrobe/items",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+    expect((fetchMock.mock.calls[1][1]?.headers as Headers).get("Authorization")).toBe("Bearer test-token");
+    expect(await screen.findByText("保存成功，已加入衣柜")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+    expect(await screen.findByText("优衣库灰色连帽卫衣")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /删除 优衣库灰色连帽卫衣/ }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://127.0.0.1:8000/api/wardrobe/items/wm-hoodie-002",
+        expect.objectContaining({ method: "DELETE" }),
+      );
+    });
+    expect((fetchMock.mock.calls[3][1]?.headers as Headers).get("Authorization")).toBe("Bearer test-token");
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   clearApiConnectionConfig,
   hasCompleteApiConnectionConfig,
@@ -19,6 +19,8 @@ import { ReportScreen } from "./screens/ReportScreen";
 import { TodayScreen } from "./screens/TodayScreen";
 import { WardrobeScreen } from "./screens/WardrobeScreen";
 import { loadUserProfile, saveUserProfile, type UserProfile } from "./userProfile";
+
+type BackendStatus = "unconfigured" | "loading" | "connected" | "offline";
 
 const parentTab: Record<ScreenId, TabId> = {
   today: "today",
@@ -47,11 +49,12 @@ const screenTime: Record<ScreenId, string> = {
 export default function App() {
   const [screen, setScreen] = useState<ScreenId>("today");
   const [mobileSummary, setMobileSummary] = useState<MobileSummary | null>(null);
-  const [backendStatus, setBackendStatus] = useState<"unconfigured" | "loading" | "connected" | "offline">("unconfigured");
+  const [backendStatus, setBackendStatus] = useState<BackendStatus>("unconfigured");
   const [userProfile, setUserProfile] = useState<UserProfile>(() => loadUserProfile());
   const [apiConfig, setApiConfig] = useState<ApiConnectionConfig>(() => loadApiConnectionConfig());
   const [selectedClothingId, setSelectedClothingId] = useState("");
   const [selectedMachineId, setSelectedMachineId] = useState("");
+  const skipAutoRefreshKeyRef = useRef("");
   const activeTab = parentTab[screen];
 
   const goBack = () => setScreen(parentTab[screen]);
@@ -60,9 +63,13 @@ export default function App() {
   const handleProfileSave = (profile: UserProfile) => {
     setUserProfile(saveUserProfile(profile));
   };
-  const handleApiConfigSave = (config: ApiConnectionConfig) => {
+  const handleApiConfigSave = (config: ApiConnectionConfig, options: { skipAutoRefresh?: boolean } = {}) => {
     const savedConfig = saveApiConnectionConfig(config);
+    if (options.skipAutoRefresh) {
+      skipAutoRefreshKeyRef.current = apiConfigKey(savedConfig);
+    }
     setApiConfig(savedConfig);
+    return savedConfig;
   };
   const handleApiConfigClear = () => {
     setApiConfig(clearApiConnectionConfig());
@@ -78,14 +85,14 @@ export default function App() {
     setScreen("machineDetail");
   };
 
-  const refreshMobileSummary = async () => {
-    if (!hasCompleteApiConnectionConfig(apiConfig)) {
+  const refreshMobileSummary = async (configOverride: ApiConnectionConfig = apiConfig) => {
+    if (!hasCompleteApiConnectionConfig(configOverride)) {
       setMobileSummary(null);
       setBackendStatus("unconfigured");
       return;
     }
     setBackendStatus("loading");
-    return fetchMobileSummary(apiConfig)
+    return fetchMobileSummary(configOverride)
       .then((summary) => {
         setMobileSummary(summary);
         setBackendStatus("connected");
@@ -108,6 +115,13 @@ export default function App() {
     if (!hasCompleteApiConnectionConfig(apiConfig)) {
       setMobileSummary(null);
       setBackendStatus("unconfigured");
+      return () => {
+        active = false;
+      };
+    }
+    const currentConfigKey = apiConfigKey(apiConfig);
+    if (skipAutoRefreshKeyRef.current === currentConfigKey) {
+      skipAutoRefreshKeyRef.current = "";
       return () => {
         active = false;
       };
@@ -186,6 +200,8 @@ export default function App() {
             onSave={handleProfileSave}
             onSaveApiConfig={handleApiConfigSave}
             onClearApiConfig={handleApiConfigClear}
+            backendStatus={backendStatus}
+            onTestApiConnection={refreshMobileSummary}
           />
         );
     }
@@ -202,4 +218,8 @@ export default function App() {
       </div>
     </div>
   );
+}
+
+function apiConfigKey(config: ApiConnectionConfig): string {
+  return `${config.apiBaseUrl}\n${config.apiToken}`;
 }
