@@ -179,6 +179,56 @@ store.add_wash_record(
 
 本模块只负责衣柜记忆与洗护频率，不调用 LLM，不读取洗衣机状态，不生成最终洗衣方案或报告。
 
+### 洗衣计划与报告
+
+E 模块负责把已选择的衣柜衣物和校园上下文转换成可执行洗衣方案，并把方案生成可读报告。
+
+相关文件：
+
+- `backend/laundry/planner.py`：分桶、洗衣模式、烘干方式、费用时间和风险提醒。
+- `backend/reports/generator.py`：把 `LaundryPlan` 转换成 `WashReport`。
+- `tests/test_e_module.py`：E 模块真实单元测试。
+
+`plan_laundry()` 不读取页面状态、不调用 LLM、不读取机器文件。调用方必须显式传入：
+
+- `LaundryConstraints.selected_item_ids`
+- `CampusContext.available_machines`
+- `CampusContext.pricing_rules["wash_programs"]`
+- `CampusContext.pricing_rules["dryer_programs"]`，当允许并推荐烘干时需要
+
+价格和时长规则示例：
+
+```python
+pricing_rules = {
+    "wash_programs": {
+        "standard": {"price_yuan": 4.0, "duration_minutes": 35},
+        "large": {"price_yuan": 6.0, "duration_minutes": 45},
+        "gentle": {"price_yuan": 4.0, "duration_minutes": 30},
+    },
+    "dryer_programs": {
+        "low": {"price_yuan": 2.0, "duration_minutes": 25},
+    },
+}
+```
+
+缺少所选衣物、可用机器、价格或时长时，模块会显式抛出 `ValueError`，不会编造默认方案。
+
+基本用法：
+
+```python
+from backend.laundry.planner import plan_laundry
+from backend.reports.generator import generate_report
+from backend.shared.models import LaundryConstraints
+
+constraints = LaundryConstraints(
+    selected_item_ids=["wm-white-tee-001", "wm-black-jeans-001"],
+    allow_dryer=False,
+)
+
+plan = plan_laundry(items, constraints, campus_context)
+report = generate_report(plan, items, campus_context)
+```
+
 ### 本地验证
 
 本项目统一使用 `uv` 管理依赖和运行命令，不使用 `requirements.txt`。
@@ -186,6 +236,7 @@ store.add_wash_record(
 ```powershell
 uv run python -m unittest tests.test_clothing_extraction -v
 uv run python -m unittest tests.test_c_module -v
+uv run python -m unittest tests.test_e_module -v
 uv run python -m unittest discover -v
 uv run python scripts/demo_c_module.py
 ```
