@@ -24,5 +24,45 @@
   "drying_context": {
     "balcony_available": true,
     "ventilation": "normal"
+  },
+  "machine_type_map": {
+    "洗衣机": "standard_washer",
+    "洗鞋机": "shoe_washer",
+    "烘干机": "dryer"
+  },
+  "washer_types": {
+    "small_washer": {
+      "capacity_kg": 5.0,
+      "default_price_yuan": 2.0,
+      "modes": ["quick", "standard"]
+    },
+    "standard_washer": {
+      "capacity_kg": 7.0,
+      "default_price_yuan": 3.0,
+      "modes": ["quick", "standard", "heavy"]
+    },
+    "large_washer": {
+      "capacity_kg": 10.0,
+      "default_price_yuan": 4.0,
+      "modes": ["standard", "heavy"]
+    },
+    "shoe_washer": {}
+  },
+  "dryer_modes": {
+    "30min": {
+      "duration_minutes": 30,
+      "price_yuan": 3.0
+    },
+    "60min": {
+      "duration_minutes": 60,
+      "price_yuan": 5.0
+    },
+    "90min": {
+      "duration_minutes": 90,
+      "price_yuan": 7.0
+    }
+  },
+  "pricing": {
+    "currency": "CNY"
   }
 }

@@ -57,6 +57,11 @@ Wash-agent/
     api_config.json
     machine_rules.json
   tests/
+    test_campus_context.py
+    test_campus_machine_api.py
+    test_d_module.py
+    test_e_module.py
+    test_full_integration.py
     test_clothing_extraction.py
 ```
 
@@ -92,6 +97,7 @@ Wash-agent/
 
 - 存放跨模块使用的 dataclass 和 Enum。
 - 作为页面、衣物抽取、衣柜、校园上下文、洗衣计划和报告模块之间的唯一共享数据契约。
+- 当前校园模块新增 `MachineTower`，用于把 CleverSchool 楼号和海乐生活点位列表传给页面层；`MachineTower.provider_keys` 显式记录同一统一楼名下的所有来源 id，避免把两套外部 id 混用；`CampusContext` 同时保留 `all_machines`、`available_machines` 和 `queue_estimates`，避免丢失运行中机器的剩余时间和排队摘要。
 
 不应该做：
 
@@ -152,17 +158,22 @@ Wash-agent/
 
 应该做：
 
-- `machine_api.py` 负责统一机器状态接口和机器数据解析。
-- `context.py` 负责组合机器、价格、等待时间、天气、阳台、湿度等上下文。
-- `machines_mock.json` 使用 `machines` 列表保存显式机器记录，机器类型和状态必须能映射到 `MachineType` 与 `MachineStatus`。
-- `machine_rules.json` 使用 `pricing_rules` 保存洗衣和烘干程序的价格与时长，并可包含 `drying_context`。
-- `build_campus_context()` 要求调用方显式传入 `machine_rules_path`，缺少规则文件、`pricing_rules` 或机器必要字段时抛出错误。
+- `machine_api.py` 负责 CleverSchool 和海乐生活洗衣机接口及机器数据解析。CleverSchool 使用 `https://api.cleverschool.cn/washapi4/device/tower` 获取楼号列表，使用 `https://api.cleverschool.cn/washapi4/device/status` 按 `towerKey` 获取机器状态；海乐生活使用 `https://yshz-user.haier-ioc.com/position/nearPosition` 获取清华附近点位，使用 `https://yshz-user.haier-ioc.com/position/deviceDetailPage` 按 `positionId` 和分类获取设备状态。
+- `machine_api.py` 负责统一楼名。海乐生活点位名前缀 `清华大学` 会被去掉；同名楼会归并成一个 `MachineTower`，并通过 `provider_keys` 保存 `cleverschool` / `haier` 对应的外部 id。前端下拉菜单使用统一后的 `MachineTower.name`。
+- `machine_api.py` 把 CleverSchool 接口中的 `macUnionCode`、`tower`、`floorName` 和中文 `status` 文本转换为 `MachineTower` / `MachineInfo`。状态文本中的“待机”映射为可用，“工作/运转”映射为运行中，“脱水/开盖/故障/出错/异常”映射为不可用异常状态；剩余分钟数只从 `剩余时间:N分钟` 显式解析。状态解析必须匹配明确词，不能用单字包含关系把“待维修”等文本误判为空闲。
+- `machine_api.py` 把海乐生活分类 `00/01/02` 分别转换为 `standard_washer`、`shoe_washer`、`dryer`，把状态 `1/2/3` 分别转换为可用、运行中、不可用异常。海乐缺失的容量、价格、模式和剩余时间不做猜测。
+- `context.py` 负责组合机器、价格、等待时间、天气、阳台、湿度等上下文。页面层可直接调用 `build_campus_context_from_user_input()`，传入用户可理解的 `tower_name`、`weather` 和 `drying_context`，由该入口通过合并后的楼号列表精确解析内部 `tower_keys`，再创建机器客户端、调用所有对应 provider 的状态 API 并输出 `CampusContext`。后端不做模糊匹配；如果楼名不在下拉列表中，必须显式报错。若调用方直接传外部楼栋 id，则必须同时传 `tower_provider` 或 `tower_keys`，不能静默默认 CleverSchool。
+- `context.py` 必须生成 `CampusContext.queue_estimates`。该字段按 `MachineType` 汇总总数、可用数、运行中数、异常数、未知数和 `estimated_wait_minutes`：有可用机器时为 `0`；无可用机器但运行中机器有剩余时间时取最短剩余时间；信息不足时保持 `None`。
+- `machine_api.py` 提供 `mock_transport_from_file("data/machines_mock.json")`，用于让交付 mock 文件通过正式 transport 入口参与测试；mock 缺少必要响应时应显式报错。
+- `machines_mock.json` 同时保留本地离线集成使用的 `machines` 列表，以及真实接口 transport 测试使用的 CleverSchool / 海乐响应片段。
+- `machine_rules.json` 同时保存 E 模块消费的 `pricing_rules`、晾晒上下文 `drying_context`，以及 D 模块解析真实机器接口所需的机器类型映射、容量、模式、价格和时长等配置。外部状态接口不提供的容量、价格和模式，相关字段只能来自该配置，不能从接口文本猜测。
 
 不应该做：
 
 - 不管理衣柜。
 - 不判断衣物材质风险。
 - 不生成最终报告文案。
+- 不从外部接口缺失字段中猜测容量、价格、模式、剩余时间或天气。
 
 ### 洗衣计划
 
@@ -212,8 +223,8 @@ Wash-agent/
    - 无图片时，继续使用文本抽取 prompt。
 5. `backend.wardrobe.store.WardrobeStore.upsert_item()` 写入衣柜。
 6. 页面构造 `LaundryConstraints`。
-7. `backend.campus.machine_api.LaundryMachineClient.list_machines()` 获取并校验机器状态。
-8. `backend.campus.context.build_campus_context()` 用显式 `machine_rules_path` 组合校园上下文。
+7. `backend.campus.machine_api.LaundryMachineClient.list_towers()` 获取并统一 CleverSchool 楼号和海乐生活点位列表，页面传入下拉菜单中的统一楼名后由 `build_campus_context_from_user_input()` 精确解析 `tower_keys`，再调用所有对应 provider 的 `list_machines(...)` 获取机器状态。
+8. `backend.campus.context.build_campus_context()` 组合校园上下文。
 9. `backend.wardrobe.frequency_advisor.advise_frequency()` 给每件衣物洗护优先级。
 10. `backend.laundry.planner.plan_laundry()` 输出 `LaundryPlan`。
     - 调用方需提供显式价格与时长规则，例如 `pricing_rules["wash_programs"]["standard"]` 和 `pricing_rules["dryer_programs"]["low"]`。

@@ -42,6 +42,7 @@ class MachineType(str, Enum):
     SMALL_WASHER = "small_washer"
     STANDARD_WASHER = "standard_washer"
     LARGE_WASHER = "large_washer"
+    SHOE_WASHER = "shoe_washer"
     DRYER = "dryer"
     UNKNOWN = "unknown"
 
@@ -53,6 +54,16 @@ class MachineStatus(str, Enum):
     RUNNING = "running"
     OUT_OF_SERVICE = "out_of_service"
     UNKNOWN = "unknown"
+
+
+@dataclass(slots=True)
+class MachineTower:
+    """One campus laundry tower or dormitory returned by the machine service."""
+
+    name: str
+    tower_key: str
+    provider: str
+    provider_keys: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -167,10 +178,25 @@ class MachineInfo:
 
 
 @dataclass(slots=True)
+class MachineQueueEstimate:
+    """Queue and waiting-time summary for one machine type."""
+
+    machine_type: MachineType
+    total_count: int
+    available_count: int
+    running_count: int
+    out_of_service_count: int
+    unknown_count: int
+    estimated_wait_minutes: int | None = None
+
+
+@dataclass(slots=True)
 class CampusContext:
     """Campus machine, weather, drying, and pricing context."""
 
+    all_machines: list[MachineInfo] = field(default_factory=list)
     available_machines: list[MachineInfo] = field(default_factory=list)
+    queue_estimates: list[MachineQueueEstimate] = field(default_factory=list)
     weather: dict[str, Any] = field(default_factory=dict)
     drying_context: dict[str, Any] = field(default_factory=dict)
     pricing_rules: dict[str, Any] = field(default_factory=dict)

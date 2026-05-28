@@ -120,6 +120,42 @@ profile = extract_clothing_info(raw)
 wardrobe_item = build_wardrobe_item(profile)
 ```
 
+### 校园洗衣机接口
+
+D 模块通过 `backend.campus.machine_api.LaundryMachineClient` 查询清华宿舍洗衣机状态。当前合并 CleverSchool 和海乐生活两个来源：
+
+- `POST https://api.cleverschool.cn/washapi4/device/tower`：获取楼号列表。
+- `POST https://api.cleverschool.cn/washapi4/device/status`：按 `towerKey` 获取某栋楼机器状态。
+- `POST https://yshz-user.haier-ioc.com/position/nearPosition`：按清华附近坐标获取海乐生活点位。
+- `POST https://yshz-user.haier-ioc.com/position/deviceDetailPage`：按海乐点位和设备分类获取设备状态。
+
+示例：
+
+```python
+from backend.campus.context import build_campus_context_from_user_input
+from backend.campus.machine_api import LaundryMachineClient
+
+client = LaundryMachineClient()
+towers = client.list_towers()
+context = build_campus_context_from_user_input(
+    {
+        "tower_name": "南区26号楼东",
+        "weather": {"condition": "cloudy", "humidity": 72},
+        "drying_context": {"has_balcony": True},
+    },
+)
+```
+
+页面层可以传用户输入的 `tower_name`，D 模块会通过合并后的楼号列表解析成内部 `tower_keys`。用户不需要知道 CleverSchool 的 `towerKey` 或海乐的 `positionId`。后端只做精确楼名匹配；前端应使用 `list_towers()` 返回的楼名做下拉菜单。若调用方绕过楼名、直接传外部 id，则必须同时传 `tower_provider` 或 `tower_keys`，否则会显式报错。
+
+同一栋楼可能同时存在两个来源，例如 CleverSchool 提供洗衣机、海乐生活提供烘干机。`list_towers()` 会先统一楼名，例如把 `清华大学南区21号楼` 归并为 `南区21号楼`，并在 `MachineTower.provider_keys` 中记录该楼所有来源。查询 `build_campus_context_from_user_input({"tower_name": "南区21号楼"})` 时会同时请求这些来源，并把洗衣机、洗鞋机、烘干机一起放进 `CampusContext.all_machines`。后端只做精确楼名匹配；前端应使用 `list_towers()` 返回的楼名做下拉菜单。
+
+CleverSchool 状态文本中的“待机”会映射为可用，“工作/运转”会映射为运行中，“脱水/开盖/故障/出错/异常”会映射为不可用异常状态。状态解析只匹配这些明确词，不会把“待维修”这类文本误判为空闲。海乐生活的分类 `00/01/02` 分别映射为洗衣机、洗鞋机、烘干机，状态 `1/2/3` 分别映射为可用、运行中、不可用异常。
+
+`CampusContext.queue_estimates` 按机器类型给出排队/等待摘要：总数、可用数、运行中数、异常数、未知数，以及 `estimated_wait_minutes`。如果该类型已有可用机器，等待时间为 `0`；如果没有可用机器但运行中机器提供剩余时间，则取最短剩余时间；如果接口没有足够信息，则保持 `None`，不猜测。
+
+容量、价格和模式只从 `config/machine_rules.json` 读取；接口缺失字段不会被猜测。离线测试可使用 `backend.campus.machine_api.mock_transport_from_file("data/machines_mock.json")` 读取交付 mock 文件。
+
 ### 大模型 API 配置
 
 推荐复制示例配置文件后本地修改：

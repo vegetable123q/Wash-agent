@@ -30,5 +30,108 @@
       "price_yuan": 2.0,
       "modes": ["low"]
     }
-  ]
+  ],
+  "tower_response": {
+    "success": true,
+    "data": [
+      {
+        "text": "南区26号楼东",
+        "value": "nwhstuo"
+      },
+      {
+        "text": "南区21号楼",
+        "value": "nq21"
+      },
+      {
+        "text": "紫荆1号楼",
+        "value": "ncrkiz1"
+      }
+    ]
+  },
+  "status_responses": {
+    "ncrkiz1": {
+      "success": true,
+      "data": [
+        {
+          "tower": "紫荆1号楼",
+          "towerKey": "ncrkiz1",
+          "macUnionCode": "洗衣机 he10000177",
+          "floorName": "一层",
+          "status": "状态:工作中 剩余时间:10分钟 更新时间:2026-05-28 13:26:28"
+        },
+        {
+          "tower": "紫荆1号楼",
+          "towerKey": "ncrkiz1",
+          "macUnionCode": "洗衣机 he10000125",
+          "floorName": "二层",
+          "status": "状态:待机中 更新时间:2026-05-28 13:23:08"
+        }
+      ]
+    },
+    "nq21": {
+      "success": true,
+      "data": [
+        {
+          "tower": "南区21号楼",
+          "towerKey": "nq21",
+          "macUnionCode": "洗衣机 clever-nq21-1",
+          "floorName": "一层",
+          "status": "状态:待机中 更新时间:2026-05-28 13:23:08"
+        }
+      ]
+    }
+  },
+  "haier_position_response": {
+    "code": 0,
+    "message": "success",
+    "data": {
+      "items": [
+        {
+          "id": 43762,
+          "name": "清华大学南区21号楼"
+        },
+        {
+          "id": 440,
+          "name": "清华大学红杉学生公寓"
+        }
+      ]
+    }
+  },
+  "haier_detail_responses": {
+    "43762": {
+      "00": {
+        "code": 0,
+        "message": "success",
+        "data": {
+          "items": [
+            {
+              "id": 85500827,
+              "name": "南区21号楼1层1号",
+              "state": 1
+            }
+          ]
+        }
+      },
+      "01": {
+        "code": 0,
+        "message": "success",
+        "data": {
+          "items": []
+        }
+      },
+      "02": {
+        "code": 0,
+        "message": "success",
+        "data": {
+          "items": [
+            {
+              "id": 85500829,
+              "name": "南区21号楼1层烘干机",
+              "state": 2
+            }
+          ]
+        }
+      }
+    }
+  }
 }
