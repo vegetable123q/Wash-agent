@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: write
 
@@ -62,20 +65,44 @@ jobs:
         working-directory: frontend
         run: npm run cap:sync
 
-      - name: Decode release keystore
+      - name: Prepare release keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD_SECRET: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS_SECRET: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD_SECRET: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          test -n "$ANDROID_KEYSTORE_BASE64"
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > frontend/android/app/release.keystore
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD_SECRET" ] && [ -n "$ANDROID_KEY_ALIAS_SECRET" ] && [ -n "$ANDROID_KEY_PASSWORD_SECRET" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > frontend/android/app/release.keystore
+            {
+              echo "ANDROID_KEYSTORE_PATH=${{ github.workspace }}/frontend/android/app/release.keystore"
+              echo "ANDROID_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD_SECRET"
+              echo "ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS_SECRET"
+              echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD_SECRET"
+            } >> "$GITHUB_ENV"
+          else
+            echo "::warning::Android signing secrets are not fully configured; generating a CI-only release keystore. Configure repository secrets for stable release signing."
+            temporary_password="$(openssl rand -hex 24)"
+            keytool -genkeypair \
+              -storetype PKCS12 \
+              -keystore frontend/android/app/ci-release.keystore \
+              -storepass "$temporary_password" \
+              -alias ci-release \
+              -keypass "$temporary_password" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 30 \
+              -dname "CN=WashMate CI Release, OU=CI, O=WashMate, L=Beijing, S=Beijing, C=CN"
+            {
+              echo "ANDROID_KEYSTORE_PATH=${{ github.workspace }}/frontend/android/app/ci-release.keystore"
+              echo "ANDROID_KEYSTORE_PASSWORD=$temporary_password"
+              echo "ANDROID_KEY_ALIAS=ci-release"
+              echo "ANDROID_KEY_PASSWORD=$temporary_password"
+            } >> "$GITHUB_ENV"
+          fi
 
       - name: Build signed release APK
         working-directory: frontend/android
-        env:
-          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/frontend/android/app/release.keystore
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           test -n "$ANDROID_KEYSTORE_PASSWORD"
           test -n "$ANDROID_KEY_ALIAS"

@@ -131,3 +131,4 @@ ANDROID_KEY_PASSWORD
 ```
 
 `ANDROID_KEYSTORE_BASE64` is the base64-encoded release keystore file. The workflow decodes it only inside GitHub Actions; keystore files are ignored by git.
+If these secrets are missing, CI generates an explicit temporary keystore so the APK can still be built and published. That fallback is installable, but it is not suitable for long-term app updates because the signing key changes between runs.

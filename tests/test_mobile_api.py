@@ -12,6 +12,7 @@ from backend.api.server import (
     delete_wardrobe_item,
     list_campus_towers,
 )
+from backend.campus.machine_api import LaundryMachineClient, mock_transport_from_file
 from backend.wardrobe.store import WardrobeStore
 
 
@@ -19,7 +20,11 @@ class MobileApiTests(unittest.TestCase):
     def test_build_mobile_summary_uses_repository_backend_modules(self) -> None:
         root = Path(__file__).resolve().parents[1]
 
-        summary = build_mobile_summary(root, weather_provider=lambda: {"status": "test"})
+        summary = build_mobile_summary(
+            root,
+            weather_provider=lambda: {"status": "test"},
+            tower_client=_mock_machine_client(root),
+        )
 
         self.assertEqual(summary["source"], "backend")
         self.assertGreaterEqual(len(summary["wardrobe"]["items"]), 4)
@@ -51,7 +56,11 @@ class MobileApiTests(unittest.TestCase):
                 },
             }
 
-        summary = build_mobile_summary(root, weather_provider=fake_weather_provider)
+        summary = build_mobile_summary(
+            root,
+            weather_provider=fake_weather_provider,
+            tower_client=_mock_machine_client(root),
+        )
 
         self.assertEqual(summary["weather"]["source"], "open-meteo")
         self.assertEqual(summary["weather"]["status"], "live")
@@ -104,7 +113,7 @@ class MobileApiTests(unittest.TestCase):
     def test_list_campus_towers_exposes_selectable_dorms(self) -> None:
         root = Path(__file__).resolve().parents[1]
 
-        result = list_campus_towers(root)
+        result = list_campus_towers(root, client=_mock_machine_client(root))
 
         names = [tower["name"] for tower in result["towers"]]
         self.assertIn("紫荆1号楼", names)
@@ -122,6 +131,14 @@ class MobileApiTests(unittest.TestCase):
         self.assertFalse(_request_is_authorized("Bearer wrong-token", "secret-token"))
         self.assertFalse(_request_is_authorized("Basic secret-token", "secret-token"))
         self.assertFalse(_request_is_authorized(None, "secret-token"))
+
+
+def _mock_machine_client(root: Path) -> LaundryMachineClient:
+    machines_path = root / "data" / "machines_mock.json"
+    return LaundryMachineClient(
+        machines_path,
+        transport=mock_transport_from_file(machines_path),
+    )
 
 
 if __name__ == "__main__":

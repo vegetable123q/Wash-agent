@@ -37,6 +37,7 @@ def build_mobile_summary(
     root: Path | str | None = None,
     *,
     weather_provider: Callable[[], dict[str, Any]] | None = fetch_tsinghua_weather,
+    tower_client: LaundryMachineClient | None = None,
 ) -> dict[str, Any]:
     """Build one frontend-ready snapshot from the real backend modules."""
 
@@ -61,7 +62,7 @@ def build_mobile_summary(
     return {
         "source": "backend",
         "weather": weather,
-        "campus_towers": list_campus_towers(repo_root)["towers"],
+        "campus_towers": list_campus_towers(repo_root, client=tower_client)["towers"],
         "wardrobe": {"items": [_wardrobe_item_summary(item) for item in items]},
         "campus_context": _to_jsonable(campus_context),
         "constraints": _to_jsonable(constraints),
@@ -129,12 +130,17 @@ def delete_wardrobe_item(
     return {"status": "deleted", "item_id": normalized_item_id}
 
 
-def list_campus_towers(root: Path | str | None = None) -> dict[str, Any]:
+def list_campus_towers(
+    root: Path | str | None = None,
+    *,
+    client: LaundryMachineClient | None = None,
+) -> dict[str, Any]:
     """Return selectable campus dormitory/tower choices for the mobile profile form."""
 
     repo_root = Path(root) if root is not None else Path(__file__).resolve().parents[2]
     machines_path = repo_root / "data" / "machines_mock.json"
-    towers = LaundryMachineClient(machines_path).list_towers()
+    tower_client = client if client is not None else LaundryMachineClient(machines_path)
+    towers = tower_client.list_towers()
     return {"towers": [_tower_summary(tower) for tower in towers]}
 
 
