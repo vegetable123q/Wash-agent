@@ -27,6 +27,7 @@ class LLMClient(Protocol):
         prompt: str,
         *,
         temperature: float = 0.0,
+        response_schema: dict[str, Any] | None = None,
         image_refs: list[str] | None = None,
     ) -> LLMResponse:
         """Return a normalized LLM response for a prompt."""
@@ -90,6 +91,7 @@ class GeminiV1BetaLLMClient:
         prompt: str,
         *,
         temperature: float = 0.0,
+        response_schema: dict[str, Any] | None = None,
         image_refs: list[str] | None = None,
     ) -> LLMResponse:
         """Call a Gemini v1beta generateContent endpoint and normalize failures."""
@@ -97,6 +99,13 @@ class GeminiV1BetaLLMClient:
         endpoint = f"{self.base_url.rstrip('/')}/models/{model_path}:generateContent"
 
         try:
+            generation_config: dict[str, Any] = {
+                "temperature": temperature,
+                "responseMimeType": "application/json",
+            }
+            if response_schema:
+                generation_config["responseSchema"] = response_schema
+
             payload = {
                 "systemInstruction": {
                     "parts": [
@@ -114,10 +123,7 @@ class GeminiV1BetaLLMClient:
                         "parts": _build_gemini_parts(prompt, image_refs),
                     }
                 ],
-                "generationConfig": {
-                    "temperature": temperature,
-                    "responseMimeType": "application/json",
-                },
+                "generationConfig": generation_config,
             }
             request = urllib.request.Request(
                 endpoint,
@@ -186,6 +192,101 @@ Output rules:
 - missing_fields should use precise paths when possible, for example material_ratios, colors, care_symbols.wash_temperature, care_symbols.bleach.
 - Do not output shop name, price, purchase link, coupon, marketing slogan, or recommendation copy. 不要输出店铺、价格、购买链接或营销推荐语。
 """
+
+
+def build_clothing_profile_response_schema() -> dict[str, Any]:
+    """Return the JSON schema used for structured clothing profile extraction."""
+    care_symbol_keys = [
+        "wash_method",
+        "wash_temperature",
+        "bleach",
+        "tumble_dry",
+        "iron",
+        "dry_clean",
+        "natural_dry",
+    ]
+    evidence_values = ["visible", "inferred", "uncertain", "unknown"]
+    risk_values = ["low", "medium", "high", "unknown"]
+    return {
+        "type": "object",
+        "properties": {
+            "image_type": {
+                "type": "string",
+                "enum": [
+                    "garment_photo",
+                    "care_label",
+                    "tag_photo",
+                    "product_page",
+                    "mixed",
+                    "low_quality",
+                    "unknown",
+                ],
+            },
+            "agent_trace": {"type": "array", "items": {"type": "string"}},
+            "name": {"type": "string"},
+            "material_ratios": {
+                "type": "object",
+                "additionalProperties": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                },
+            },
+            "material_evidence_level": {"type": "string", "enum": evidence_values},
+            "colors": {"type": "array", "items": {"type": "string"}},
+            "care_symbols": {
+                "type": "object",
+                "properties": {key: {"type": "string"} for key in care_symbol_keys},
+            },
+            "care_symbol_evidence": {
+                "type": "object",
+                "properties": {
+                    key: {"type": "string", "enum": evidence_values}
+                    for key in care_symbol_keys
+                },
+            },
+            "care_warnings": {"type": "array", "items": {"type": "string"}},
+            "care_recommendations": {"type": "array", "items": {"type": "string"}},
+            "care_forbidden": {"type": "array", "items": {"type": "string"}},
+            "care_evidence_level": {"type": "string", "enum": evidence_values},
+            "recommended_wash": {"type": "string"},
+            "risks": {
+                "type": "object",
+                "properties": {
+                    key: {"type": "string", "enum": risk_values}
+                    for key in [
+                        "shrink",
+                        "color_bleed",
+                        "deform",
+                        "pilling",
+                        "dryer_damage",
+                    ]
+                },
+            },
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "source_notes": {"type": "array", "items": {"type": "string"}},
+            "missing_fields": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": [
+            "image_type",
+            "agent_trace",
+            "name",
+            "material_ratios",
+            "material_evidence_level",
+            "colors",
+            "care_symbols",
+            "care_symbol_evidence",
+            "care_warnings",
+            "care_recommendations",
+            "care_forbidden",
+            "care_evidence_level",
+            "recommended_wash",
+            "risks",
+            "confidence",
+            "source_notes",
+            "missing_fields",
+        ],
+    }
 
 
 def build_extraction_prompt(source_text: str) -> str:
@@ -269,6 +370,64 @@ Routing rules:
 - If the garment body is visible, include garment_photo.
 - For mixed images, choose image_type=mixed and list all useful regions.
 - recommended_next_agents should usually include TypedExtractionAgent; include CareInferenceAgent when material or care fields are likely incomplete.
+
+Input/source context:
+{source_text}
+""".strip()
+
+
+def build_image_single_pass_prompt(source_text: str) -> str:
+    """Build the one-shot prompt used for image-based clothing extraction."""
+    return f"""
+[VisionExtractionAgent]
+You perform the previous image routing, typed visible extraction, and conservative care inference in one API call.
+Return one JSON object only. Do not wrap it in Markdown.
+
+Responsibility: classify image_type, produce visible facts and conservative inference where visible facts are incomplete, and report missing_fields.
+Use agent_trace to show the internal stages you completed: image_router, typed_extractor, care_inference.
+
+Return JSON matching this shape:
+{{
+  "image_type": "garment_photo|care_label|tag_photo|product_page|mixed|low_quality|unknown",
+  "agent_trace": ["image_router", "typed_extractor", "care_inference"],
+  "name": "clothing name",
+  "material_ratios": {{"cotton": 0.8, "polyester": 0.2}},
+  "material_evidence_level": "visible|inferred|uncertain|unknown",
+  "colors": ["black", "white"],
+  "care_symbols": {{"wash_method": "machine_wash|hand_wash_only|do_not_wash", "wash_temperature": "cold|30c|40c|60c|95c", "bleach": "allowed|non_chlorine_only|do_not_bleach", "tumble_dry": "allowed|low_heat|normal_heat|high_heat|do_not_tumble_dry", "iron": "low_heat|medium_heat|high_heat|do_not_iron", "dry_clean": "allowed|dry_clean_only|do_not_dry_clean", "natural_dry": "line_dry|flat_dry|drip_dry|shade_dry"}},
+  "care_symbol_evidence": {{"wash_method": "visible|inferred|uncertain", "wash_temperature": "visible|inferred|uncertain", "bleach": "visible|inferred|uncertain", "tumble_dry": "visible|inferred|uncertain", "iron": "visible|inferred|uncertain", "dry_clean": "visible|inferred|uncertain", "natural_dry": "visible|inferred|uncertain"}},
+  "care_warnings": ["do_not_bleach", "do_not_tumble_dry"],
+  "care_recommendations": ["wash_separately", "use_laundry_bag"],
+  "care_forbidden": ["do_not_bleach", "do_not_tumble_dry", "wash_separately", "use_laundry_bag"],
+  "care_evidence_level": "visible|inferred|uncertain|unknown",
+  "recommended_wash": "short practical Chinese wash advice",
+  "risks": {{"shrink": "low|medium|high|unknown", "color_bleed": "low|medium|high|unknown", "deform": "low|medium|high|unknown", "pilling": "low|medium|high|unknown", "dryer_damage": "low|medium|high|unknown"}},
+  "confidence": 0.0,
+  "source_notes": ["what was visible and what was inferred"],
+  "missing_fields": ["material_ratios", "care_symbols.wash_temperature"]
+}}
+
+Image classification:
+- garment_photo: ordinary clothing photo where garment shape, color, print, texture, coating, knit, padding, or seams are visible.
+- care_label: sewn textile label or washing label with composition text and/or wash symbols.
+- tag_photo: hang tag, product card, packaging label, or removable paper tag.
+- product_page: e-commerce/product detail screenshot with title, material copy, color, or care text.
+- mixed: multiple useful regions in one image.
+- low_quality: too blurry, cropped, dark, overexposed, or small for reliable extraction.
+
+Extraction discipline:
+- First extract visible facts and mark evidence as visible only when text, symbols, product copy, or clear visual evidence supports it.
+- Then add conservative inference only for fields still incomplete. Mark inferred or uncertain evidence explicitly.
+- For garment_photo without readable tag text, material and care are usually inferred or uncertain, not visible.
+- For care_label/tag_photo/product_page, visible text and care symbols override inference.
+- Do not override visible evidence. If a visible label says tumble_dry=low_heat, do not infer do_not_tumble_dry.
+- Do not infer exact 40c/60c temperatures when no number is visible. Prefer cold or list the temperature in missing_fields.
+- Do not output shop name, price, purchase link, coupon, marketing slogan, or recommendation copy.
+- If required facts truly cannot be read or inferred, leave the field empty or unknown and include its path in missing_fields.
+
+{_CARE_SYMBOL_GUIDE}
+{_CARE_ACTION_GUIDE}
+{_COMMON_OUTPUT_RULES}
 
 Input/source context:
 {source_text}

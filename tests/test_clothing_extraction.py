@@ -13,6 +13,7 @@ from backend.clothing_extraction.llm_client import (
     build_care_inference_prompt,
     build_extraction_prompt,
     build_image_router_prompt,
+    build_image_single_pass_prompt,
     build_typed_extraction_prompt,
     create_configured_llm_client,
 )
@@ -46,6 +47,7 @@ class FakeVisionLLMClient:
         prompt: str,
         *,
         temperature: float = 0.0,
+        response_schema: dict[str, object] | None = None,
         image_refs: list[str] | None = None,
     ) -> LLMResponse:
         self.prompts.append(prompt)
@@ -64,6 +66,7 @@ class ScriptedVisionLLMClient:
         prompt: str,
         *,
         temperature: float = 0.0,
+        response_schema: dict[str, object] | None = None,
         image_refs: list[str] | None = None,
     ) -> LLMResponse:
         self.prompts.append(prompt)
@@ -77,7 +80,14 @@ class ScriptedVisionLLMClient:
 
 
 class BrokenLLMClient:
-    def complete(self, prompt: str, *, temperature: float = 0.0) -> LLMResponse:
+    def complete(
+        self,
+        prompt: str,
+        *,
+        temperature: float = 0.0,
+        response_schema: dict[str, object] | None = None,
+        image_refs: list[str] | None = None,
+    ) -> LLMResponse:
         raise RuntimeError("network unavailable")
 
 
@@ -95,6 +105,7 @@ class ClothingExtractionTests(unittest.TestCase):
         router_prompt = build_image_router_prompt("image refs only")
         label_prompt = build_typed_extraction_prompt("tag photo", "care_label")
         garment_prompt = build_typed_extraction_prompt("jacket photo", "garment_photo")
+        single_pass_prompt = build_image_single_pass_prompt("jacket photo")
         inference_prompt = build_care_inference_prompt(
             {"name": "jacket", "missing_fields": ["material_ratios"]},
             "garment_photo",
@@ -115,6 +126,10 @@ class ClothingExtractionTests(unittest.TestCase):
         self.assertIn("best-effort", inference_prompt)
         self.assertIn("do not override visible evidence", inference_prompt)
         self.assertIn("Do not leave material_ratios empty", inference_prompt)
+        self.assertIn("VisionExtractionAgent", single_pass_prompt)
+        self.assertIn("image_type", single_pass_prompt)
+        self.assertIn("visible facts and conservative inference", single_pass_prompt)
+        self.assertIn("agent_trace", single_pass_prompt)
 
     def test_enrich_product_info_normalizes_source_text(self) -> None:
         raw = ClothingInput(
@@ -268,22 +283,10 @@ class ClothingExtractionTests(unittest.TestCase):
             [
                 {
                     "image_type": "garment_photo",
-                    "confidence": 0.93,
-                    "source_notes": ["router saw a garment photo"],
-                },
-                {
                     "name": "black white layered tee",
-                    "material_ratios": {},
-                    "colors": ["black", "white"],
-                    "care_forbidden": [],
-                    "risks": {"color_bleed": "high"},
-                    "confidence": 0.6,
-                    "source_notes": ["extractor saw contrast panels"],
-                    "missing_fields": ["material_ratios", "care_forbidden"],
-                },
-                {
                     "material_ratios": {"cotton": 0.8, "polyester": 0.2},
                     "material_evidence_level": "inferred",
+                    "colors": ["black", "white"],
                     "care_forbidden": [
                         "do_not_bleach",
                         "do_not_tumble_dry",
@@ -298,7 +301,16 @@ class ClothingExtractionTests(unittest.TestCase):
                         "dryer_damage": "medium",
                     },
                     "confidence": 0.72,
-                    "source_notes": ["inference filled likely jersey care"],
+                    "source_notes": [
+                        "router saw a garment photo",
+                        "extractor saw contrast panels",
+                        "inference filled likely jersey care",
+                    ],
+                    "agent_trace": [
+                        "image_router",
+                        "typed_extractor",
+                        "care_inference",
+                    ],
                     "missing_fields": [],
                 },
             ]
@@ -309,11 +321,9 @@ class ClothingExtractionTests(unittest.TestCase):
             llm_client=fake,
         )
 
-        self.assertEqual(len(fake.prompts), 3)
-        self.assertIn("ImageRouterAgent", fake.prompts[0])
-        self.assertIn("TypedExtractionAgent", fake.prompts[1])
-        self.assertIn("CareInferenceAgent", fake.prompts[2])
-        self.assertEqual(fake.image_refs, [["uploads/layered.png"]] * 3)
+        self.assertEqual(len(fake.prompts), 1)
+        self.assertIn("VisionExtractionAgent", fake.prompts[0])
+        self.assertEqual(fake.image_refs, [["uploads/layered.png"]])
         self.assertEqual(profile.image_type, "garment_photo")
         self.assertEqual(profile.agent_trace, [
             "image_router",
@@ -329,20 +339,12 @@ class ClothingExtractionTests(unittest.TestCase):
     def test_visible_extraction_is_not_overwritten_by_inference_agent(self) -> None:
         fake = ScriptedVisionLLMClient(
             [
-                {"image_type": "care_label"},
                 {
+                    "image_type": "care_label",
                     "name": "polyester dress",
                     "material_ratios": {"polyester": 1.0},
                     "material_evidence_level": "visible",
                     "colors": ["blue"],
-                    "care_forbidden": [],
-                    "risks": {},
-                    "confidence": 0.9,
-                    "missing_fields": ["care_forbidden"],
-                },
-                {
-                    "material_ratios": {"cotton": 0.8, "polyester": 0.2},
-                    "material_evidence_level": "inferred",
                     "care_forbidden": ["do_not_bleach", "do_not_tumble_dry"],
                     "care_evidence_level": "inferred",
                     "risks": {"dryer_damage": "high"},
@@ -365,20 +367,14 @@ class ClothingExtractionTests(unittest.TestCase):
     def test_care_forbidden_labels_are_canonicalized(self) -> None:
         fake = ScriptedVisionLLMClient(
             [
-                {"image_type": "garment_photo"},
                 {
+                    "image_type": "garment_photo",
                     "name": "contrast tee",
-                    "material_ratios": {},
-                    "colors": ["black", "white"],
-                    "care_forbidden": ["no tumble dry"],
-                    "risks": {},
-                    "confidence": 0.5,
-                    "missing_fields": ["material_ratios"],
-                },
-                {
                     "material_ratios": {"cotton": 0.8, "polyester": 0.2},
                     "material_evidence_level": "inferred",
+                    "colors": ["black", "white"],
                     "care_forbidden": [
+                        "no tumble dry",
                         "wash_with_hot_water",
                         "bleach",
                         "use laundry bag",
@@ -410,18 +406,12 @@ class ClothingExtractionTests(unittest.TestCase):
     def test_care_symbols_capture_standard_wash_label_dimensions(self) -> None:
         fake = ScriptedVisionLLMClient(
             [
-                {"image_type": "care_label"},
                 {
+                    "image_type": "care_label",
                     "name": "labeled shirt",
                     "material_ratios": {"cotton": 1.0},
                     "material_evidence_level": "visible",
                     "colors": ["white"],
-                    "care_forbidden": [],
-                    "risks": {},
-                    "confidence": 0.8,
-                    "missing_fields": ["care_forbidden"],
-                },
-                {
                     "care_symbols": {
                         "wash_method": "machine wash",
                         "wash_temperature": "30°C",
@@ -498,19 +488,12 @@ class ClothingExtractionTests(unittest.TestCase):
     def test_care_actions_are_split_into_warnings_and_recommendations(self) -> None:
         fake = ScriptedVisionLLMClient(
             [
-                {"image_type": "garment_photo"},
                 {
+                    "image_type": "garment_photo",
                     "name": "contrast tee",
-                    "material_ratios": {},
-                    "colors": ["black", "white"],
-                    "care_forbidden": [],
-                    "risks": {},
-                    "confidence": 0.55,
-                    "missing_fields": ["material_ratios", "care_forbidden"],
-                },
-                {
                     "material_ratios": {"cotton": 0.7, "polyester": 0.3},
                     "material_evidence_level": "inferred",
+                    "colors": ["black", "white"],
                     "care_warnings": ["no tumble dry"],
                     "care_recommendations": [
                         "wash separately",
@@ -569,8 +552,8 @@ class ClothingExtractionTests(unittest.TestCase):
     def test_visible_care_symbol_resolves_conflicting_inferred_warning(self) -> None:
         fake = ScriptedVisionLLMClient(
             [
-                {"image_type": "care_label"},
                 {
+                    "image_type": "care_label",
                     "name": "labeled shirt",
                     "material_ratios": {"cotton": 1.0},
                     "material_evidence_level": "visible",
@@ -580,16 +563,8 @@ class ClothingExtractionTests(unittest.TestCase):
                     "care_evidence_level": "visible",
                     "risks": {},
                     "confidence": 0.82,
-                    "missing_fields": ["care_symbols.wash_temperature"],
-                },
-                {
                     "care_warnings": ["no tumble dry"],
-                    "care_symbols": {"tumble_dry": "do not tumble dry"},
-                    "care_symbol_evidence": {"tumble_dry": "inferred"},
-                    "care_evidence_level": "inferred",
-                    "risks": {},
-                    "confidence": 0.71,
-                    "missing_fields": [],
+                    "missing_fields": ["care_symbols.wash_temperature"],
                 },
             ]
         )
@@ -684,6 +659,45 @@ class ClothingExtractionTests(unittest.TestCase):
         self.assertEqual(payload["contents"][0]["parts"][0], {"text": "extract"})
         self.assertEqual(response.provider, "gemini-v1beta")
         self.assertEqual(response.text, '{"ok":true}')
+
+    def test_gemini_v1beta_client_includes_response_schema_without_network(self) -> None:
+        captured: dict[str, object] = {}
+
+        class FakeHTTPResponse:
+            def __enter__(self) -> "FakeHTTPResponse":
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return b'{"candidates":[{"content":{"parts":[{"text":"{}"}]}}]}'
+
+        def fake_urlopen(request, timeout):
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return FakeHTTPResponse()
+
+        schema = {
+            "type": "object",
+            "properties": {
+                "image_type": {
+                    "type": "string",
+                    "enum": ["garment_photo", "care_label"],
+                }
+            },
+            "required": ["image_type"],
+        }
+        client = GeminiV1BetaLLMClient(
+            apikey="test-key",
+            base_url="https://modelhub.ailemac.com/v1beta",
+            model="gemini-3.1-pro-preview",
+        )
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            client.complete("extract", response_schema=schema)
+
+        payload = captured["payload"]
+        self.assertEqual(payload["generationConfig"]["responseSchema"], schema)
 
     def test_gemini_v1beta_client_builds_inline_image_parts_without_network(self) -> None:
         import base64

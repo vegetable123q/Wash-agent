@@ -38,7 +38,7 @@
 - `risks`
 - `confidence`
 - `image_type`：图片类型判断结果，例如 `garment_photo`、`care_label`、`tag_photo`、`product_page`、`mixed`。
-- `agent_trace`：图片输入经过的 Agent 阶段，例如 `image_router -> typed_extractor -> care_inference`。
+- `agent_trace`：图片输入在单次 VLM 请求内完成的阶段，例如 `image_router -> typed_extractor -> care_inference`。
 - `missing_fields`
 - `user_fill_suggestions`
 - `source_notes`
@@ -98,6 +98,8 @@
 如果图片或文字中缺少关键信息，模块会返回 `missing_fields` 和 `user_fill_suggestions`，用于前端提示用户补拍吊牌或手动填写。
 
 如果 LLM 不可用、返回空 JSON 或返回非 JSON，模块不会再使用规则兜底生成材质、颜色或风险。此时核心字段保持空值或 `unknown`，并通过 `extraction_status` / `extraction_error` 标明失败原因，避免把规则猜测误认为大模型结果。
+
+图片输入会合并为一次结构化 Gemini 请求，单次返回 `image_type`、可见事实、保守推断、`agent_trace` 和 `missing_fields`。请求使用 JSON schema 约束输出，减少非 JSON 响应和多轮视觉调用耗时。
 
 ### 接入衣柜模块
 

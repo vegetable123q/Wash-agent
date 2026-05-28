@@ -14,11 +14,15 @@ POST {baseUrl}/models/{model_name}:generateContent
 x-goog-api-key: {apikey}
 ```
 
+  - Uses `responseMimeType=application/json`.
+  - Image extraction calls also include `responseSchema` and use one `VisionExtractionAgent` prompt to return `image_type`, visible facts, conservative inference, `agent_trace`, and `missing_fields` in a single VLM request.
+
 - `backend/clothing_extraction/product_info.py`
   - Normalizes clothing name, tag text, user notes, OCR text, product page text, supplemental sources, and manual fields into `normalized_source_text`.
 
 - `backend/clothing_extraction/extractor.py`
   - Builds `ClothingProfile`.
+  - Uses one structured VLM call for image inputs instead of separate router, typed extractor, and care inference HTTP calls.
   - Preserves explicit LLM errors in `extraction_status` and `extraction_error`.
   - Applies user manual fields when provided.
   - Does not generate hidden rule guesses when model output is missing or invalid.

@@ -8,11 +8,10 @@ import re
 from typing import Any
 
 from .llm_client import (
+    build_clothing_profile_response_schema,
     LLMClient,
-    build_care_inference_prompt,
     build_extraction_prompt,
-    build_image_router_prompt,
-    build_typed_extraction_prompt,
+    build_image_single_pass_prompt,
     create_configured_llm_client,
 )
 from backend.shared.models import ClothingInput, ClothingProfile, RiskLevel, WardrobeItem
@@ -685,35 +684,14 @@ def _complete_with_optional_images(
     client: LLMClient,
     prompt: str,
     image_refs: list[str],
+    response_schema: dict[str, Any] | None = None,
 ) -> Any:
     kwargs: dict[str, Any] = {"temperature": 0.0}
+    if response_schema:
+        kwargs["response_schema"] = response_schema
     if image_refs:
         kwargs["image_refs"] = image_refs
     return client.complete(prompt, **kwargs)
-
-
-_PROFILE_PAYLOAD_KEYS = {
-    "name",
-    "material_ratios",
-    "colors",
-    "care_forbidden",
-    "care_warnings",
-    "care_recommendations",
-    "care_symbols",
-    "risks",
-    "missing_fields",
-}
-
-
-def _payload_has_profile_fields(payload: dict[str, Any]) -> bool:
-    return bool(_PROFILE_PAYLOAD_KEYS.intersection(payload))
-
-
-def _payload_confidence(payload: dict[str, Any]) -> float:
-    try:
-        return max(0.0, min(float(payload.get("confidence", 0.0)), 1.0))
-    except (TypeError, ValueError):
-        return 0.0
 
 
 def _extend_unique(target: list[str], values: list[str]) -> None:
@@ -724,179 +702,66 @@ def _extend_unique(target: list[str], values: list[str]) -> None:
             seen.add(value)
 
 
-def _merge_inference_payload(
-    profile: ClothingProfile,
-    payload: dict[str, Any],
-) -> ClothingProfile:
-    material_ratios = {
-        str(key).lower(): ratio
-        for key, value in dict(payload.get("material_ratios") or {}).items()
-        if (ratio := _normalize_ratio(value)) is not None
-    }
-    material_evidence = _evidence_level(payload.get("material_evidence_level"))
-    if material_ratios and profile.material_evidence_level != "visible":
-        profile.material_ratios = material_ratios
-        profile.material_evidence_level = material_evidence
-        profile.field_sources["material_ratios"] = "care_inference"
-
-    care_forbidden = _normalize_care_labels(payload.get("care_forbidden"))
-    care_warnings = [
-        label
-        for label in _normalize_care_labels(payload.get("care_warnings"))
-        if label in _CARE_WARNING_LABELS
-    ]
-    care_recommendations = [
-        label
-        for label in _normalize_care_labels(payload.get("care_recommendations"))
-        if label in _CARE_RECOMMENDATION_LABELS
-    ]
-    care_evidence = _evidence_level(payload.get("care_evidence_level"))
-    if care_forbidden and profile.care_evidence_level != "visible":
-        if profile.care_forbidden:
-            _extend_unique(profile.care_forbidden, care_forbidden)
-        else:
-            profile.care_forbidden = care_forbidden
-        profile.care_evidence_level = care_evidence
-        profile.field_sources["care_forbidden"] = "care_inference"
-
-    if (care_warnings or care_recommendations) and profile.care_evidence_level != "visible":
-        _extend_unique(profile.care_warnings, care_warnings)
-        _extend_unique(profile.care_recommendations, care_recommendations)
-        profile.care_evidence_level = care_evidence
-        profile.field_sources["care_actions"] = "care_inference"
-
-    care_symbols = _normalize_care_symbols(payload.get("care_symbols"))
-    if care_symbols:
-        care_symbol_evidence = _normalize_care_symbol_evidence(
-            payload.get("care_symbol_evidence"),
-            care_symbols,
-            care_evidence,
-        )
-        for category, symbol in care_symbols.items():
-            if profile.care_evidence_level != "visible" or category not in profile.care_symbols:
-                profile.care_symbols[category] = symbol
-                profile.care_symbol_evidence[category] = care_symbol_evidence[category]
-        if profile.care_evidence_level != "visible":
-            profile.care_evidence_level = care_evidence
-        profile.field_sources["care_symbols"] = "care_inference"
-
-    risks = payload.get("risks")
-    if isinstance(risks, dict):
-        profile.risks.update(
-            {str(key): _risk_level(value) for key, value in risks.items()}
-        )
-        profile.field_sources["risks"] = "care_inference"
-
-    if payload.get("recommended_wash"):
-        profile.recommended_wash = str(payload["recommended_wash"])
-        profile.field_sources["recommended_wash"] = "care_inference"
-
-    _extend_unique(profile.source_notes, _string_list(payload.get("source_notes")))
-    profile.confidence = max(profile.confidence, _payload_confidence(payload))
-    return _with_missing_fields(
-        profile,
-        [str(field) for field in payload.get("missing_fields") or profile.missing_fields],
-    )
-
-
 def _profile_from_image_agents(
     enriched: ClothingInput,
     client: LLMClient,
     source_text: str,
 ) -> ClothingProfile:
-    router_response = _complete_with_optional_images(
+    response = _complete_with_optional_images(
         client,
-        build_image_router_prompt(source_text),
+        build_image_single_pass_prompt(source_text),
         enriched.image_refs,
+        build_clothing_profile_response_schema(),
     )
-    router_payload, router_error = _parse_json_object(router_response.text)
-    if router_error:
+    payload, parse_error = _parse_json_object(response.text)
+    if parse_error:
         profile = _empty_profile(
             enriched,
             extraction_status="llm_invalid_json",
-            extraction_error=router_error,
-            notes=[f"ImageRouterAgent failed: {router_error}"],
+            extraction_error=parse_error,
+            notes=[f"VisionExtractionAgent failed: {parse_error}"],
         )
-        profile.agent_trace.append("image_router")
         return _with_missing_fields(profile, profile.missing_fields)
 
-    if not router_payload:
-        if router_response.raw.get("error"):
-            error = str(router_response.raw["error"])
+    if not payload:
+        if response.raw.get("error"):
+            error = str(response.raw["error"])
             profile = _empty_profile(
                 enriched,
                 extraction_status="llm_error",
                 extraction_error=error,
-                notes=[f"ImageRouterAgent unavailable: {error}"],
+                notes=[f"VisionExtractionAgent unavailable: {error}"],
             )
         else:
             profile = _empty_profile(
                 enriched,
                 extraction_status="llm_empty_response",
-                extraction_error="ImageRouterAgent returned empty JSON",
-                notes=["ImageRouterAgent returned empty JSON"],
+                extraction_error="VisionExtractionAgent returned empty JSON",
+                notes=["VisionExtractionAgent returned empty JSON"],
             )
-        profile.agent_trace.append("image_router")
         return _with_missing_fields(profile, profile.missing_fields)
 
-    if not router_payload.get("image_type") and _payload_has_profile_fields(router_payload):
-        profile = _profile_from_llm(enriched, router_payload)
-        if profile is None:
-            profile = _empty_profile(
-                enriched,
-                extraction_status="llm_empty_response",
-                extraction_error="LLM returned no usable fields",
-                notes=["Legacy vision response contained no usable fields"],
-            )
-        return profile
-
-    image_type = _image_type(router_payload.get("image_type"))
-    extraction_response = _complete_with_optional_images(
-        client,
-        build_typed_extraction_prompt(source_text, image_type),
-        enriched.image_refs,
-    )
-    extraction_payload, extraction_error = _parse_json_object(extraction_response.text)
-    if extraction_error:
-        profile = _empty_profile(
-            enriched,
-            extraction_status="llm_invalid_json",
-            extraction_error=extraction_error,
-            notes=[f"TypedExtractionAgent failed: {extraction_error}"],
-        )
-        profile.image_type = image_type
-        profile.agent_trace.extend(["image_router", "typed_extractor"])
-        return _with_missing_fields(profile, profile.missing_fields)
-
-    extraction_payload["image_type"] = image_type
-    profile = _profile_from_llm(enriched, extraction_payload)
+    profile = _profile_from_llm(enriched, payload)
     if profile is None:
         profile = _empty_profile(
             enriched,
             extraction_status="llm_empty_response",
-            extraction_error="TypedExtractionAgent returned no usable fields",
-            notes=["TypedExtractionAgent returned no usable fields"],
+            extraction_error="VisionExtractionAgent returned no usable fields",
+            notes=["VisionExtractionAgent returned no usable fields"],
         )
-        profile.image_type = image_type
-    profile.agent_trace[:] = ["image_router", "typed_extractor"]
-    _extend_unique(profile.source_notes, _string_list(router_payload.get("source_notes")))
-
-    if profile.material_ratios and profile.material_evidence_level == "visible":
-        profile.field_sources["material_ratios"] = "typed_extractor"
-    if profile.care_forbidden and profile.care_evidence_level == "visible":
-        profile.field_sources["care_forbidden"] = "typed_extractor"
-
-    inference_response = _complete_with_optional_images(
-        client,
-        build_care_inference_prompt(extraction_payload, image_type),
-        enriched.image_refs,
-    )
-    inference_payload, inference_error = _parse_json_object(inference_response.text)
-    profile.agent_trace.append("care_inference")
-    if inference_error:
-        profile.source_notes.append(f"CareInferenceAgent failed: {inference_error}")
         return _with_missing_fields(profile, profile.missing_fields)
-    return _merge_inference_payload(profile, inference_payload)
+
+    if profile.material_ratios:
+        profile.field_sources["material_ratios"] = "vision_extraction"
+    if profile.care_forbidden or profile.care_warnings or profile.care_recommendations:
+        profile.field_sources["care_actions"] = "vision_extraction"
+    if profile.care_symbols:
+        profile.field_sources["care_symbols"] = "vision_extraction"
+    if any(value != RiskLevel.UNKNOWN for value in profile.risks.values()):
+        profile.field_sources["risks"] = "vision_extraction"
+    if profile.recommended_wash:
+        profile.field_sources["recommended_wash"] = "vision_extraction"
+    return profile
 
 
 def extract_clothing_info(

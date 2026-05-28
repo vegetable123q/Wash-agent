@@ -112,6 +112,7 @@ Wash-agent/
 - `llm_client.py` 负责 ModelHub / Gemini v1beta 请求、图片 payload 构造和 prompt 构造。
 - `product_info.py` 负责归一化商品名、吊牌文字、用户备注、OCR 和商品页文字。
 - `extractor.py` 负责把归一化输入抽取为 `ClothingProfile`。
+- 图片输入通过一次结构化 Gemini 请求完成图片类型识别、可见事实抽取和保守洗护推断，请求使用 `responseMimeType=application/json` 和 `responseSchema` 约束输出 JSON。
 
 不应该做：
 
@@ -202,6 +203,8 @@ Wash-agent/
 2. 页面构造 `ClothingInput`。
 3. `backend.clothing_extraction.product_info.enrich_product_info()` 归一化输入。
 4. `backend.clothing_extraction.extractor.extract_clothing_info()` 生成 `ClothingProfile`。
+   - 有图片时，`extractor` 调用 `build_image_single_pass_prompt()`，由单次 VLM 请求返回 `image_type`、`agent_trace`、材质、颜色、洗护动作、风险和 `missing_fields`。
+   - 无图片时，继续使用文本抽取 prompt。
 5. `backend.wardrobe.store.WardrobeStore.upsert_item()` 写入衣柜。
 6. 页面构造 `LaundryConstraints`。
 7. `backend.campus.machine_api.LaundryMachineClient.list_machines()` 获取机器状态。
