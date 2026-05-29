@@ -78,5 +78,16 @@ function itemSearchText(item: LoadEstimateItem): string {
 }
 
 function containsAny(text: string, terms: string[]): boolean {
-  return terms.some((term) => text.includes(term.toLowerCase()));
+  return terms.some((term) => termMatches(text, term.toLowerCase()));
+}
+
+function termMatches(text: string, term: string): boolean {
+  if (/^[a-z0-9 _-]+$/i.test(term)) {
+    return new RegExp(`(^|[^a-z0-9])${escapeRegExp(term)}([^a-z0-9]|$)`).test(text);
+  }
+  return text.includes(term);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
