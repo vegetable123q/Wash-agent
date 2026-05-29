@@ -85,6 +85,8 @@ def _validate_items(value: object) -> None:
 def _validate_item(item: WardrobeItem, field_name: str) -> None:
     if not isinstance(item.profile, ClothingProfile):
         raise ValueError(f"{field_name}.profile must be a ClothingProfile")
+    _non_empty_string(item.profile.item_id, f"{field_name}.profile.item_id")
+    _non_empty_string(item.profile.name, f"{field_name}.profile.name")
 
 
 def _validate_constraints(constraints: LaundryConstraints) -> None:

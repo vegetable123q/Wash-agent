@@ -321,6 +321,23 @@ class EModuleTests(unittest.TestCase):
                 _campus_context(),
             )
 
+    def test_plan_requires_valid_item_identity_fields(self) -> None:
+        invalid_items = [
+            ("item_id", WardrobeItem(profile=ClothingProfile(item_id=True, name="white tee"))),  # type: ignore[arg-type]
+            ("item_id", WardrobeItem(profile=ClothingProfile(item_id="", name="white tee"))),
+            ("name", WardrobeItem(profile=ClothingProfile(item_id="bad-name", name=True))),  # type: ignore[arg-type]
+            ("name", WardrobeItem(profile=ClothingProfile(item_id="bad-name", name=""))),
+        ]
+
+        for field_name, item in invalid_items:
+            with self.subTest(field_name=field_name, item=item):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    plan_laundry(
+                        [item],
+                        LaundryConstraints(selected_item_ids=["bad-name"]),
+                        _campus_context(),
+                    )
+
     def test_plan_requires_laundry_constraints(self) -> None:
         items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
         invalid_constraints: list[object] = [None, object(), {"selected_item_ids": ["white-tee"]}]
