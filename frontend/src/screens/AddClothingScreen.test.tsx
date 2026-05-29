@@ -333,6 +333,41 @@ describe("AddClothingScreen", () => {
     expect(await screen.findByText("识别完成，已填入可编辑字段")).toBeInTheDocument();
   });
 
+  it("locks the single image input while image recognition is pending", async () => {
+    let resolveRecognition: (value: { ok: boolean; json: () => Promise<object> }) => void = () => undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<{ ok: boolean; json: () => Promise<object> }>((resolve) => {
+            resolveRecognition = resolve;
+          }),
+      ),
+    );
+
+    const { container } = render(<AddClothingScreen modelHubConfig={modelHubConfig} onBack={() => undefined} />);
+
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]:not([multiple])');
+    expect(input).not.toBeNull();
+    fireEvent.change(input!, { target: { files: [new File(["tee"], "tee.png", { type: "image/png" })] } });
+    const recognizeButton = container.querySelector<HTMLButtonElement>(".secondary-button");
+    expect(recognizeButton).not.toBeNull();
+    fireEvent.click(recognizeButton!);
+
+    await waitFor(() => expect(recognizeButton).toBeDisabled());
+    expect(input).toBeDisabled();
+
+    resolveRecognition({
+      ok: true,
+      json: async () => ({
+        candidates: [{ content: { parts: [{ text: JSON.stringify({ name: "Test tee" }) }] } }],
+      }),
+    });
+
+    expect(await screen.findByDisplayValue("Test tee")).toBeInTheDocument();
+    expect(input).not.toBeDisabled();
+  });
+
   it("recognizes a selected image through ModelHub and fills the form", async () => {
     const fetchMock = vi.fn();
     fetchMock.mockResolvedValue({

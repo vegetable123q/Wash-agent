@@ -250,6 +250,7 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
               type="file"
               accept="image/*"
               aria-label="上传衣物图片"
+              disabled={recognitionStatus === "recognizing"}
               onChange={(event) => {
                 const file = event.currentTarget.files?.[0] ?? null;
                 setImageFile(file);
