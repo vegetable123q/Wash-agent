@@ -98,6 +98,28 @@ describe("MachineDetailScreen", () => {
     expect(screen.queryByText(/等待未知/)).not.toBeInTheDocument();
   });
 
+  it("does not show non-finite running remaining time", () => {
+    const { container } = render(
+      <MachineDetailScreen
+        onBack={vi.fn()}
+        backendMachine={{
+          machine_id: "85774952",
+          location: "南区21号楼 南区21号楼6层烘干机",
+          machine_type: "dryer",
+          status: "running",
+          remaining_minutes: Number.POSITIVE_INFINITY,
+          price_yuan: null,
+          modes: [],
+          provider: "haier",
+        }}
+        pricingRules={{ ...PRICING_RULES }}
+      />,
+    );
+
+    expect(container.textContent).not.toContain("Infinity");
+    expect(container.querySelector(".panel-metrics span")?.textContent).toBe("运行中");
+  });
+
   it("shows user-facing machine details without raw backend field names", () => {
     render(<MachineDetailScreen onBack={vi.fn()} staticMachine={machines[1]} />);
 
