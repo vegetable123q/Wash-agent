@@ -50,6 +50,23 @@ describe("AddClothingScreen", () => {
     expect(onSaved).toHaveBeenCalledTimes(1);
   });
 
+  it("clears a save error after the user edits the draft", async () => {
+    localStorage.setItem("washmate.localWardrobe", "{not-json");
+
+    render(<AddClothingScreen modelHubConfig={{ ...modelHubConfig, apikey: "" }} onBack={() => undefined} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "文字输入" }));
+    const nameInput = screen.getByLabelText("衣物名称");
+    fireEvent.change(nameInput, { target: { value: "第一件衣物" } });
+    fireEvent.click(screen.getByRole("button", { name: /保存到衣柜/ }));
+
+    expect(await screen.findByText("本地衣柜数据无法读取")).toBeInTheDocument();
+
+    fireEvent.change(nameInput, { target: { value: "第二件衣物" } });
+
+    expect(screen.queryByText("本地衣柜数据无法读取")).not.toBeInTheDocument();
+  });
+
   it("requires ModelHub settings before image recognition", () => {
     render(<AddClothingScreen modelHubConfig={{ ...modelHubConfig, apikey: "" }} onBack={() => undefined} />);
 

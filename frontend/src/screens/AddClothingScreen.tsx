@@ -90,6 +90,7 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
   const updateDraft = (patch: Partial<ClothingDraft>) => {
     setDraft((current) => ({ ...current, ...patch }));
     setStatus((current) => (current === "saved" ? "idle" : current));
+    setError("");
   };
 
   const fillDraftFromRecognition = (result: ClothingRecognitionResult, imageFilename = "") => {
