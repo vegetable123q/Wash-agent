@@ -91,6 +91,7 @@ describe("generateReport", () => {
     expect(report.sections["洗衣步骤"]).toContain("床品单独洗：床单被套");
     expect(report.sections["洗衣步骤"]).toContain("程序：标准洗");
     expect(report.sections["费用和时间"]).toContain("床品单独洗 · 标准洗");
+    expect(report.risk_notes).toContain("洗衣机 等待时间未知，无法确认是否满足最大等待 10 分钟。");
     expect(text).toContain("洗衣机 等待时间未知");
     expect(text).not.toMatch(/large-bedding|standard_washer|程序 standard/);
   });

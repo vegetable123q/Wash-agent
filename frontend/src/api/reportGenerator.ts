@@ -119,6 +119,7 @@ function riskNotes(plan: LaundryPlan): string[] {
     }
     notes.push(...bucket.warnings.map(userFacingWarning));
   }
+  notes.push(...plan.global_warnings.map(userFacingWarning));
   return dedupe(notes);
 }
 

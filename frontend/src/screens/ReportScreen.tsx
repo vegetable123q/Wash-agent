@@ -36,7 +36,7 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
   const durationText = plan?.estimated_duration_minutes == null ? "待确认" : `${plan.estimated_duration_minutes} 分钟`;
   const bucketCountText = plan ? `${plan.buckets.length} 个批次` : "待生成";
   const routeCards = hasPlan && plan ? buildRouteCards(plan.buckets, nameMap, pricingRules) : [];
-  const reminders = conciseReminders(planReport?.risk_notes, plan?.buckets.flatMap((bucket) => bucket.warnings));
+  const reminders = conciseReminders(planReport?.risk_notes, plan?.global_warnings, plan?.buckets.flatMap((bucket) => bucket.warnings));
   const overview = environmentOverview(mobileSummary);
 
   return (
