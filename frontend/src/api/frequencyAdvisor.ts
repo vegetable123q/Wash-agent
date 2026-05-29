@@ -51,14 +51,15 @@ const FREQUENCY_RISK_KEYS = new Set(["shrink", "color_bleed", "deform", "pilling
 export function adviseFrequency(item: WardrobeItemForPlan, constraints: LaundryConstraints): FrequencyAdvice {
   const text = searchText(item);
   const threshold = thresholdFor(text);
+  const wearCount = nonNegativeInteger(item.wear_count_since_wash);
   const reasons: string[] = [];
   let score = 0;
 
-  if (item.wear_count_since_wash >= threshold) {
+  if (wearCount >= threshold) {
     score += 45;
-    reasons.push(`已穿 ${item.wear_count_since_wash} 次，达到建议清洗阈值 ${threshold} 次。`);
+    reasons.push(`已穿 ${wearCount} 次，达到建议清洗阈值 ${threshold} 次。`);
   } else {
-    reasons.push(`已穿 ${item.wear_count_since_wash} 次，未达到建议清洗阈值 ${threshold} 次。`);
+    reasons.push(`已穿 ${wearCount} 次，未达到建议清洗阈值 ${threshold} 次。`);
   }
 
   if (constraints.urgent_item_ids.includes(item.profile.item_id)) {
@@ -76,7 +77,7 @@ export function adviseFrequency(item: WardrobeItemForPlan, constraints: LaundryC
     reasons.push("用户记录有明显污渍，建议本次优先处理。");
   }
 
-  if (containsAny(text, LOW_FREQUENCY_TERMS) && item.wear_count_since_wash < threshold) {
+  if (containsAny(text, LOW_FREQUENCY_TERMS) && wearCount < threshold) {
     score -= 15;
     reasons.push("牛仔、羊毛或外套类衣物可适当少洗，减少褪色、缩水和变形。");
   }
@@ -131,6 +132,10 @@ function thresholdFor(text: string): number {
   }
   if (!matches.length) return 4; // default threshold for unknown items
   return Math.min(...matches);
+}
+
+function nonNegativeInteger(value: number): number {
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 }
 
 function termMatches(text: string, term: string): boolean {

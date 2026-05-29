@@ -39,6 +39,13 @@ describe("frequencyAdvisor", () => {
 
     expect(advice.priority_score).toBe(0);
   });
+
+  it("normalizes negative wear counts before building reasons", () => {
+    const advice = adviseFrequency(planItem({ name: "white cotton tee", wearCount: -1 }), constraints);
+
+    expect(advice.reasons[0]).toContain("已穿 0 次");
+    expect(advice.reasons[0]).not.toContain("-1");
+  });
 });
 
 function planItem({ name, wearCount }: { name: string; wearCount: number }): WardrobeItemForPlan {
