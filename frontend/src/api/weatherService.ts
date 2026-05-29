@@ -30,6 +30,9 @@ export async function fetchTsinghuaWeather(): Promise<WeatherSnapshot> {
     if (!current || typeof current !== "object") {
       throw new Error("Open-Meteo response missing current weather");
     }
+    if (!isValidCurrentWeather(current)) {
+      throw new Error("Open-Meteo response invalid current weather");
+    }
 
     return {
       source: "open-meteo",
@@ -46,4 +49,12 @@ export async function fetchTsinghuaWeather(): Promise<WeatherSnapshot> {
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+function isValidCurrentWeather(value: unknown): value is WeatherSnapshot["current"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const current = value as Record<string, unknown>;
+  return [current.temperature_2m, current.relative_humidity_2m, current.precipitation].every(
+    (item) => typeof item === "number" && Number.isFinite(item),
+  );
 }
