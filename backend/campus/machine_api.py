@@ -386,7 +386,7 @@ def _machine_from_mock_dict(data: object) -> MachineInfo:
 
     return MachineInfo(
         machine_id=_required_mock_text(data, "machine_id"),
-        location=str(data["location"]),
+        location=_required_mock_text(data, "location"),
         machine_type=_machine_type_from_value(data["machine_type"]),
         status=_machine_status_from_value(data["status"]),
         remaining_minutes=_optional_int(data.get("remaining_minutes"), "remaining_minutes"),
