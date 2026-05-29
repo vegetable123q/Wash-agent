@@ -430,7 +430,12 @@ function normalizeStoredWardrobeItem(value: unknown): WardrobeSummaryItem {
 }
 
 function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean) : [];
+  return Array.isArray(value)
+    ? value
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : [];
 }
 
 function nonNegativeInteger(value: unknown): number {

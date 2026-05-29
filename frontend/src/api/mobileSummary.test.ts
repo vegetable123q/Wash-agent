@@ -233,6 +233,25 @@ describe("mobileSummary wardrobe selection", () => {
     expect(summary.wardrobe.items[0].risks).toEqual({ color_bleed: "high" });
   });
 
+  it("ignores nonstring legacy array values", async () => {
+    localStorage.setItem(
+      wardrobeStorageKey,
+      JSON.stringify([
+        {
+          item_id: "legacy-tee",
+          name: "legacy tee",
+          colors: [" white ", true, 7],
+          user_notes: [" keep ", false],
+        },
+      ]),
+    );
+
+    const summary = await fetchMobileSummary();
+
+    expect(summary.wardrobe.items[0].colors).toEqual(["white"]);
+    expect(summary.wardrobe.items[0].user_notes).toEqual(["keep"]);
+  });
+
   it("assigns unique wardrobe ids when several items are saved in the same millisecond", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-29T12:00:00.000Z"));
