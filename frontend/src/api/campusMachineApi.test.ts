@@ -106,4 +106,39 @@ describe("campusMachineApi", () => {
       "/haier-api/position/deviceDetailPage",
     ]);
   });
+
+  it("recognizes common CleverSchool status synonyms", async () => {
+    const transport: CampusMachineTransport = async ({ url }) => {
+      if (url.endsWith("/device/status")) {
+        return {
+          success: true,
+          data: [
+            {
+              tower: "南区21号楼",
+              macUnionCode: "洗衣机 455514",
+              floorName: "一层",
+              status: "状态:空闲 更新时间:2026-05-29 13:20:00",
+            },
+            {
+              tower: "南区21号楼",
+              macUnionCode: "洗衣机 455515",
+              floorName: "一层",
+              status: "状态:使用中 剩余时间:12分钟 更新时间:2026-05-29 13:20:00",
+            },
+          ],
+        };
+      }
+      return { code: 0, data: { items: [] } };
+    };
+
+    const context = await buildCampusContextForDorm("南区21号楼", { transport });
+
+    expect(context.all_machines.map((machine) => machine.status)).toEqual(["available", "running"]);
+    expect(context.all_machines[1].remaining_minutes).toBe(12);
+    expect(context.queue_estimates[0]).toMatchObject({
+      available_count: 1,
+      running_count: 1,
+      estimated_wait_minutes: 0,
+    });
+  });
 });

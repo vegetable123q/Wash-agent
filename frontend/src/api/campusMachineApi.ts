@@ -254,8 +254,8 @@ function machineStatus(statusText: string): MachineStatus {
   if (["脱水", "开盖", "出错", "错误", "异常", "故障"].some((token) => statusText.includes(token))) {
     return "out_of_service";
   }
-  if (statusText.includes("待机")) return "available";
-  if (statusText.includes("工作") || statusText.includes("运转")) return "running";
+  if (statusText.includes("待机") || statusText.includes("空闲") || statusText.includes("可用")) return "available";
+  if (statusText.includes("工作") || statusText.includes("运转") || statusText.includes("使用") || statusText.includes("运行")) return "running";
   return "unknown";
 }
 
