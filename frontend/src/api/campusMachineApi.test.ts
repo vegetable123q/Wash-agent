@@ -161,6 +161,20 @@ describe("campusMachineApi", () => {
     });
   });
 
+  it("rejects non-finite Haier numeric identifiers", async () => {
+    const transport: CampusMachineTransport = async ({ url, data }) => {
+      if (url.endsWith("/device/status")) {
+        return { success: true, data: [] };
+      }
+      if (url.endsWith("/position/deviceDetailPage") && data?.categoryCode === "00") {
+        return { code: 0, data: { items: [{ id: Number.NaN, name: "washer", state: 1 }] } };
+      }
+      return { code: 0, data: { items: [] } };
+    };
+
+    await expect(buildCampusContextForDorm("南区21号楼", { transport })).rejects.toThrow("Missing required haier[0].id");
+  });
+
   it("parses hour and minute remaining time", async () => {
     const transport: CampusMachineTransport = async ({ url }) => {
       if (url.endsWith("/device/status")) {

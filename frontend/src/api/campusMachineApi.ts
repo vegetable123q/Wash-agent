@@ -220,8 +220,11 @@ function requiredText(item: Record<string, unknown>, key: string, context: strin
 
 function requiredIdentifier(item: Record<string, unknown>, key: string, context: string): string {
   const value = item[key];
-  if ((typeof value === "string" || typeof value === "number") && String(value).trim()) {
-    return String(value).trim();
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
   }
   throw new Error(`Missing required ${context}.${key}`);
 }
