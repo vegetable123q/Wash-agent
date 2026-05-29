@@ -70,12 +70,13 @@ function selectedItems(items: WardrobeItemForPlan[], ids: string[]): WardrobeIte
   if (!ids.length) {
     throw new Error("selected_item_ids is required for laundry planning");
   }
+  const uniqueIds = [...new Set(ids)];
   const byId = new Map(items.map((item) => [item.profile.item_id, item]));
-  const missing = ids.filter((id) => !byId.has(id));
+  const missing = uniqueIds.filter((id) => !byId.has(id));
   if (missing.length) {
     throw new Error(`selected item ids not found: ${missing.join(", ")}`);
   }
-  return ids.map((id) => byId.get(id)!);
+  return uniqueIds.map((id) => byId.get(id)!);
 }
 
 // ─── bucket splitting ───────────────────────────────────────────────────
