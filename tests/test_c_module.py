@@ -139,6 +139,28 @@ class CModuleTests(unittest.TestCase):
         self.assertGreaterEqual(advice["wm-white-tee-001"].priority_score, 45)
         self.assertIn("运动", " ".join(advice["wm-sports-tee-001"].reasons))
 
+    def test_frequency_requires_item_and_constraints(self) -> None:
+        item = self.store.get_item("wm-white-tee-001")
+        assert item is not None
+
+        invalid_items: list[object] = [object(), "item"]
+        for invalid_item in invalid_items:
+            with self.subTest(invalid_item=invalid_item):
+                with self.assertRaisesRegex(ValueError, "item"):
+                    advise_frequency(
+                        invalid_item,  # type: ignore[arg-type]
+                        LaundryConstraints(),
+                    )
+
+        invalid_constraints: list[object] = [None, object(), {"urgent_item_ids": []}]
+        for constraints in invalid_constraints:
+            with self.subTest(constraints=constraints):
+                with self.assertRaisesRegex(ValueError, "constraints"):
+                    advise_frequency(
+                        item,
+                        constraints,  # type: ignore[arg-type]
+                    )
+
     def test_jeans_can_be_deferred_before_threshold(self) -> None:
         item = self.store.get_item("wm-black-jeans-001")
         assert item is not None

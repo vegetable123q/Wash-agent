@@ -53,6 +53,8 @@ def advise_frequency(
 ) -> FrequencyAdvice:
     """Recommend whether and how urgently one item should be washed."""
 
+    _validate_item(item)
+    _validate_constraints(constraints)
     search_text = _search_text(item)
     threshold = _threshold_for(search_text)
     reasons: list[str] = []
@@ -135,6 +137,16 @@ def _threshold_for(text: str) -> int:
     if not matches:
         raise ValueError("cannot infer wash-frequency threshold from wardrobe item data")
     return min(matches)
+
+
+def _validate_item(value: object) -> None:
+    if not isinstance(value, WardrobeItem):
+        raise ValueError("item must be a WardrobeItem")
+
+
+def _validate_constraints(value: object) -> None:
+    if not isinstance(value, LaundryConstraints):
+        raise ValueError("constraints must be LaundryConstraints")
 
 
 def _search_text(item: WardrobeItem) -> str:
