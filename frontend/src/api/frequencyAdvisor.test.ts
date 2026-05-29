@@ -19,6 +19,13 @@ describe("frequencyAdvisor", () => {
     expect(advice.priority_score).toBeGreaterThanOrEqual(45);
     expect(advice.reasons[0]).toContain("达到建议清洗阈值 2 次");
   });
+
+  it("uses a bedding threshold for English sheet names", () => {
+    const advice = adviseFrequency(planItem({ name: "cotton bed sheet", wearCount: 1 }), constraints);
+
+    expect(advice.priority_score).toBeGreaterThanOrEqual(45);
+    expect(advice.reasons[0]).toContain("达到建议清洗阈值 1 次");
+  });
 });
 
 function planItem({ name, wearCount }: { name: string; wearCount: number }): WardrobeItemForPlan {
