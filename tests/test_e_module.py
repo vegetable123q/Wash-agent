@@ -261,6 +261,19 @@ class EModuleTests(unittest.TestCase):
                         _campus_context(),
                     )
 
+    def test_constraints_require_boolean_flags(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        invalid_values: list[object] = ["true", 1, None]
+
+        for field_name in ("allow_mixed_colors", "allow_dryer", "hygiene_sensitive"):
+            for value in invalid_values:
+                with self.subTest(field_name=field_name, value=value):
+                    constraints = LaundryConstraints(selected_item_ids=["white-tee"])
+                    setattr(constraints, field_name, value)
+
+                    with self.assertRaisesRegex(ValueError, field_name):
+                        plan_laundry(items, constraints, _campus_context())
+
     def test_air_dry_and_budget_warnings_use_explicit_context(self) -> None:
         context = _campus_context()
         context.drying_context = {"balcony_available": False, "ventilation": "poor"}

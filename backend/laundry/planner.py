@@ -72,6 +72,9 @@ def plan_laundry(
 def _validate_constraints(constraints: LaundryConstraints) -> None:
     _item_id_list(constraints.selected_item_ids, "selected_item_ids")
     _item_id_list(constraints.urgent_item_ids, "urgent_item_ids")
+    _boolean(constraints.allow_mixed_colors, "allow_mixed_colors")
+    _boolean(constraints.allow_dryer, "allow_dryer")
+    _boolean(constraints.hygiene_sensitive, "hygiene_sensitive")
 
 
 def _item_id_list(value: object, field_name: str) -> list[str]:
@@ -79,6 +82,12 @@ def _item_id_list(value: object, field_name: str) -> list[str]:
         raise ValueError(f"{field_name} must be a list of non-empty strings")
     if not all(isinstance(item, str) and item.strip() for item in value):
         raise ValueError(f"{field_name} must be a list of non-empty strings")
+    return value
+
+
+def _boolean(value: object, field_name: str) -> bool:
+    if not isinstance(value, bool):
+        raise ValueError(f"{field_name} must be a boolean")
     return value
 
 
