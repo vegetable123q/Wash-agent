@@ -36,6 +36,13 @@ describe("mobileSummary wardrobe selection", () => {
     await expect(fetchMobileSummary()).rejects.toThrow("本地衣柜数据无法读取");
   });
 
+  it("keeps shoe washer and provider pricing rules in the mobile summary", async () => {
+    const summary = await fetchMobileSummary();
+
+    expect(summary.campus_context.pricing_rules.shoe_washer_programs).toEqual(PRICING_RULES.shoe_washer_programs);
+    expect(summary.campus_context.pricing_rules.provider_programs).toEqual(PRICING_RULES.provider_programs);
+  });
+
   it("does not auto-plan recommended items until the user selects this batch", async () => {
     localStorage.setItem(
       wardrobeStorageKey,

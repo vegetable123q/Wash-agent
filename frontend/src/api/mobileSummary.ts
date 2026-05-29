@@ -225,8 +225,7 @@ async function buildIntegratedMobileSummary(profile?: MobileSummaryProfile): Pro
       weather: campusContext.weather,
       drying_context: campusContext.drying_context,
       pricing_rules: {
-        wash_programs: campusContext.pricing_rules.wash_programs,
-        dryer_programs: campusContext.pricing_rules.dryer_programs,
+        ...campusContext.pricing_rules,
         source: "integrated",
       },
     },
@@ -343,6 +342,10 @@ function campusPricingRules(): CampusContext["pricing_rules"] {
   return {
     wash_programs: PRICING_RULES.wash_programs,
     dryer_programs: PRICING_RULES.dryer_programs,
+    shoe_washer_programs: PRICING_RULES.shoe_washer_programs,
+    provider_programs: PRICING_RULES.provider_programs,
+    washer_types: PRICING_RULES.washer_types,
+    dryer_modes: PRICING_RULES.dryer_modes,
   };
 }
 
