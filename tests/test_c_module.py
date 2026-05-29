@@ -161,6 +161,25 @@ class CModuleTests(unittest.TestCase):
                         constraints,  # type: ignore[arg-type]
                     )
 
+    def test_advise_all_requires_items_and_constraints(self) -> None:
+        invalid_items: list[object] = ["items", [object()]]
+        for items in invalid_items:
+            with self.subTest(items=items):
+                with self.assertRaisesRegex(ValueError, "items"):
+                    advise_all_frequencies(
+                        items,  # type: ignore[arg-type]
+                        LaundryConstraints(),
+                    )
+
+        invalid_constraints: list[object] = [None, object(), {"urgent_item_ids": []}]
+        for constraints in invalid_constraints:
+            with self.subTest(constraints=constraints):
+                with self.assertRaisesRegex(ValueError, "constraints"):
+                    advise_all_frequencies(
+                        [],
+                        constraints,  # type: ignore[arg-type]
+                    )
+
     def test_jeans_can_be_deferred_before_threshold(self) -> None:
         item = self.store.get_item("wm-black-jeans-001")
         assert item is not None

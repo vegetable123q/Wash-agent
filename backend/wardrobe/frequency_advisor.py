@@ -106,6 +106,8 @@ def advise_all_frequencies(
 ) -> list[FrequencyAdvice]:
     """Return frequency advice sorted by priority score, highest first."""
 
+    _validate_items(items)
+    _validate_constraints(constraints)
     return sorted(
         [advise_frequency(item, constraints) for item in items],
         key=lambda advice: advice.priority_score,
@@ -142,6 +144,14 @@ def _threshold_for(text: str) -> int:
 def _validate_item(value: object) -> None:
     if not isinstance(value, WardrobeItem):
         raise ValueError("item must be a WardrobeItem")
+
+
+def _validate_items(value: object) -> None:
+    if not isinstance(value, list):
+        raise ValueError("items must be a list")
+    for index, item in enumerate(value):
+        if not isinstance(item, WardrobeItem):
+            raise ValueError(f"items[{index}] must be a WardrobeItem")
 
 
 def _validate_constraints(value: object) -> None:
