@@ -26,6 +26,7 @@ class WardrobeStore:
     def get_item(self, item_id: str) -> WardrobeItem | None:
         """Return one wardrobe item by id."""
 
+        item_id = _required_text(item_id, "item_id")
         for item in self.list_items():
             if item.profile.item_id == item_id:
                 return item

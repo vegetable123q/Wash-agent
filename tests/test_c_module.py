@@ -56,6 +56,13 @@ class CModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "count"):
                     self.store.record_wear("wm-white-tee-001", count=count)  # type: ignore[arg-type]
 
+    def test_get_item_requires_string_item_id(self) -> None:
+        invalid_item_ids: list[object] = [True, 123, "", " "]
+        for item_id in invalid_item_ids:
+            with self.subTest(item_id=item_id):
+                with self.assertRaisesRegex(ValueError, "item_id"):
+                    self.store.get_item(item_id)  # type: ignore[arg-type]
+
     def test_select_items_preserves_order_and_delete_requires_existing_item(self) -> None:
         selected = self.store.select_items(["wm-black-jeans-001", "wm-white-tee-001"])
         self.assertEqual([item.profile.item_id for item in selected], ["wm-black-jeans-001", "wm-white-tee-001"])
