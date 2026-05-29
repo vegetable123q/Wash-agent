@@ -3,6 +3,8 @@ export interface UserProfile {
   dormName: string;
   latestPickupTime: string;
   allowDryer: boolean;
+  budgetYuan: number | null;
+  maxWaitMinutes: number | null;
 }
 
 export const defaultUserProfile: UserProfile = {
@@ -10,6 +12,8 @@ export const defaultUserProfile: UserProfile = {
   dormName: "",
   latestPickupTime: "22:30",
   allowDryer: false,
+  budgetYuan: null,
+  maxWaitMinutes: null,
 };
 
 const STORAGE_KEY = "washmate.userProfile";
@@ -42,5 +46,12 @@ function normalizeProfile(value: unknown): UserProfile {
     dormName: String(profile.dormName ?? "").trim(),
     latestPickupTime: String(profile.latestPickupTime ?? defaultUserProfile.latestPickupTime).trim(),
     allowDryer: Boolean(profile.allowDryer),
+    budgetYuan: positiveNumberOrNull(profile.budgetYuan),
+    maxWaitMinutes: positiveNumberOrNull(profile.maxWaitMinutes),
   };
+}
+
+function positiveNumberOrNull(value: unknown): number | null {
+  const numberValue = typeof value === "string" && value.trim() ? Number(value) : value;
+  return typeof numberValue === "number" && Number.isFinite(numberValue) && numberValue > 0 ? numberValue : null;
 }

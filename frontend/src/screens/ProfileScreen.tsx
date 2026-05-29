@@ -45,6 +45,10 @@ export function ProfileScreen({
     setDraft((current) => ({ ...current, ...patch }));
   };
 
+  const updateNumberDraft = (field: "budgetYuan" | "maxWaitMinutes", value: string) => {
+    updateDraft({ [field]: positiveNumberOrNull(value) });
+  };
+
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     onSave(draft);
@@ -134,6 +138,30 @@ export function ProfileScreen({
                 onChange={(event) => updateDraft({ allowDryer: event.target.checked })}
               />
               <span>允许使用烘干机</span>
+            </label>
+            <label>
+              <span>本次预算上限（元）</span>
+              <input
+                className="input-like"
+                type="number"
+                min="0.1"
+                step="0.1"
+                value={numberInputValue(draft.budgetYuan)}
+                onChange={(event) => updateNumberDraft("budgetYuan", event.target.value)}
+                placeholder="例如 12"
+              />
+            </label>
+            <label>
+              <span>最大等待时间（分钟）</span>
+              <input
+                className="input-like"
+                type="number"
+                min="1"
+                step="1"
+                value={numberInputValue(draft.maxWaitMinutes)}
+                onChange={(event) => updateNumberDraft("maxWaitMinutes", event.target.value)}
+                placeholder="例如 8"
+              />
             </label>
           </div>
         </Section>
@@ -228,4 +256,17 @@ function modelHubConnectionStatus(backendStatus: BackendStatus, hasSavedConfig: 
     return { label: "加载中", tone: "blue" as const };
   }
   return { label: "本地数据异常", tone: "red" as const };
+}
+
+function numberInputValue(value: number | null | undefined): string {
+  return value == null ? "" : String(value);
+}
+
+function positiveNumberOrNull(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createWardrobeItem, fetchMobileSummary, rebuildMobileSummaryForSelection, setLaundrySelection } from "./mobileSummary";
+import { createWardrobeItem, fetchMobileSummary, rebuildMobileSummaryForSelection, setLaundrySelection, type MobileSummary } from "./mobileSummary";
+import { PRICING_RULES } from "./pricingRules";
 
 const wardrobeStorageKey = "washmate.localWardrobe";
 const dirtyBasketStorageKey = "washmate.selectedLaundryItemIds";
@@ -410,5 +411,97 @@ describe("mobileSummary wardrobe selection", () => {
     expect(summary.dirty_basket.recommendation).toContain("约 2 桶");
     expect(summary.plan.buckets).toHaveLength(0);
     expect(summary.plan.summary).toContain("当前机器条件不足");
+  });
+
+  it("applies profile budget and wait preferences to regenerated laundry plans", async () => {
+    const summary: MobileSummary = {
+      source: "backend",
+      selected_laundry_item_ids: [],
+      dirty_basket: {
+        item_count: 0,
+        load_percent: 0,
+        oldest_days: 0,
+        urgent_count: 0,
+        status_label: "空篮",
+        recommendation: "",
+        next_action: "",
+        items: [],
+      },
+      wardrobe: {
+        items: [
+          {
+            item_id: "tee-1",
+            name: "白色棉 T 恤",
+            user_note: "",
+            user_notes: [],
+            wear_count_since_wash: 1,
+            wash_count: 0,
+            material_ratios: { cotton: 1 },
+            colors: ["white"],
+            risks: {},
+          },
+        ],
+      },
+      campus_context: {
+        all_machines: [
+          {
+            machine_id: "washer-1",
+            location: "1F",
+            machine_type: "standard_washer",
+            status: "available",
+            remaining_minutes: null,
+            price_yuan: 3.5,
+            modes: ["standard"],
+          },
+        ],
+        available_machines: [
+          {
+            machine_id: "washer-1",
+            location: "1F",
+            machine_type: "standard_washer",
+            status: "available",
+            remaining_minutes: null,
+            price_yuan: 3.5,
+            modes: ["standard"],
+          },
+        ],
+        queue_estimates: [
+          {
+            machine_type: "standard_washer",
+            total_count: 1,
+            available_count: 1,
+            running_count: 0,
+            out_of_service_count: 0,
+            unknown_count: 0,
+            estimated_wait_minutes: 12,
+          },
+        ],
+        weather: {},
+        drying_context: { balcony_available: true, ventilation: "normal" },
+        pricing_rules: { ...PRICING_RULES },
+      },
+      plan: {
+        buckets: [],
+        estimated_cost_yuan: null,
+        estimated_duration_minutes: null,
+        summary: "",
+        global_warnings: [],
+      },
+      report: {
+        title: "",
+        sections: {},
+        savings_notes: [],
+        risk_notes: [],
+      },
+    };
+
+    const updated = rebuildMobileSummaryForSelection(summary, ["tee-1"], {
+      allowDryer: false,
+      budgetYuan: 3,
+      maxWaitMinutes: 5,
+    });
+
+    expect(updated.plan.global_warnings.some((warning) => warning.includes("预算 3 元"))).toBe(true);
+    expect(updated.plan.global_warnings.some((warning) => warning.includes("预计等待 12 分钟超过最大等待 5 分钟"))).toBe(true);
   });
 });

@@ -17,6 +17,8 @@ describe("LaundryRoomScreen", () => {
           dormName: "南区21号楼",
           latestPickupTime: "22:30",
           allowDryer: false,
+          budgetYuan: null,
+          maxWaitMinutes: null,
         }}
         mobileSummary={{
           source: "backend",
@@ -167,6 +169,8 @@ describe("LaundryRoomScreen", () => {
           dormName: "南区21号楼",
           latestPickupTime: "22:30",
           allowDryer: false,
+          budgetYuan: null,
+          maxWaitMinutes: null,
         }}
         mobileSummary={{
           source: "backend",

@@ -56,14 +56,17 @@ interface DirtyBasketRecord {
   added_at_source: DirtyBasketAddedAtSource;
 }
 
-export async function fetchMobileSummary(profile?: Pick<UserProfile, "dormName" | "allowDryer">): Promise<MobileSummary> {
+type MobileSummaryProfile = Partial<Pick<UserProfile, "dormName" | "allowDryer" | "budgetYuan" | "maxWaitMinutes">>;
+type LaundryPreferenceProfile = Partial<Pick<UserProfile, "allowDryer" | "budgetYuan" | "maxWaitMinutes">>;
+
+export async function fetchMobileSummary(profile?: MobileSummaryProfile): Promise<MobileSummary> {
   return buildIntegratedMobileSummary(profile);
 }
 
 export function rebuildMobileSummaryForSelection(
   summary: MobileSummary,
   itemIds: string[],
-  profile?: Pick<UserProfile, "allowDryer">,
+  profile?: LaundryPreferenceProfile,
 ): MobileSummary {
   const storedItems = summary.wardrobe.items;
   const validIds = new Set(storedItems.map((item) => item.item_id));
@@ -154,7 +157,7 @@ export async function setLaundrySelection(itemIds: string[]): Promise<{ status: 
 
 // ─── integrated summary builder ─────────────────────────────────────────
 
-async function buildIntegratedMobileSummary(profile?: Pick<UserProfile, "dormName" | "allowDryer">): Promise<MobileSummary> {
+async function buildIntegratedMobileSummary(profile?: MobileSummaryProfile): Promise<MobileSummary> {
   const storedItems = readLocalWardrobeItems();
 
   let weather: WeatherSnapshot = await fetchTsinghuaWeather();
@@ -236,7 +239,7 @@ function buildLaundryArtifacts(
   storedItems: WardrobeSummaryItem[],
   selectedLaundryItemIds: string[],
   campusContext: CampusContext,
-  profile?: Pick<UserProfile, "allowDryer">,
+  profile?: LaundryPreferenceProfile,
 ): { frequencyAdvice: FrequencyAdvice[]; plan: LaundryPlan; report: WashReport } {
   const planItems = storedItems.map(storedToPlanItem);
   const constraints: LaundryConstraints = {
@@ -245,8 +248,8 @@ function buildLaundryArtifacts(
     allow_mixed_colors: false,
     allow_dryer: Boolean(profile?.allowDryer),
     hygiene_sensitive: true,
-    max_wait_minutes: null,
-    budget_yuan: null,
+    max_wait_minutes: profile?.maxWaitMinutes ?? null,
+    budget_yuan: profile?.budgetYuan ?? null,
   };
   const frequencyAdvice = adviseAllFrequencies(planItems, constraints);
 

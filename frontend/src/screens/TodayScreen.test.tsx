@@ -64,7 +64,7 @@ describe("TodayScreen", () => {
       <TodayScreen
         backendStatus="connected"
         mobileSummary={mobileSummary}
-        userProfile={{ displayName: "", dormName: "", latestPickupTime: "22:30", allowDryer: false }}
+        userProfile={{ displayName: "", dormName: "", latestPickupTime: "22:30", allowDryer: false, budgetYuan: null, maxWaitMinutes: null }}
         onNavigate={onNavigate}
       />,
     );
@@ -159,7 +159,7 @@ describe("TodayScreen", () => {
       <TodayScreen
         backendStatus="connected"
         mobileSummary={mobileSummary}
-        userProfile={{ displayName: "", dormName: "", latestPickupTime: "22:30", allowDryer: false }}
+        userProfile={{ displayName: "", dormName: "", latestPickupTime: "22:30", allowDryer: false, budgetYuan: null, maxWaitMinutes: null }}
         onNavigate={vi.fn()}
       />,
     );
