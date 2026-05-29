@@ -174,10 +174,10 @@ function buildBucket(
 
   const program = baseBucketId === "large-bedding" ? "large" : "standard";
   const machineType: MachineType = "standard_washer";
-  const machine = requireAvailableMachine(context.available_machines, machineType, program);
+  const machine = requireAvailableMachine(context.available_machines, machineType, program, constraints.preferred_machine_floor);
   requireWashProgram(context, program);
 
-  const [dryMethod, dryWarnings] = dryingDecision(items, constraints, context);
+  const [dryMethod, dryer, dryWarnings] = dryingDecision(items, constraints, context);
   const warnings = [
     ...machineBucketWarnings(baseBucketId, items),
     ...capacityBucketWarnings(bucketId, baseBucketId),
@@ -190,10 +190,16 @@ function buildBucket(
     item_ids: itemIds(items),
     wash_method: "machine_wash",
     machine_type: machineType,
+    machine_id: machine.machine_id,
+    machine_location: machine.location,
+    machine_floor: machine.machine_floor ?? null,
     program,
     detergent_ml: detergentMl(baseBucketId, items),
     use_laundry_bag: baseBucketId === "dark-standard" || anyRecommendsBag(items),
     dry_method: dryMethod,
+    dryer_machine_id: dryer?.machine_id,
+    dryer_machine_location: dryer?.location,
+    dryer_machine_floor: dryer?.machine_floor ?? null,
     warnings: dedupe(warnings),
   };
 }
@@ -204,22 +210,23 @@ function dryingDecision(
   items: WardrobeItemForPlan[],
   constraints: LaundryConstraints,
   context: CampusContext,
-): [DryMethod, string[]] {
+): [DryMethod, MachineInfo | null, string[]] {
   if (!constraints.allow_dryer) {
-    return ["air_dry", ["用户未允许烘干，本批次自然晾干。", ...airDryContextWarnings(context)]];
+    return ["air_dry", null, ["用户未允许烘干，本批次自然晾干。", ...airDryContextWarnings(context)]];
   }
 
   const unsafe = items.filter(dryerUnsafe).map((item) => item.profile.name);
   if (unsafe.length) {
     return [
       "air_dry",
+      null,
       [`${unsafe.join("、")} 不可烘干或存在高温损伤风险，改为自然晾干。`, ...airDryContextWarnings(context)],
     ];
   }
 
-  const dryer = requireAvailableMachine(context.available_machines, "dryer", "low");
+  const dryer = requireAvailableMachine(context.available_machines, "dryer", "low", constraints.preferred_machine_floor);
   requireDryerProgram(context, "low");
-  return ["low_heat_dryer", [machineRecommendationWarning(dryer, "low")]];
+  return ["low_heat_dryer", dryer, [machineRecommendationWarning(dryer, "low")]];
 }
 
 // ─── cost and duration ──────────────────────────────────────────────────
@@ -371,14 +378,29 @@ function requireAvailableMachine(
   available: MachineInfo[],
   machineType: MachineType,
   program: string,
+  preferredFloor?: number | null,
 ): MachineInfo {
-  const match = available.find(
+  const candidates = available.filter(
     (m) => m.machine_type === machineType && m.status === "available" && (!m.modes.length || m.modes.includes(program)),
   );
-  if (!match) {
+  if (!candidates.length) {
     throw new Error(`no available machine for ${machineType} program ${program}`);
   }
-  return match;
+  return bestMachineForFloor(candidates, preferredFloor);
+}
+
+function bestMachineForFloor(candidates: MachineInfo[], preferredFloor?: number | null): MachineInfo {
+  if (preferredFloor == null || !Number.isFinite(preferredFloor)) {
+    return candidates[0];
+  }
+  return [...candidates].sort((a, b) => machineFloorRank(a, preferredFloor) - machineFloorRank(b, preferredFloor))[0];
+}
+
+function machineFloorRank(machine: MachineInfo, preferredFloor: number): number {
+  if (machine.machine_floor == null || !Number.isFinite(machine.machine_floor)) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return Math.abs(machine.machine_floor - preferredFloor);
 }
 
 function machineRecommendationWarning(machine: MachineInfo, program: string): string {

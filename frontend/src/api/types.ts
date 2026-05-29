@@ -15,6 +15,7 @@ export type DirtyBasketAddedAtSource = "known" | "estimated";
 export interface MachineInfo {
   machine_id: string;
   location: string;
+  machine_floor?: number | null;
   machine_type: MachineType;
   status: MachineStatus;
   remaining_minutes: number | null;
@@ -100,6 +101,7 @@ export interface LaundryConstraints {
   hygiene_sensitive: boolean;
   max_wait_minutes: number | null;
   budget_yuan: number | null;
+  preferred_machine_floor?: number | null;
 }
 
 /** One recommended bucket in the final laundry plan. */
@@ -108,10 +110,16 @@ export interface LaundryBucket {
   item_ids: string[];
   wash_method: WashMethod;
   machine_type: MachineType;
+  machine_id?: string;
+  machine_location?: string;
+  machine_floor?: number | null;
   program: string;
   detergent_ml: number | null;
   use_laundry_bag: boolean;
   dry_method: DryMethod;
+  dryer_machine_id?: string;
+  dryer_machine_location?: string;
+  dryer_machine_floor?: number | null;
   warnings: string[];
 }
 
@@ -230,6 +238,7 @@ export interface WardrobeInput {
 export interface BackendMachine {
   machine_id: string;
   location: string;
+  machine_floor?: number | null;
   machine_type: string;
   status: string;
   remaining_minutes: number | null;

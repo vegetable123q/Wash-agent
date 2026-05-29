@@ -108,6 +108,46 @@ def _campus_context() -> CampusContext:
 
 
 class EModuleTests(unittest.TestCase):
+    def test_plan_prefers_available_washer_closest_to_user_floor(self) -> None:
+        first_floor = MachineInfo(
+            machine_id="washer-1f",
+            location="Dorm A 一层",
+            machine_floor=1,
+            machine_type=MachineType.STANDARD_WASHER,
+            status=MachineStatus.AVAILABLE,
+            modes=["standard"],
+        )
+        sixth_floor = MachineInfo(
+            machine_id="washer-6f",
+            location="Dorm A 六层",
+            machine_floor=6,
+            machine_type=MachineType.STANDARD_WASHER,
+            status=MachineStatus.AVAILABLE,
+            modes=["standard"],
+        )
+        context = _campus_context()
+        context.all_machines = [first_floor, sixth_floor]
+        context.available_machines = [first_floor, sixth_floor]
+        item = _item(
+            "white-tee",
+            "白色 T 恤",
+            colors=["white"],
+            materials={"cotton": 1.0},
+        )
+
+        plan = plan_laundry(
+            [item],
+            LaundryConstraints(
+                selected_item_ids=["white-tee"],
+                preferred_machine_floor=5,
+                allow_dryer=False,
+            ),
+            context,
+        )
+
+        self.assertEqual(plan.buckets[0].machine_id, "washer-6f")
+        self.assertEqual(plan.buckets[0].machine_floor, 6)
+
     def test_plan_splits_light_dark_bedding_and_hand_wash_buckets(self) -> None:
         items = [
             _item("white-tee", "白色纯棉 T 恤", colors=["white", "light"], materials={"cotton": 1.0}),

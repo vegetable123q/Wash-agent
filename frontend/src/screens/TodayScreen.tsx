@@ -5,7 +5,7 @@ import { computeRecommendedStartTime, generateTodayAdvice } from "../api/llmSumm
 import type { MobileSummary } from "../api/mobileSummary";
 import { Card, Chip, MetricCard, Page, PrimaryPanel, Section } from "../components/AppChrome";
 import { bucketPlans, planSummaryFallback, todaySummary, type ScreenId } from "../data/washMateContent";
-import type { UserProfile } from "../userProfile";
+import { dormWithFloor, type UserProfile } from "../userProfile";
 
 interface TodayScreenProps {
   backendStatus?: "unconfigured" | "loading" | "connected" | "offline";
@@ -32,16 +32,18 @@ export function TodayScreen({
   const weather = connected ? liveWeather(mobileSummary) : null;
   const hasPersonalContext = Boolean(
     userProfile?.displayName ||
-      userProfile?.dormName ||
-      userProfile?.allowDryer ||
-      (userProfile?.latestPickupTime && userProfile.latestPickupTime !== "22:30"),
+    userProfile?.dormName ||
+    userProfile?.dormFloor ||
+    userProfile?.allowDryer ||
+    (userProfile?.latestPickupTime && userProfile.latestPickupTime !== "22:30"),
   );
+  const dormLabel = dormWithFloor(userProfile);
   const subtitle = userProfile?.dormName
-    ? `${userProfile.dormName} · 最晚 ${userProfile.latestPickupTime} 取衣`
+    ? `${dormLabel} · 最晚 ${userProfile.latestPickupTime} 取衣`
     : "请先在「我的」配置宿舍楼和偏好";
   const constraints = userProfile && hasPersonalContext
     ? [
-        userProfile.dormName || "请选择宿舍楼",
+        dormLabel || "请选择宿舍楼",
         userProfile.allowDryer ? "允许烘干" : "优先低温/晾干",
         `最晚 ${userProfile.latestPickupTime}`,
       ]

@@ -37,7 +37,7 @@ import type {
   WeatherSnapshot,
 } from "./types";
 import { fetchTsinghuaWeather } from "./weatherService";
-import type { UserProfile } from "../userProfile";
+import { normalizeDormFloor, type UserProfile } from "../userProfile";
 
 // ─── public types re-exported for screens ───────────────────────────────
 
@@ -56,14 +56,14 @@ interface DirtyBasketRecord {
   added_at_source: DirtyBasketAddedAtSource;
 }
 
-export async function fetchMobileSummary(profile?: Pick<UserProfile, "dormName" | "allowDryer">): Promise<MobileSummary> {
+export async function fetchMobileSummary(profile?: Pick<UserProfile, "dormName" | "dormFloor" | "allowDryer">): Promise<MobileSummary> {
   return buildIntegratedMobileSummary(profile);
 }
 
 export function rebuildMobileSummaryForSelection(
   summary: MobileSummary,
   itemIds: string[],
-  profile?: Pick<UserProfile, "allowDryer">,
+  profile?: Pick<UserProfile, "dormFloor" | "allowDryer">,
 ): MobileSummary {
   const storedItems = summary.wardrobe.items;
   const validIds = new Set(storedItems.map((item) => item.item_id));
@@ -154,7 +154,7 @@ export async function setLaundrySelection(itemIds: string[]): Promise<{ status: 
 
 // ─── integrated summary builder ─────────────────────────────────────────
 
-async function buildIntegratedMobileSummary(profile?: Pick<UserProfile, "dormName" | "allowDryer">): Promise<MobileSummary> {
+async function buildIntegratedMobileSummary(profile?: Pick<UserProfile, "dormName" | "dormFloor" | "allowDryer">): Promise<MobileSummary> {
   const storedItems = readLocalWardrobeItems();
 
   let weather: WeatherSnapshot = await fetchTsinghuaWeather();
@@ -236,7 +236,7 @@ function buildLaundryArtifacts(
   storedItems: WardrobeSummaryItem[],
   selectedLaundryItemIds: string[],
   campusContext: CampusContext,
-  profile?: Pick<UserProfile, "allowDryer">,
+  profile?: Pick<UserProfile, "dormFloor" | "allowDryer">,
 ): { frequencyAdvice: FrequencyAdvice[]; plan: LaundryPlan; report: WashReport } {
   const planItems = storedItems.map(storedToPlanItem);
   const constraints: LaundryConstraints = {
@@ -247,6 +247,7 @@ function buildLaundryArtifacts(
     hygiene_sensitive: true,
     max_wait_minutes: null,
     budget_yuan: null,
+    preferred_machine_floor: profileFloorNumber(profile?.dormFloor),
   };
   const frequencyAdvice = adviseAllFrequencies(planItems, constraints);
 
@@ -312,10 +313,16 @@ function toMobileLaundryPlan(plan: LaundryPlan): MobileSummary["plan"] {
       item_ids: b.item_ids,
       wash_method: b.wash_method,
       machine_type: b.machine_type,
+      machine_id: b.machine_id,
+      machine_location: b.machine_location,
+      machine_floor: b.machine_floor,
       program: b.program,
       detergent_ml: b.detergent_ml,
       use_laundry_bag: b.use_laundry_bag,
       dry_method: b.dry_method,
+      dryer_machine_id: b.dryer_machine_id,
+      dryer_machine_location: b.dryer_machine_location,
+      dryer_machine_floor: b.dryer_machine_floor,
       warnings: b.warnings,
     })),
     estimated_cost_yuan: plan.estimated_cost_yuan,
@@ -366,6 +373,7 @@ function fromBackendMachine(machine: BackendMachine): MachineInfo {
   return {
     machine_id: machine.machine_id,
     location: machine.location,
+    machine_floor: machine.machine_floor ?? null,
     machine_type: machine.machine_type as MachineInfo["machine_type"],
     status: machine.status as MachineInfo["status"],
     remaining_minutes: machine.remaining_minutes,
@@ -385,6 +393,11 @@ function fromBackendQueueEstimate(estimate: BackendQueueEstimate): MachineQueueE
     unknown_count: estimate.unknown_count,
     estimated_wait_minutes: estimate.estimated_wait_minutes,
   };
+}
+
+function profileFloorNumber(value: unknown): number | null {
+  const normalized = normalizeDormFloor(value);
+  return normalized ? Number(normalized) : null;
 }
 
 // ─── local storage ──────────────────────────────────────────────────────
@@ -654,6 +667,7 @@ function toBackendMachine(m: MachineInfo): BackendMachine {
   return {
     machine_id: m.machine_id,
     location: m.location,
+    machine_floor: m.machine_floor ?? null,
     machine_type: m.machine_type,
     status: m.status,
     remaining_minutes: m.remaining_minutes,

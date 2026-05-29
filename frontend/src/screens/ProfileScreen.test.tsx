@@ -1,15 +1,20 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { emptyModelHubConfig } from "../api/modelHubConfig";
 import { ProfileScreen } from "./ProfileScreen";
 
 describe("ProfileScreen", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   it("lets users choose a dorm name without exposing tower keys", () => {
     render(
       <ProfileScreen
         profile={{
           displayName: "",
           dormName: "",
+          dormFloor: "",
           latestPickupTime: "22:30",
           allowDryer: false,
         }}
@@ -31,5 +36,58 @@ describe("ProfileScreen", () => {
     expect(screen.queryByDisplayValue("nq21")).not.toBeInTheDocument();
     expect(screen.queryByText(/cleverschool/)).not.toBeInTheDocument();
     expect(screen.queryByText(/haier/)).not.toBeInTheDocument();
+  });
+
+  it("saves a manually entered dorm floor from 1 to 30", () => {
+    const onSave = vi.fn();
+    render(
+      <ProfileScreen
+        profile={{
+          displayName: "",
+          dormName: "南区21号楼",
+          dormFloor: "",
+          latestPickupTime: "22:30",
+          allowDryer: false,
+        }}
+        modelHubConfig={emptyModelHubConfig}
+        backendStatus="connected"
+        towerOptions={[{ name: "南区21号楼" }]}
+        onSave={onSave}
+        onSaveModelHubConfig={vi.fn((config) => config)}
+        onClearModelHubConfig={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("所在楼层"), { target: { value: "4" } });
+    fireEvent.click(screen.getByRole("button", { name: /保存个人信息/ }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ dormFloor: "4" }));
+  });
+
+  it("rejects dorm floors outside 1 to 30", () => {
+    const onSave = vi.fn();
+    render(
+      <ProfileScreen
+        profile={{
+          displayName: "",
+          dormName: "南区21号楼",
+          dormFloor: "",
+          latestPickupTime: "22:30",
+          allowDryer: false,
+        }}
+        modelHubConfig={emptyModelHubConfig}
+        backendStatus="connected"
+        towerOptions={[{ name: "南区21号楼" }]}
+        onSave={onSave}
+        onSaveModelHubConfig={vi.fn((config) => config)}
+        onClearModelHubConfig={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("所在楼层"), { target: { value: "31" } });
+    fireEvent.click(screen.getByRole("button", { name: /保存个人信息/ }));
+
+    expect(screen.getByText("请输入 1-30 之间的楼层")).toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
   });
 });

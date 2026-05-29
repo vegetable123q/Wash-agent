@@ -148,6 +148,7 @@ class LaundryConstraints:
     hygiene_sensitive: bool = True
     max_wait_minutes: int | None = None
     budget_yuan: float | None = None
+    preferred_machine_floor: int | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -169,6 +170,7 @@ class MachineInfo:
     location: str
     machine_type: MachineType
     status: MachineStatus
+    machine_floor: int | None = None
     remaining_minutes: int | None = None
     price_yuan: float | None = None
     modes: list[str] = field(default_factory=list)
@@ -223,12 +225,14 @@ class LaundryBucket:
     machine_type: MachineType = MachineType.UNKNOWN
     machine_id: str = ""
     machine_location: str = ""
+    machine_floor: int | None = None
     program: str = ""
     detergent_ml: float | None = None
     use_laundry_bag: bool = False
     dry_method: DryMethod = DryMethod.UNKNOWN
     dryer_machine_id: str = ""
     dryer_machine_location: str = ""
+    dryer_machine_floor: int | None = None
     estimated_cost_yuan: float | None = None
     estimated_duration_minutes: int | None = None
     warnings: list[str] = field(default_factory=list)

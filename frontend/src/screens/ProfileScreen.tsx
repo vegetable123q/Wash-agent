@@ -8,7 +8,7 @@ import {
 } from "../api/modelHubConfig";
 import { Card, Chip, Page, Section } from "../components/AppChrome";
 import type { CampusTowerOption } from "../api/mobileSummary";
-import type { UserProfile } from "../userProfile";
+import { dormWithFloor, normalizeDormFloor, type UserProfile } from "../userProfile";
 
 type BackendStatus = "loading" | "connected" | "offline";
 
@@ -34,6 +34,7 @@ export function ProfileScreen({
   const [draft, setDraft] = useState(profile);
   const [modelHubDraft, setModelHubDraft] = useState(modelHubConfig);
   const [saved, setSaved] = useState(false);
+  const [floorError, setFloorError] = useState<string | null>(null);
   const [modelHubSaved, setModelHubSaved] = useState(false);
   const selectedDormIsListed = towerOptions.some((tower) => tower.name === draft.dormName);
   const normalizedModelHubDraft = normalizeModelHubConfig(modelHubDraft);
@@ -42,12 +43,23 @@ export function ProfileScreen({
 
   const updateDraft = (patch: Partial<UserProfile>) => {
     setSaved(false);
+    if ("dormFloor" in patch) {
+      setFloorError(null);
+    }
     setDraft((current) => ({ ...current, ...patch }));
   };
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    onSave(draft);
+    const dormFloor = normalizeDormFloor(draft.dormFloor);
+    if (dormFloor === null) {
+      setSaved(false);
+      setFloorError("请输入 1-30 之间的楼层");
+      return;
+    }
+    const normalizedDraft = { ...draft, dormFloor };
+    setDraft(normalizedDraft);
+    onSave(normalizedDraft);
     setSaved(true);
   };
 
@@ -80,7 +92,7 @@ export function ProfileScreen({
         </span>
         <div>
           <h2>{draft.displayName || "未填写昵称"}</h2>
-          <p>{draft.dormName || "请选择宿舍楼，洗衣房不会再默认紫荆 1 号楼"}</p>
+          <p>{dormWithFloor(draft) || "请选择宿舍楼，洗衣房不会再默认紫荆 1 号楼"}</p>
         </div>
       </Card>
 
@@ -113,6 +125,19 @@ export function ProfileScreen({
                 ))}
               </select>
             </label>
+            <label>
+              <span>所在楼层</span>
+              <input
+                className="input-like"
+                aria-label="所在楼层"
+                inputMode="numeric"
+                maxLength={2}
+                value={draft.dormFloor ?? ""}
+                onChange={(event) => updateDraft({ dormFloor: event.target.value })}
+                placeholder="1-30"
+              />
+            </label>
+            {floorError ? <p className="form-status form-status-error">{floorError}</p> : null}
           </div>
         </Section>
 

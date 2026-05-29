@@ -115,4 +115,79 @@ describe("planLaundry", () => {
     expect(plan.buckets.every((bucket) => bucket.item_ids.length <= 7)).toBe(true);
     expect(plan.summary).toContain("2 个洗护批次");
   });
+
+  it("prefers the available washer closest to the user's dorm floor", () => {
+    const firstFloorWasher: MachineInfo = {
+      machine_id: "first-floor",
+      location: "南区21号楼 一层",
+      machine_floor: 1,
+      machine_type: "standard_washer",
+      status: "available",
+      remaining_minutes: null,
+      price_yuan: null,
+      modes: ["standard"],
+    };
+    const sixthFloorWasher: MachineInfo = {
+      machine_id: "sixth-floor",
+      location: "南区21号楼 六层",
+      machine_floor: 6,
+      machine_type: "standard_washer",
+      status: "available",
+      remaining_minutes: null,
+      price_yuan: null,
+      modes: ["standard"],
+    };
+    const floorContext: CampusContext = {
+      all_machines: [firstFloorWasher, sixthFloorWasher],
+      available_machines: [firstFloorWasher, sixthFloorWasher],
+      queue_estimates: [],
+      weather: {},
+      drying_context: {},
+      pricing_rules: {
+        wash_programs: {
+          standard: { price_yuan: 3.5, duration_minutes: 40 },
+        },
+        dryer_programs: {
+          low: { price_yuan: 2, duration_minutes: 50 },
+        },
+      },
+    };
+    const item: WardrobeItemForPlan = {
+      profile: {
+        item_id: "shirt",
+        name: "白色短袖",
+        user_note: "",
+        material_ratios: { cotton: 1 },
+        colors: ["white"],
+        care_warnings: [],
+        care_recommendations: [],
+        care_forbidden: [],
+        care_symbols: {},
+        risks: {},
+        recommended_wash: "machine_wash",
+      },
+      wear_count_since_wash: 1,
+      preferred_method: "machine_wash",
+      user_notes: [],
+    };
+    const constraints: LaundryConstraints = {
+      selected_item_ids: ["shirt"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: 10,
+      budget_yuan: null,
+      preferred_machine_floor: 5,
+    };
+
+    const plan = planLaundry([item], constraints, floorContext);
+
+    expect(plan.buckets[0]).toMatchObject({
+      bucket_id: "light-standard",
+      machine_id: "sixth-floor",
+      machine_floor: 6,
+    });
+    expect(plan.global_warnings.join("\n")).toContain("推荐使用 sixth-floor");
+  });
 });

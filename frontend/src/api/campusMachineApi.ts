@@ -128,9 +128,11 @@ function isLocalWebPreview(): boolean {
 function cleverSchoolMachineFromPayload(item: Record<string, unknown>, index: number): MachineInfo {
   const [label, machineId] = parseMacUnionCode(requiredText(item, "macUnionCode", `cleverschool[${index}]`));
   const machineType = machineTypeForLabel(label);
+  const floorName = requiredText(item, "floorName", `cleverschool[${index}]`);
   return {
     machine_id: machineId,
-    location: `${requiredText(item, "tower", `cleverschool[${index}]`)} ${requiredText(item, "floorName", `cleverschool[${index}]`)}`,
+    location: `${requiredText(item, "tower", `cleverschool[${index}]`)} ${floorName}`,
+    machine_floor: parseMachineFloor(floorName),
     machine_type: machineType,
     status: machineStatus(requiredText(item, "status", `cleverschool[${index}]`)),
     remaining_minutes: remainingMinutes(requiredText(item, "status", `cleverschool[${index}]`)),
@@ -151,6 +153,7 @@ function haierMachineFromPayload(
   return {
     machine_id: id,
     location: `${dormName} ${name}`,
+    machine_floor: parseMachineFloor(name),
     machine_type: haierMachineType(categoryCode),
     status: haierMachineStatus(item.state),
     remaining_minutes: null,
@@ -262,6 +265,44 @@ function machineStatus(statusText: string): MachineStatus {
 function remainingMinutes(statusText: string): number | null {
   const match = statusText.match(/剩余时间[:：]\s*(\d+)\s*分钟/);
   return match ? Number(match[1]) : null;
+}
+
+function parseMachineFloor(value: string): number | null {
+  const digitMatch = value.match(/(?:^|[^\d])([1-9]|[12]\d|30)\s*层/);
+  if (digitMatch) {
+    return Number(digitMatch[1]);
+  }
+  const chineseMatch = value.match(/([一二三四五六七八九十]{1,3})\s*层/);
+  if (!chineseMatch) {
+    return null;
+  }
+  const floor = chineseFloorNumber(chineseMatch[1]);
+  return floor >= 1 && floor <= 30 ? floor : null;
+}
+
+function chineseFloorNumber(value: string): number {
+  const digits: Record<string, number> = {
+    一: 1,
+    二: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    七: 7,
+    八: 8,
+    九: 9,
+  };
+  if (value === "十") {
+    return 10;
+  }
+  if (value.startsWith("十")) {
+    return 10 + (digits[value.slice(1)] ?? 0);
+  }
+  if (value.includes("十")) {
+    const [tens, ones] = value.split("十");
+    return (digits[tens] ?? 0) * 10 + (ones ? digits[ones] ?? 0 : 0);
+  }
+  return digits[value] ?? Number.NaN;
 }
 
 function statusCount(machines: MachineInfo[], status: MachineStatus): number {

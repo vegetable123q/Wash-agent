@@ -168,7 +168,12 @@ def _build_bucket(
 
     program = "large" if bucket_id == "large-bedding" else "standard"
     machine_type = MachineType.STANDARD_WASHER
-    machine = _require_available_machine(campus_context.available_machines, machine_type, program)
+    machine = _require_available_machine(
+        campus_context.available_machines,
+        machine_type,
+        program,
+        constraints.preferred_machine_floor,
+    )
     _require_wash_program(campus_context, program)
 
     dry_method, dryer, dry_warnings = _drying_decision(items, constraints, campus_context)
@@ -189,6 +194,7 @@ def _build_bucket(
         machine_type=machine_type,
         machine_id=machine.machine_id,
         machine_location=machine.location,
+        machine_floor=machine.machine_floor,
         program=program,
         detergent_ml=_detergent_ml(bucket_id, items),
         use_laundry_bag=(
@@ -199,6 +205,7 @@ def _build_bucket(
         dry_method=dry_method,
         dryer_machine_id=dryer.machine_id if dryer is not None else "",
         dryer_machine_location=dryer.location if dryer is not None else "",
+        dryer_machine_floor=dryer.machine_floor if dryer is not None else None,
         estimated_cost_yuan=round(wash_cost + dryer_cost, 2),
         estimated_duration_minutes=wash_duration + dryer_duration,
         warnings=warnings,
@@ -217,7 +224,12 @@ def _drying_decision(
         return DryMethod.AIR_DRY, None, [
             f"{'、'.join(unsafe)} 不可烘干或存在高温损伤风险，改为自然晾干。"
         ] + _air_dry_context_warnings(campus_context)
-    dryer = _require_available_machine(campus_context.available_machines, MachineType.DRYER, "low")
+    dryer = _require_available_machine(
+        campus_context.available_machines,
+        MachineType.DRYER,
+        "low",
+        constraints.preferred_machine_floor,
+    )
     _require_dryer_program(campus_context, "low")
     return DryMethod.LOW_HEAT_DRYER, dryer, [_machine_recommendation_warning(dryer, "low")]
 
@@ -316,14 +328,34 @@ def _required_machine_types(buckets: list[LaundryBucket]) -> list[MachineType]:
     return list(dict.fromkeys(machine_types))
 
 
-def _require_available_machine(machines: list[MachineInfo], machine_type: MachineType, program: str) -> MachineInfo:
-    for machine in machines:
-        if machine.machine_type != machine_type or machine.status != MachineStatus.AVAILABLE:
-            continue
-        if not machine.modes or program not in machine.modes:
-            continue
-        return machine
+def _require_available_machine(
+    machines: list[MachineInfo],
+    machine_type: MachineType,
+    program: str,
+    preferred_floor: int | None = None,
+) -> MachineInfo:
+    candidates = [
+        machine
+        for machine in machines
+        if machine.machine_type == machine_type
+        and machine.status == MachineStatus.AVAILABLE
+        and (not machine.modes or program in machine.modes)
+    ]
+    if candidates:
+        return _best_machine_for_floor(candidates, preferred_floor)
     raise ValueError(f"no available machine for {machine_type.value} program {program}")
+
+
+def _best_machine_for_floor(machines: list[MachineInfo], preferred_floor: int | None) -> MachineInfo:
+    if preferred_floor is None:
+        return machines[0]
+    return min(machines, key=lambda machine: _machine_floor_rank(machine, preferred_floor))
+
+
+def _machine_floor_rank(machine: MachineInfo, preferred_floor: int) -> float:
+    if machine.machine_floor is None:
+        return float("inf")
+    return abs(machine.machine_floor - preferred_floor)
 
 
 def _require_wash_program(campus_context: CampusContext, program: str) -> None:
