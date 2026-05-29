@@ -245,6 +245,24 @@ describe("ModelHub clothing recognition", () => {
     expect(result.material).toBe("棉 80%、聚酯纤维 20%");
   });
 
+  it("normalizes colon-separated material ratio strings", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        modelHubResponse({
+          is_clothing: true,
+          name: "cotton polyester hoodie",
+          material: "cotton: 80%, polyester: 20%",
+          colors: ["gray"],
+        }),
+      ),
+    );
+
+    const result = await recognizeClothingText("cotton polyester hoodie", modelHubConfig);
+
+    expect(result.material).toBe("棉 80%、聚酯纤维 20%");
+  });
+
   it("keeps care label variants in the editable note", async () => {
     vi.stubGlobal(
       "fetch",

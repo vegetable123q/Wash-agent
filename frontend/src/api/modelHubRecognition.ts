@@ -482,7 +482,7 @@ function colorsText(value: unknown): string {
 }
 
 function translateMaterialName(value: string): string {
-  const trimmed = value.trim();
+  const trimmed = value.trim().replace(/[：:]+$/, "");
   return materialDisplayNames[termKey(trimmed)] ?? trimmed;
 }
 
