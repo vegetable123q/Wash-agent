@@ -244,9 +244,11 @@ function haierMachineType(categoryCode: string): MachineType {
 }
 
 function haierMachineStatus(state: unknown): MachineStatus {
-  if (state === 1) return "available";
-  if (state === 2) return "running";
-  if (state === 3) return "out_of_service";
+  const stateCode =
+    typeof state === "number" ? state : typeof state === "string" && state.trim() ? Number(state.trim()) : NaN;
+  if (stateCode === 1) return "available";
+  if (stateCode === 2) return "running";
+  if (stateCode === 3) return "out_of_service";
   return "unknown";
 }
 

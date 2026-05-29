@@ -141,4 +141,23 @@ describe("campusMachineApi", () => {
       estimated_wait_minutes: 0,
     });
   });
+
+  it("parses Haier numeric state strings", async () => {
+    const transport: CampusMachineTransport = async ({ url, data }) => {
+      if (url.endsWith("/device/status")) {
+        return { success: true, data: [] };
+      }
+      if (url.endsWith("/position/deviceDetailPage") && data?.categoryCode === "00") {
+        return { code: 0, data: { items: [{ id: "h-1", name: "washer", state: "1" }] } };
+      }
+      return { code: 0, data: { items: [] } };
+    };
+
+    const context = await buildCampusContextForDorm("南区21号楼", { transport });
+
+    expect(context.all_machines[0]).toMatchObject({
+      machine_id: "h-1",
+      status: "available",
+    });
+  });
 });
