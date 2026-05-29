@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from backend.shared.models import FrequencyAdvice, LaundryConstraints, RiskLevel, WardrobeItem
 from backend.shared.utils import contains_any, dedupe
 
@@ -116,10 +118,11 @@ def recommended_item_ids(
 ) -> list[str]:
     """Return item ids whose explicit score meets min_score."""
 
+    safe_min_score = min_score if math.isfinite(min_score) else 0.0
     return [
         advice.item_id
         for advice in advise_all_frequencies(items, constraints)
-        if advice.priority_score >= min_score
+        if advice.priority_score >= safe_min_score
     ]
 
 

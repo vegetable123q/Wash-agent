@@ -92,6 +92,13 @@ class CModuleTests(unittest.TestCase):
         self.assertIn("wm-sports-tee-001", ids)
         self.assertNotIn("wm-black-jeans-001", ids)
 
+    def test_recommended_item_ids_defaults_nonfinite_threshold_to_zero(self) -> None:
+        items = self.store.list_items()
+
+        ids = recommended_item_ids(items, LaundryConstraints(), min_score=float("nan"))
+
+        self.assertIn("wm-white-tee-001", ids)
+
     def test_unknown_frequency_category_is_explicit_error(self) -> None:
         item = WardrobeItem(
             profile=ClothingProfile(
