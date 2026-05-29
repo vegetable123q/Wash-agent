@@ -46,6 +46,15 @@ describe("frequencyAdvisor", () => {
     expect(advice.reasons[0]).toContain("已穿 0 次");
     expect(advice.reasons[0]).not.toContain("-1");
   });
+
+  it("trims urgent item ids before matching", () => {
+    const advice = adviseFrequency(planItem({ name: "white cotton tee", wearCount: 0 }), {
+      ...constraints,
+      urgent_item_ids: [" item-1 "],
+    });
+
+    expect(advice.priority_score).toBeGreaterThanOrEqual(25);
+  });
 });
 
 function planItem({ name, wearCount }: { name: string; wearCount: number }): WardrobeItemForPlan {

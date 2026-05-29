@@ -52,6 +52,7 @@ export function adviseFrequency(item: WardrobeItemForPlan, constraints: LaundryC
   const text = searchText(item);
   const threshold = thresholdFor(text);
   const wearCount = nonNegativeInteger(item.wear_count_since_wash);
+  const urgentItemIds = new Set(constraints.urgent_item_ids.map((id) => id.trim()).filter(Boolean));
   const reasons: string[] = [];
   let score = 0;
 
@@ -62,7 +63,7 @@ export function adviseFrequency(item: WardrobeItemForPlan, constraints: LaundryC
     reasons.push(`已穿 ${wearCount} 次，未达到建议清洗阈值 ${threshold} 次。`);
   }
 
-  if (constraints.urgent_item_ids.includes(item.profile.item_id)) {
+  if (urgentItemIds.has(item.profile.item_id)) {
     score += 25;
     reasons.push("该衣物被标记为本次急用，优先级提高。");
   }
