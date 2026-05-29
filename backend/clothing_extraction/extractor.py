@@ -662,7 +662,7 @@ def _profile_from_llm(raw: ClothingInput, payload: dict[str, Any]) -> ClothingPr
 
     confidence = _normalize_confidence(payload.get("confidence", 0.0))
 
-    llm_missing = [str(field) for field in payload.get("missing_fields") or []]
+    llm_missing = _string_list(payload.get("missing_fields"))
     care_symbols = _normalize_care_symbols(payload.get("care_symbols"))
     care_evidence_level = _evidence_level(payload.get("care_evidence_level"))
     care_warnings = [
