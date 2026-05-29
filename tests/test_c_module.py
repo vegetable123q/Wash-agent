@@ -193,6 +193,20 @@ class CModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "risks"):
                     self.store.list_items()
 
+    def test_store_rejects_invalid_wash_history_shape(self) -> None:
+        invalid_histories: list[object] = ["not-a-list", [True], [123]]
+        for wash_history in invalid_histories:
+            with self.subTest(wash_history=wash_history):
+                payload = json.loads(self.path.read_text(encoding="utf-8"))
+                payload["items"][0]["wash_history"] = wash_history
+                self.path.write_text(
+                    json.dumps(payload, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesRegex(ValueError, "wash_history"):
+                    self.store.list_items()
+
     def test_store_rejects_invalid_wash_record_issues(self) -> None:
         invalid_issues: list[object] = ["pilling", [True], [123]]
         for issues in invalid_issues:

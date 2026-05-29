@@ -111,7 +111,7 @@ def _wardrobe_item_from_dict(data: dict[str, Any]) -> WardrobeItem:
             "wear_count_since_wash",
         ),
         preferred_method=WashMethod(data["preferred_method"]),
-        wash_history=[_wash_record_from_dict(record) for record in data["wash_history"]],
+        wash_history=_wash_history(data["wash_history"]),
         user_notes=_string_list(data["user_notes"], "user_notes"),
     )
 
@@ -153,6 +153,20 @@ def _wash_record_from_dict(data: dict[str, Any]) -> WashRecord:
         notes=_text(data["notes"], "notes"),
         issues=_string_list(data["issues"], "issues"),
     )
+
+
+def _wash_history(value: Any) -> list[WashRecord]:
+    if not isinstance(value, list):
+        raise ValueError("wash_history must be a list")
+    records: list[WashRecord] = []
+    for index, record in enumerate(value):
+        if not isinstance(record, dict):
+            raise ValueError(f"wash_history[{index}] must be an object")
+        try:
+            records.append(_wash_record_from_dict(record))
+        except ValueError as exc:
+            raise ValueError(f"wash_history[{index}].{exc}") from exc
+    return records
 
 
 def _require_keys(data: dict[str, Any], keys: set[str]) -> None:
