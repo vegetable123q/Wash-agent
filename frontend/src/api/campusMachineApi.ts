@@ -262,8 +262,11 @@ function machineStatus(statusText: string): MachineStatus {
 }
 
 function remainingMinutes(statusText: string): number | null {
-  const match = statusText.match(/剩余(?:时间)?[:：]?\s*(\d+)\s*分钟/);
-  return match ? Number(match[1]) : null;
+  const match = statusText.match(/剩余(?:时间)?[:：]?\s*(?:(\d+)\s*小时)?\s*(?:(\d+)\s*分钟)?/);
+  if (!match?.[1] && !match?.[2]) return null;
+  const hours = match[1] ? Number(match[1]) : 0;
+  const minutes = match[2] ? Number(match[2]) : 0;
+  return hours * 60 + minutes;
 }
 
 function statusCount(machines: MachineInfo[], status: MachineStatus): number {

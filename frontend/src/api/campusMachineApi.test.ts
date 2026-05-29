@@ -160,4 +160,28 @@ describe("campusMachineApi", () => {
       status: "available",
     });
   });
+
+  it("parses hour and minute remaining time", async () => {
+    const transport: CampusMachineTransport = async ({ url }) => {
+      if (url.endsWith("/device/status")) {
+        return {
+          success: true,
+          data: [
+            {
+              tower: "南区21号楼",
+              macUnionCode: "洗衣机 455515",
+              floorName: "一层",
+              status: "状态: 工作中 剩余1小时20分钟 更新时间:2026-05-29 13:20:00",
+            },
+          ],
+        };
+      }
+      return { code: 0, data: { items: [] } };
+    };
+
+    const context = await buildCampusContextForDorm("南区21号楼", { transport });
+
+    expect(context.all_machines[0].remaining_minutes).toBe(80);
+    expect(context.queue_estimates[0].estimated_wait_minutes).toBe(80);
+  });
 });
