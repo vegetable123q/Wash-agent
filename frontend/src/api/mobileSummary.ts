@@ -608,9 +608,7 @@ function buildDirtyBasketSummary(
     .filter((item): item is DirtyBasketItem => item !== null);
   const oldestDays = Math.max(0, ...basketItems.map((item) => item.days_in_basket));
   const urgentCount = selectedItems.filter(isUrgentItem).length;
-  const hasUrgentItem = selectedItems.some((item) =>
-    [item.name, item.user_note, ...(item.user_notes ?? [])].join(" ").includes("明天要穿"),
-  );
+  const hasUrgentItem = selectedItems.some(isUrgentItem);
 
   if (itemCount === 0) {
     return {

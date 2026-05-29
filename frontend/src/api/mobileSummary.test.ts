@@ -325,6 +325,31 @@ describe("mobileSummary wardrobe selection", () => {
     expect(summary.dirty_basket.status_label).not.toBe("有急用衣物");
   });
 
+  it("uses urgent notes for the dirty-basket status label", async () => {
+    localStorage.setItem(
+      wardrobeStorageKey,
+      JSON.stringify([
+        {
+          item_id: "tee-1",
+          name: "白色棉T恤",
+          user_note: "今晚急用",
+          user_notes: ["今晚急用"],
+          wear_count_since_wash: 1,
+          wash_count: 0,
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          risks: {},
+        },
+      ]),
+    );
+
+    await setLaundrySelection(["tee-1"]);
+    const summary = await fetchMobileSummary();
+
+    expect(summary.dirty_basket.urgent_count).toBe(1);
+    expect(summary.dirty_basket.status_label).toBe("有急用衣物");
+  });
+
   it("marks legacy dirty-basket records with an estimated added date", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-29T12:00:00.000Z"));
