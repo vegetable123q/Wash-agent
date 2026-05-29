@@ -48,4 +48,26 @@ describe("machinePricing", () => {
     expect(priceText).toContain("3.5");
     expect(priceText).not.toContain("NaN");
   });
+
+  it("falls back to configured prices when direct machine price is negative", () => {
+    const machine: BackendMachine = {
+      machine_id: "washer-1",
+      location: "1F",
+      machine_type: "standard_washer",
+      status: "available",
+      remaining_minutes: null,
+      price_yuan: -1,
+      modes: ["standard"],
+    };
+
+    const priceText = machinePriceText(machine, {
+      wash_programs: {
+        standard: { price_yuan: 3.5, duration_minutes: 40 },
+      },
+      dryer_programs: {},
+    });
+
+    expect(priceText).toContain("3.5");
+    expect(priceText).not.toContain("-1");
+  });
 });

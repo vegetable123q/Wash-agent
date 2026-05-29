@@ -30,7 +30,7 @@ const DEFAULT_PROGRAM_LABELS: Record<string, string> = {
 };
 
 export function machinePriceText(machine: BackendMachine, pricingRules?: PricingRulesLike | null): string {
-  if (typeof machine.price_yuan === "number" && Number.isFinite(machine.price_yuan)) {
+  if (typeof machine.price_yuan === "number" && Number.isFinite(machine.price_yuan) && machine.price_yuan >= 0) {
     return `价格：¥${formatYuan(machine.price_yuan)}`;
   }
 
