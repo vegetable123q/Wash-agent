@@ -154,6 +154,13 @@ def _profile_from_dict(data: dict[str, Any]) -> ClothingProfile:
     ):
         if field_name in cleaned:
             cleaned[field_name] = _text(cleaned[field_name], field_name)
+    for field_name in (
+        "user_fill_suggestions",
+        "care_symbols",
+        "care_symbol_evidence",
+        "field_sources",
+    ):
+        cleaned[field_name] = _string_map(cleaned.get(field_name), field_name)
     cleaned["risks"] = _risk_map(cleaned.get("risks"))
     return ClothingProfile(**cleaned)
 
@@ -190,6 +197,21 @@ def _risk_map(value: Any) -> dict[str, RiskLevel]:
         except ValueError as exc:
             raise ValueError(f"risks.{key} must be a valid risk level") from exc
     return risks
+
+
+def _string_map(value: Any, field_name: str) -> dict[str, str]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{field_name} must be an object")
+    items: dict[str, str] = {}
+    for key, item_value in value.items():
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError(f"{field_name} must contain non-empty string keys")
+        if not isinstance(item_value, str):
+            raise ValueError(f"{field_name}.{key} must be a string")
+        items[key.strip()] = item_value
+    return items
 
 
 def _wash_record_from_dict(data: dict[str, Any]) -> WashRecord:
