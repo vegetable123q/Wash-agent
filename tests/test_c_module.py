@@ -184,6 +184,21 @@ class CModuleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "profile"):
             advise_frequency(item, LaundryConstraints())
 
+    def test_frequency_requires_valid_profile_identity_fields(self) -> None:
+        invalid_profiles = [
+            ("item.profile.item_id", ClothingProfile(item_id=True, name="cotton t-shirt")),  # type: ignore[arg-type]
+            ("item.profile.item_id", ClothingProfile(item_id="", name="cotton t-shirt")),
+            ("item.profile.name", ClothingProfile(item_id="bad-name", name=True)),  # type: ignore[arg-type]
+            ("item.profile.name", ClothingProfile(item_id="bad-name", name="")),
+        ]
+
+        for field_name, profile in invalid_profiles:
+            with self.subTest(field_name=field_name, profile=profile):
+                item = WardrobeItem(profile=profile)
+
+                with self.assertRaisesRegex(ValueError, field_name):
+                    advise_frequency(item, LaundryConstraints())
+
     def test_frequency_requires_valid_wear_count(self) -> None:
         invalid_counts: list[object] = [True, -1, 1.5, "2"]
 
