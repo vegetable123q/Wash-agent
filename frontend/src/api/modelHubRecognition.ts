@@ -223,7 +223,12 @@ function parseGeminiJsonText(raw: unknown): Record<string, unknown> {
   if (!text.trim()) {
     throw new Error("ModelHub returned no recognition text");
   }
-  const parsed = JSON.parse(text) as unknown;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("ModelHub returned invalid recognition JSON");
+  }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error("ModelHub recognition result must be a JSON object");
   }

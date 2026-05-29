@@ -16,6 +16,15 @@ function modelHubResponse(payload: object) {
   };
 }
 
+function modelHubTextResponse(text: string) {
+  return {
+    ok: true,
+    json: async () => ({
+      candidates: [{ content: { parts: [{ text }] } }],
+    }),
+  };
+}
+
 describe("ModelHub clothing recognition", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
@@ -27,6 +36,14 @@ describe("ModelHub clothing recognition", () => {
     const file = new File(["not clothing"], "desk.png", { type: "image/png" });
 
     await expect(recognizeClothingImage(file, modelHubConfig)).rejects.toThrow("没有识别到衣物");
+  });
+
+  it("reports invalid recognition JSON explicitly", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(modelHubTextResponse("not json")));
+
+    await expect(recognizeClothingText("white cotton tee", modelHubConfig)).rejects.toThrow(
+      "ModelHub returned invalid recognition JSON",
+    );
   });
 
   it("extracts clothing fields from a long text description without image data", async () => {
