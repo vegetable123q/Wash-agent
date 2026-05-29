@@ -123,7 +123,7 @@ describe("campusMachineApi", () => {
               tower: "南区21号楼",
               macUnionCode: "洗衣机 455515",
               floorName: "一层",
-              status: "状态:使用中 剩余时间:12分钟 更新时间:2026-05-29 13:20:00",
+              status: "状态:使用中 剩余12分钟 更新时间:2026-05-29 13:20:00",
             },
           ],
         };

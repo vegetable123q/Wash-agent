@@ -260,7 +260,7 @@ function machineStatus(statusText: string): MachineStatus {
 }
 
 function remainingMinutes(statusText: string): number | null {
-  const match = statusText.match(/剩余时间[:：]\s*(\d+)\s*分钟/);
+  const match = statusText.match(/剩余(?:时间)?[:：]?\s*(\d+)\s*分钟/);
   return match ? Number(match[1]) : null;
 }
 
