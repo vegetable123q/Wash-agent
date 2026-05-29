@@ -1,0 +1,29 @@
+import { describe, expect, it } from "vitest";
+import { machinePriceText } from "./machinePricing";
+import type { BackendMachine } from "./types";
+
+describe("machinePricing", () => {
+  it("formats list price from supported machine modes", () => {
+    const machine: BackendMachine = {
+      machine_id: "washer-1",
+      location: "1F",
+      machine_type: "standard_washer",
+      status: "available",
+      remaining_minutes: null,
+      price_yuan: null,
+      modes: ["standard"],
+    };
+
+    const priceText = machinePriceText(machine, {
+      wash_programs: {
+        quick: { price_yuan: 3, duration_minutes: 30 },
+        standard: { price_yuan: 3.5, duration_minutes: 40 },
+        large: { price_yuan: 4, duration_minutes: 50 },
+      },
+      dryer_programs: {},
+    });
+
+    expect(priceText).toContain("3.5");
+    expect(priceText).not.toContain("3-4");
+  });
+});

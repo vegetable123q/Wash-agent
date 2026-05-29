@@ -34,7 +34,7 @@ export function machinePriceText(machine: BackendMachine, pricingRules?: Pricing
     return `价格：¥${formatYuan(machine.price_yuan)}`;
   }
 
-  const prices = configuredPricesForMachineType(machine.machine_type, machine.provider, pricingRules);
+  const prices = configuredPricesForMachine(machine, pricingRules);
   if (!prices.length) {
     return "价格：未配置";
   }
@@ -60,8 +60,10 @@ export function machineProgramOptions(machine: BackendMachine, pricingRules?: Pr
     });
 }
 
-function configuredPricesForMachineType(machineType: string, provider: string | undefined, pricingRules?: PricingRulesLike | null): number[] {
-  return configuredProgramsForMachine(machineType, provider, pricingRules)
+function configuredPricesForMachine(machine: BackendMachine, pricingRules?: PricingRulesLike | null): number[] {
+  const supportedModes = machine.modes.length ? new Set(machine.modes) : null;
+  return configuredProgramsForMachine(machine.machine_type, machine.provider, pricingRules)
+    .filter(([programId]) => !supportedModes || supportedModes.has(programId))
     .map(([, program]) => program.price_yuan)
     .filter((price, index, allPrices) => allPrices.indexOf(price) === index)
     .sort((left, right) => left - right);
