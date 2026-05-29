@@ -523,5 +523,17 @@ async function fileToDataUrl(file: File): Promise<string> {
   bytes.forEach((byte) => {
     binary += String.fromCharCode(byte);
   });
-  return `data:${file.type};base64,${btoa(binary)}`;
+  return `data:${imageDataUrlMimeType(file)};base64,${btoa(binary)}`;
+}
+
+function imageDataUrlMimeType(file: File): string {
+  const explicitType = file.type.trim().toLowerCase();
+  if (explicitType.startsWith("image/")) return explicitType;
+  const lowerName = file.name.toLowerCase();
+  if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) return "image/jpeg";
+  if (lowerName.endsWith(".png")) return "image/png";
+  if (lowerName.endsWith(".webp")) return "image/webp";
+  if (lowerName.endsWith(".gif")) return "image/gif";
+  if (lowerName.endsWith(".heic")) return "image/heic";
+  return "image/jpeg";
 }

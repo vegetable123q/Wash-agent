@@ -34,6 +34,29 @@ describe("AddClothingScreen", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("infers a local photo mime type from filename when saving manual input", async () => {
+    const { container } = render(
+      <AddClothingScreen modelHubConfig={{ ...modelHubConfig, apikey: "" }} onBack={() => undefined} />,
+    );
+
+    const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]:not([multiple])');
+    expect(fileInput).not.toBeNull();
+    fireEvent.change(fileInput!, { target: { files: [new File(["photo"], "shirt.jpg", { type: "" })] } });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const nameInput = container.querySelector<HTMLInputElement>("form input.input-like");
+    expect(nameInput).not.toBeNull();
+    fireEvent.change(nameInput!, { target: { value: "photo tee" } });
+    const saveButton = container.querySelector<HTMLButtonElement>("form .primary-button");
+    expect(saveButton).not.toBeNull();
+    fireEvent.click(saveButton!);
+
+    await waitFor(() => {
+      const saved = JSON.parse(localStorage.getItem("washmate.localWardrobe") ?? "[]");
+      expect(saved[0]?.photo_data_url).toMatch(/^data:image\/jpeg;base64,/);
+    });
+  });
+
   it("does not save the same manual item again after a successful save", async () => {
     const onSaved = vi.fn();
 
