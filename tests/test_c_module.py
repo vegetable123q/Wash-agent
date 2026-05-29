@@ -252,6 +252,30 @@ class CModuleTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, field_name):
                         self.store.list_items()
 
+    def test_store_rejects_invalid_profile_string_fields(self) -> None:
+        fields = [
+            "user_note",
+            "image_type",
+            "material_evidence_level",
+            "care_evidence_level",
+            "recommended_wash",
+            "extraction_status",
+            "extraction_error",
+        ]
+        invalid_values: list[object] = [True, 123, ["text"]]
+        for field_name in fields:
+            for value in invalid_values:
+                with self.subTest(field_name=field_name, value=value):
+                    payload = json.loads((ROOT / "data" / "wardrobe_sample.json").read_text(encoding="utf-8"))
+                    payload["items"][0]["profile"][field_name] = value
+                    self.path.write_text(
+                        json.dumps(payload, ensure_ascii=False),
+                        encoding="utf-8",
+                    )
+
+                    with self.assertRaisesRegex(ValueError, field_name):
+                        self.store.list_items()
+
     def test_store_rejects_invalid_profile_risks(self) -> None:
         invalid_risks: list[object] = [
             True,

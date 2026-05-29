@@ -141,6 +141,17 @@ def _profile_from_dict(data: dict[str, Any]) -> ClothingProfile:
         "agent_trace",
     ):
         cleaned[field_name] = _string_list(cleaned.get(field_name, []), field_name)
+    for field_name in (
+        "user_note",
+        "image_type",
+        "material_evidence_level",
+        "care_evidence_level",
+        "recommended_wash",
+        "extraction_status",
+        "extraction_error",
+    ):
+        if field_name in cleaned:
+            cleaned[field_name] = _text(cleaned[field_name], field_name)
     cleaned["risks"] = _risk_map(cleaned.get("risks"))
     return ClothingProfile(**cleaned)
 
