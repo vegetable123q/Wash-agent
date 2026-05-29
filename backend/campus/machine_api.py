@@ -342,6 +342,21 @@ def _required_mock_text(data: dict[str, Any], key: str) -> str:
     return value.strip()
 
 
+def _mock_string_list(value: object, field_name: str) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError(f"machine {field_name} must be a list")
+    result: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(
+                f"machine {field_name} entries must be non-empty strings"
+            )
+        result.append(item.strip())
+    return result
+
+
 def _list_mock_machines(path: Path) -> list[MachineInfo]:
     if not path.is_file():
         raise FileNotFoundError(f"machine data file not found: {path}")
@@ -380,9 +395,7 @@ def _machine_from_mock_dict(data: object) -> MachineInfo:
     if missing:
         raise ValueError(f"missing required machine fields: {', '.join(sorted(missing))}")
 
-    modes = data.get("modes", [])
-    if not isinstance(modes, list):
-        raise ValueError("machine modes must be a list")
+    modes = _mock_string_list(data.get("modes", []), "modes")
 
     return MachineInfo(
         machine_id=_required_mock_text(data, "machine_id"),
@@ -391,7 +404,7 @@ def _machine_from_mock_dict(data: object) -> MachineInfo:
         status=_machine_status_from_value(data["status"]),
         remaining_minutes=_optional_int(data.get("remaining_minutes"), "remaining_minutes"),
         price_yuan=_optional_number(data.get("price_yuan"), "price_yuan"),
-        modes=[str(mode) for mode in modes],
+        modes=modes,
         provider=str(data.get("provider", "")).strip(),
     )
 
