@@ -62,14 +62,6 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
         note: mobileSummary.plan.summary,
       }
     : backendPlanSummary;
-  const statusLabel =
-    backendStatus === "connected"
-      ? "APK 内置"
-      : backendStatus === "loading"
-        ? "加载本地数据"
-        : backendStatus === "unconfigured"
-          ? "APK 内置"
-          : "本地数据异常";
 
   // Dynamic recommended start time
   const recommendedTime = useMemo(
@@ -164,7 +156,6 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
           <h1>{timeOfDayTitle()}</h1>
           <p>{subtitle}</p>
         </div>
-        <Chip tone={connected ? "teal" : "amber"}>{statusLabel}</Chip>
       </header>
 
       <PrimaryPanel>

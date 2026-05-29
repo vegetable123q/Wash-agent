@@ -100,29 +100,33 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
         </button>
       </div>
 
-      <label className="upload-panel">
-        <Camera size={32} />
-        <strong>{imageFilename || "上传衣物、吊牌或洗护标签"}</strong>
-        <span>{mode === "photo" ? "选择图片后可调用 ModelHub 识别；不识图也可以手动保存" : "文字输入可直接保存到 APK 内置衣柜"}</span>
-        <input
-          className="file-input"
-          type="file"
-          accept="image/*"
-          aria-label="上传衣物图片"
-          onChange={(event) => {
-            const file = event.currentTarget.files?.[0] ?? null;
-            setImageFile(file);
-            setImageFilename(file?.name ?? "");
-            setRecognitionStatus("idle");
-            setRecognitionError("");
-          }}
-        />
-      </label>
+      {mode === "photo" ? (
+        <>
+          <label className="upload-panel">
+            <Camera size={32} />
+            <strong>{imageFilename || "上传衣物、吊牌或洗护标签"}</strong>
+            <span>选择图片后可调用 ModelHub 识别；不识图也可以手动保存</span>
+            <input
+              className="file-input"
+              type="file"
+              accept="image/*"
+              aria-label="上传衣物图片"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0] ?? null;
+                setImageFile(file);
+                setImageFilename(file?.name ?? "");
+                setRecognitionStatus("idle");
+                setRecognitionError("");
+              }}
+            />
+          </label>
 
-      <button className="secondary-button" type="button" onClick={handleRecognize} disabled={!canRecognize}>
-        <Camera size={18} />
-        {recognitionStatus === "recognizing" ? "识别中" : "拍照识别"}
-      </button>
+          <button className="secondary-button" type="button" onClick={handleRecognize} disabled={!canRecognize}>
+            <Camera size={18} />
+            {recognitionStatus === "recognizing" ? "识别中" : "拍照识别"}
+          </button>
+        </>
+      ) : null}
 
       <form className="form-stack" onSubmit={handleSubmit}>
         <label>

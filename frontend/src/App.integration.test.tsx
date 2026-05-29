@@ -19,7 +19,7 @@ describe("App in-APK backend integration", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("APK 内置")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument();
     // Without a configured dorm, the app should not invent machine availability or costs.
     expect(screen.getAllByText("费用待确认").length).toBeGreaterThan(0);
     // Only Open-Meteo weather fetch is allowed — no private backend service
@@ -104,7 +104,7 @@ describe("App in-APK backend integration", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("APK 内置")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /衣柜/ }));
     fireEvent.click(screen.getByLabelText("添加衣物"));
     fireEvent.click(screen.getByRole("button", { name: "文字输入" }));

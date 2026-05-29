@@ -140,7 +140,7 @@ export default function App() {
       case "addClothing":
         return <AddClothingScreen modelHubConfig={modelHubConfig} onBack={goBack} onSaved={refreshMobileSummary} />;
       case "clothingDetail":
-        return <ClothingDetailScreen onBack={goBack} backendItem={selectedBackendItem} staticItem={selectedStaticItem} modelHubConfig={modelHubConfig} />;
+        return <ClothingDetailScreen onBack={goBack} backendItem={selectedBackendItem} staticItem={selectedStaticItem} modelHubConfig={modelHubConfig} onSelectionChange={refreshMobileSummary} />;
       case "laundryRoom":
         return (
           <LaundryRoomScreen

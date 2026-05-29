@@ -40,6 +40,43 @@ export type { BackendMachine, BackendQueueEstimate, CampusTowerOption, MobileSum
 // ─── wardrobe CRUD ──────────────────────────────────────────────────────
 
 const LOCAL_WARDROBE_STORAGE_KEY = "washmate.localWardrobe";
+const MANUAL_SELECTED_KEY = "washmate.manualSelected";
+
+// ─── manual item selection ─────────────────────────────────────────────
+
+function readManualSelectedIds(): string[] {
+  if (typeof localStorage === "undefined") return [];
+  const raw = localStorage.getItem(MANUAL_SELECTED_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((id: unknown) => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeManualSelectedIds(ids: string[]): void {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(MANUAL_SELECTED_KEY, JSON.stringify(ids));
+}
+
+export function isManuallySelected(itemId: string): boolean {
+  return readManualSelectedIds().includes(itemId);
+}
+
+export function toggleManualSelection(itemId: string): boolean {
+  const ids = readManualSelectedIds();
+  const index = ids.indexOf(itemId);
+  if (index >= 0) {
+    ids.splice(index, 1);
+    writeManualSelectedIds(ids);
+    return false;
+  }
+  ids.push(itemId);
+  writeManualSelectedIds(ids);
+  return true;
+}
 
 export async function fetchMobileSummary(profile?: Pick<UserProfile, "dormName" | "allowDryer">): Promise<MobileSummary> {
   return buildIntegratedMobileSummary(profile);
@@ -145,7 +182,12 @@ async function buildIntegratedMobileSummary(profile?: Pick<UserProfile, "dormNam
   // Get frequency advice for all items
   const frequencyAdvice = adviseAllFrequencies(planItems, constraints);
   const recommendedIds = recommendedItemIds(planItems, constraints, 45);
-  constraints.selected_item_ids = recommendedIds;
+
+  // Merge manual user selections into the plan
+  const manualIds = readManualSelectedIds().filter((id) => planItems.some((p) => p.profile.item_id === id));
+  const selectedIds = [...new Set([...recommendedIds, ...manualIds])];
+  constraints.selected_item_ids = selectedIds;
+  constraints.urgent_item_ids = manualIds;
 
   // Plan laundry for recommended items
   let plan: LaundryPlan;

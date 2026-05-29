@@ -51,7 +51,6 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
           <h1>{backendReport?.title ?? "本次报告"}</h1>
           <p>把洗护决策转成费用、时间和风险结果</p>
         </div>
-        <Chip tone="teal">{backendReport ? "后端报告" : "已生成"}</Chip>
       </header>
 
       <PrimaryPanel className="report-panel">
