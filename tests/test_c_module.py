@@ -319,6 +319,20 @@ class CModuleTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, field_name):
                         self.store.list_items()
 
+    def test_store_rejects_invalid_profile_confidence(self) -> None:
+        invalid_confidences: list[object] = [True, "0.7", -0.1, 1.5, float("nan")]
+        for confidence in invalid_confidences:
+            with self.subTest(confidence=confidence):
+                payload = json.loads((ROOT / "data" / "wardrobe_sample.json").read_text(encoding="utf-8"))
+                payload["items"][0]["profile"]["confidence"] = confidence
+                self.path.write_text(
+                    json.dumps(payload, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesRegex(ValueError, "confidence"):
+                    self.store.list_items()
+
     def test_store_rejects_invalid_profile_risks(self) -> None:
         invalid_risks: list[object] = [
             True,

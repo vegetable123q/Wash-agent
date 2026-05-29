@@ -132,6 +132,7 @@ def _profile_from_dict(data: dict[str, Any]) -> ClothingProfile:
     cleaned = dict(data)
     cleaned["item_id"] = _required_text(cleaned["item_id"], "item_id")
     cleaned["name"] = _required_text(cleaned["name"], "name")
+    cleaned["confidence"] = _confidence(cleaned.get("confidence", 0.0))
     cleaned["material_ratios"] = _ratio_map(cleaned.get("material_ratios"))
     cleaned["colors"] = _string_list(cleaned.get("colors", []), "colors")
     for field_name in (
@@ -163,6 +164,15 @@ def _profile_from_dict(data: dict[str, Any]) -> ClothingProfile:
         cleaned[field_name] = _string_map(cleaned.get(field_name), field_name)
     cleaned["risks"] = _risk_map(cleaned.get("risks"))
     return ClothingProfile(**cleaned)
+
+
+def _confidence(value: Any) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("confidence must be a number from 0 to 1")
+    confidence = float(value)
+    if not math.isfinite(confidence) or confidence < 0 or confidence > 1:
+        raise ValueError("confidence must be a number from 0 to 1")
+    return confidence
 
 
 def _ratio_map(value: Any) -> dict[str, float]:
