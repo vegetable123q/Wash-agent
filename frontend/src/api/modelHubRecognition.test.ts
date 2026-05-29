@@ -263,6 +263,25 @@ describe("ModelHub clothing recognition", () => {
     expect(result.material).toBe("棉 80%、聚酯纤维 20%");
   });
 
+  it("does not treat nonnumeric material ratios as 100 percent", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        modelHubResponse({
+          is_clothing: true,
+          name: "cotton wool sweater",
+          material_ratios: { cotton: true, wool: "50%" },
+          colors: ["beige"],
+        }),
+      ),
+    );
+
+    const result = await recognizeClothingText("cotton wool sweater", modelHubConfig);
+
+    expect(result.material).not.toContain("100%");
+    expect(result.material).toContain("50%");
+  });
+
   it("normalizes colon-separated material ratio strings", async () => {
     vi.stubGlobal(
       "fetch",

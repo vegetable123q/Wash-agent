@@ -426,7 +426,7 @@ function numericRatioValue(value: unknown): number {
     }
     return Number(trimmed);
   }
-  return Number(value);
+  return Number.NaN;
 }
 
 function careTexts(value: unknown): string[] {
