@@ -458,6 +458,7 @@ function BatchEntry({
           accept="image/*"
           multiple
           aria-label="批量上传衣物图片"
+          disabled={recognitionStatus === "recognizing" || status === "saving"}
           onChange={(event) => onFilesChange(Array.from(event.currentTarget.files ?? []))}
         />
       </label>

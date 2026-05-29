@@ -247,6 +247,43 @@ describe("AddClothingScreen", () => {
     expect(screen.queryByRole("dialog", { name: "批量识别进度" })).not.toBeInTheDocument();
   });
 
+  it("locks the batch file input while batch recognition is pending", async () => {
+    let resolveRecognition: (value: { ok: boolean; json: () => Promise<object> }) => void = () => undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<{ ok: boolean; json: () => Promise<object> }>((resolve) => {
+            resolveRecognition = resolve;
+          }),
+      ),
+    );
+
+    const { container } = render(<AddClothingScreen modelHubConfig={modelHubConfig} onBack={() => undefined} />);
+
+    const modeButtons = Array.from(container.querySelectorAll<HTMLButtonElement>(".segmented button"));
+    fireEvent.click(modeButtons[1]);
+    const input = container.querySelector<HTMLInputElement>('input[type="file"][multiple]');
+    expect(input).not.toBeNull();
+    fireEvent.change(input!, { target: { files: [new File(["tee"], "tee.png", { type: "image/png" })] } });
+    const batchRecognizeButton = container.querySelector<HTMLButtonElement>(".secondary-button");
+    expect(batchRecognizeButton).not.toBeNull();
+    fireEvent.click(batchRecognizeButton!);
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(input).toBeDisabled();
+
+    resolveRecognition({
+      ok: true,
+      json: async () => ({
+        candidates: [{ content: { parts: [{ text: JSON.stringify({ name: "Test tee" }) }] } }],
+      }),
+    });
+
+    expect(await screen.findByText("Test tee")).toBeInTheDocument();
+    expect(input).not.toBeDisabled();
+  });
+
   it("shows a clear reminder when the selected image has no clothing", async () => {
     vi.stubGlobal(
       "fetch",
