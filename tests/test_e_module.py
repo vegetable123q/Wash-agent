@@ -311,6 +311,19 @@ class EModuleTests(unittest.TestCase):
                         _campus_context(),
                     )
 
+    def test_plan_requires_laundry_constraints(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        invalid_constraints: list[object] = [None, object(), {"selected_item_ids": ["white-tee"]}]
+
+        for constraints in invalid_constraints:
+            with self.subTest(constraints=constraints):
+                with self.assertRaisesRegex(ValueError, "constraints"):
+                    plan_laundry(
+                        items,
+                        constraints,  # type: ignore[arg-type]
+                        _campus_context(),
+                    )
+
     def test_plan_requires_campus_context(self) -> None:
         items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
         invalid_contexts: list[object] = [None, object(), {"available_machines": []}]

@@ -80,6 +80,8 @@ def _validate_items(value: object) -> None:
 
 
 def _validate_constraints(constraints: LaundryConstraints) -> None:
+    if not isinstance(constraints, LaundryConstraints):
+        raise ValueError("constraints must be LaundryConstraints")
     _item_id_list(constraints.selected_item_ids, "selected_item_ids")
     _item_id_list(constraints.urgent_item_ids, "urgent_item_ids")
     _boolean(constraints.allow_mixed_colors, "allow_mixed_colors")
