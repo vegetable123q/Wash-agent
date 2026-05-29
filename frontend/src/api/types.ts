@@ -104,7 +104,8 @@ export interface LaundryConstraints {
   preferred_machine_floor?: number | null;
 }
 
-/** One recommended bucket in the final laundry plan. */
+/** One recommended bucket in the wash-phase laundry plan.
+ *  Dryer assignment is deferred to ``recommendDrying``. */
 export interface LaundryBucket {
   bucket_id: string;
   item_ids: string[];
@@ -117,19 +118,51 @@ export interface LaundryBucket {
   detergent_ml: number | null;
   use_laundry_bag: boolean;
   dry_method: DryMethod;
-  dryer_machine_id?: string;
-  dryer_machine_location?: string;
-  dryer_machine_floor?: number | null;
+  estimated_cost_yuan?: number | null;
+  estimated_duration_minutes?: number | null;
   warnings: string[];
 }
 
-/** Final laundry plan produced by the planner. */
+/** Wash-phase laundry plan.  Use ``recommendDrying`` for dryer assignments. */
 export interface LaundryPlan {
   buckets: LaundryBucket[];
   estimated_cost_yuan: number | null;
   estimated_duration_minutes: number | null;
   summary: string;
   global_warnings: string[];
+}
+
+/** One dryer assignment for a previously-washed bucket. */
+export interface DryingStep {
+  bucket_id: string;
+  item_ids: string[];
+  dry_method: DryMethod;
+  dryer_machine_id?: string;
+  dryer_machine_location?: string;
+  dryer_machine_floor?: number | null;
+  estimated_cost_yuan?: number | null;
+  estimated_duration_minutes?: number | null;
+  warnings: string[];
+}
+
+/** Drying recommendations produced after wash-phase is complete. */
+export interface DryingPlan {
+  steps: DryingStep[];
+  estimated_cost_yuan: number | null;
+  estimated_duration_minutes: number | null;
+  cost_breakdown: LaundryChargeLine[];
+  warnings: string[];
+}
+
+/** One priced machine action. */
+export interface LaundryChargeLine {
+  bucket_id: string;
+  label: string;
+  amount_yuan: number;
+  duration_minutes: number;
+  machine_id?: string;
+  machine_type?: MachineType;
+  program?: string;
 }
 
 /** User-facing report generated from the final plan. */
@@ -279,6 +312,7 @@ export interface MobileSummary {
     pricing_rules: Record<string, unknown>;
   };
   plan: LaundryPlan;
+  drying_plan?: DryingPlan;
   report: {
     title: string;
     sections: Record<string, string>;

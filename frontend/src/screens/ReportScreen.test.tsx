@@ -150,7 +150,7 @@ describe("ReportScreen", () => {
             program: "standard",
             detergent_ml: 36,
             use_laundry_bag: true,
-            dry_method: "low_heat_dryer",
+            dry_method: "air_dry",
             warnings: ["推荐使用 790781，位置 南区22号楼 一层，程序 standard。"],
           },
           {
@@ -170,6 +170,30 @@ describe("ReportScreen", () => {
         summary: "本次按颜色和材质分开处理。",
         global_warnings: [],
       },
+      drying_plan: {
+        steps: [
+          {
+            bucket_id: "dark-standard",
+            item_ids: ["jeans", "coat", "scarf"],
+            dry_method: "low_heat_dryer",
+            dryer_machine_id: "dryer-1",
+            dryer_machine_location: "南区22号楼 一层",
+            estimated_cost_yuan: 3,
+            estimated_duration_minutes: 50,
+            warnings: [],
+          },
+          {
+            bucket_id: "dry-clean",
+            item_ids: ["cashmere"],
+            dry_method: "do_not_dry",
+            warnings: [],
+          },
+        ],
+        estimated_cost_yuan: 3,
+        estimated_duration_minutes: 50,
+        cost_breakdown: [{ bucket_id: "dark-standard", label: "dark-standard 低温烘干", amount_yuan: 3, duration_minutes: 50, machine_id: "dryer-1", machine_type: "dryer", program: "low" }],
+        warnings: [],
+      },
       report: {
         title: "本次洗护报告",
         sections: {
@@ -183,7 +207,7 @@ describe("ReportScreen", () => {
 
     const { container } = render(<ReportScreen mobileSummary={mobileSummary} />);
 
-    expect(screen.getByText("¥11")).toBeInTheDocument();
+    expect(screen.getByText(/\¥11/)).toBeInTheDocument();
     expect(screen.getByText("180 分钟")).toBeInTheDocument();
     expect(screen.getByText("2 个批次")).toBeInTheDocument();
     expect(screen.getByText("可用 9/13")).toBeInTheDocument();
@@ -191,7 +215,9 @@ describe("ReportScreen", () => {
     expect(screen.getByText("3 件衣物")).toBeInTheDocument();
     expect(screen.getByText("机洗 · 标准洗")).toBeInTheDocument();
     expect(screen.getByText("洗衣液 36 ml")).toBeInTheDocument();
+    // Drying is now in a separate "烘干安排" section.
     expect(screen.getByText("低温烘干")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "烘干安排" })).toBeInTheDocument();
     expect(container.textContent).not.toContain("1. 干洗衣物");
     expect(container.textContent).not.toContain("计费批次");
     expect(container.textContent).not.toContain("790781");

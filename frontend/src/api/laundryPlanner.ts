@@ -1,18 +1,23 @@
 /**
  * Laundry decision and bucket planning.
  * Ported from backend/laundry/planner.py so the APK is self-contained.
+ *
+ * The planner produces a **wash-phase** plan.  Use ``recommendDrying``
+ * to obtain dryer assignments after the user accepts the wash plan.
  */
 
 import type {
   CampusContext,
   DryMethod,
+  DryingPlan,
+  DryingStep,
   LaundryBucket,
+  LaundryChargeLine,
   LaundryConstraints,
   LaundryPlan,
   MachineInfo,
   MachineStatus,
   MachineType,
-  RiskLevel,
   WardrobeItemForPlan,
   WashMethod,
 } from "./types";
@@ -37,8 +42,9 @@ const LARGE_DETERGENT_ML_BASE = 32.0;
 const LARGE_DETERGENT_ML_PER_ITEM = 8.0;
 
 const BUCKET_ORDER = ["do-not-wash", "dry-clean", "hand-wash", "large-bedding", "dark-standard", "light-standard"];
+const UNSPLITTABLE_BUCKET_IDS = new Set(["do-not-wash", "dry-clean", "hand-wash"]);
 
-// ─── main entry ─────────────────────────────────────────────────────────
+// ─── wash-phase entry ───────────────────────────────────────────────────
 
 export function planLaundry(
   items: WardrobeItemForPlan[],
@@ -46,13 +52,14 @@ export function planLaundry(
   campusContext: CampusContext,
 ): LaundryPlan {
   const selected = selectedItems(items, constraints.selected_item_ids);
-  const bucketInputs = splitBucketInputs(selected);
+  const bucketInputs = splitBucketInputs(selected, constraints);
   const buckets = bucketInputs.map(({ bucketId, baseBucketId, items: bucketItems }) =>
     buildBucket(bucketId, baseBucketId, bucketItems, constraints, campusContext),
   );
 
-  const estimatedCost = estimateCost(buckets, campusContext);
-  const estimatedDuration = estimateDuration(buckets, campusContext);
+  const costBreakdown = washCostBreakdown(buckets, campusContext);
+  const estimatedCost = estimateCost(costBreakdown);
+  const estimatedDuration = estimateDuration(costBreakdown);
   const globalWarnings = buildGlobalWarnings(buckets, constraints, estimatedCost, campusContext);
 
   return {
@@ -61,6 +68,132 @@ export function planLaundry(
     estimated_duration_minutes: estimatedDuration,
     summary: `本次共 ${buckets.length} 个洗护批次，已按容量、颜色、材质、床品和高风险衣物分开处理。`,
     global_warnings: globalWarnings,
+  };
+}
+
+// ─── drying-phase entry ─────────────────────────────────────────────────
+
+export function recommendDrying(
+  buckets: LaundryBucket[],
+  campusContext: CampusContext,
+  options?: {
+    allowDryer?: boolean;
+    preferredMachineFloor?: number | null;
+    items?: WardrobeItemForPlan[];
+  },
+): DryingPlan {
+  const allowDryer = options?.allowDryer ?? false;
+  const preferredFloor = options?.preferredMachineFloor;
+  const itemsById = options?.items
+    ? new Map(options.items.map((item) => [item.profile.item_id, item]))
+    : null;
+
+  const steps: DryingStep[] = [];
+  const costBreakdown: LaundryChargeLine[] = [];
+  let totalCost = 0;
+  let totalDuration = 0;
+
+  for (const bucket of buckets) {
+    // Non-machine buckets already have their final dry_method.
+    if (bucket.wash_method !== "machine_wash") {
+      const dryWarnings: string[] = [];
+      if (bucket.wash_method === "hand_wash") {
+        for (const warning of bucket.warnings) {
+          if (warning.includes("不可烘干") || warning.includes("高温")) {
+            dryWarnings.push(warning);
+          }
+        }
+        if (!dryWarnings.length && bucket.dry_method === "air_dry" && itemsById) {
+          const bucketItems = bucket.item_ids
+            .map((id) => itemsById.get(id))
+            .filter(Boolean) as WardrobeItemForPlan[];
+          const unsafeNames = bucketItems.filter(dryerUnsafe).map((item) => item.profile.name);
+          if (unsafeNames.length) {
+            dryWarnings.push(`${unsafeNames.join("、")} 不可烘干或存在高温损伤风险，改为自然晾干。`);
+          }
+        }
+      }
+      steps.push({
+        bucket_id: bucket.bucket_id,
+        item_ids: bucket.item_ids,
+        dry_method: bucket.dry_method,
+        warnings: dryWarnings,
+      });
+      continue;
+    }
+
+    // Check dryer safety.
+    const bucketItems = itemsById
+      ? bucket.item_ids.map((id) => itemsById.get(id)).filter(Boolean) as WardrobeItemForPlan[]
+      : [];
+    const unsafeNames = bucketItems.filter(dryerUnsafe).map((item) => item.profile.name);
+    const canDry = allowDryer && unsafeNames.length === 0;
+
+    if (!canDry) {
+      const warnings: string[] = [];
+      if (!allowDryer) {
+        warnings.push("用户未允许烘干，本批次自然晾干。");
+      } else if (unsafeNames.length) {
+        warnings.push(`${unsafeNames.join("、")} 不可烘干或存在高温损伤风险，改为自然晾干。`);
+      }
+      warnings.push(...airDryContextWarnings(campusContext));
+      steps.push({
+        bucket_id: bucket.bucket_id,
+        item_ids: bucket.item_ids,
+        dry_method: "air_dry",
+        warnings,
+      });
+      continue;
+    }
+
+    // Try to assign an available dryer.
+    let dryer: MachineInfo;
+    try {
+      dryer = requireAvailableMachine(campusContext.available_machines, "dryer", "low", preferredFloor);
+    } catch {
+      steps.push({
+        bucket_id: bucket.bucket_id,
+        item_ids: bucket.item_ids,
+        dry_method: "air_dry",
+        warnings: ["没有可用烘干机，本批次改为自然晾干。"],
+      });
+      continue;
+    }
+
+    requireDryerProgram(campusContext, "low");
+    const dryerCost = dryerProgramValue(campusContext, "low", "price_yuan");
+    const dryerDuration = Math.round(dryerProgramValue(campusContext, "low", "duration_minutes"));
+
+    steps.push({
+      bucket_id: bucket.bucket_id,
+      item_ids: bucket.item_ids,
+      dry_method: "low_heat_dryer",
+      dryer_machine_id: dryer.machine_id,
+      dryer_machine_location: dryer.location,
+      dryer_machine_floor: dryer.machine_floor ?? null,
+      estimated_cost_yuan: Math.round(dryerCost * 100) / 100,
+      estimated_duration_minutes: dryerDuration,
+      warnings: [machineRecommendationWarning(dryer, "low")],
+    });
+    costBreakdown.push({
+      bucket_id: bucket.bucket_id,
+      label: `${bucket.bucket_id} 低温烘干`,
+      amount_yuan: Math.round(dryerCost * 100) / 100,
+      duration_minutes: dryerDuration,
+      machine_id: dryer.machine_id,
+      machine_type: "dryer",
+      program: "low",
+    });
+    totalCost += dryerCost;
+    totalDuration += dryerDuration;
+  }
+
+  return {
+    steps,
+    estimated_cost_yuan: totalCost ? Math.round(totalCost * 100) / 100 : null,
+    estimated_duration_minutes: totalDuration || null,
+    cost_breakdown: costBreakdown,
+    warnings: [],
   };
 }
 
@@ -86,15 +219,18 @@ interface BucketInput {
   items: WardrobeItemForPlan[];
 }
 
-function splitBucketInputs(items: WardrobeItemForPlan[]): BucketInput[] {
+function splitBucketInputs(items: WardrobeItemForPlan[], constraints: LaundryConstraints): BucketInput[] {
   const groups = new Map<string, WardrobeItemForPlan[]>();
   for (const item of items) {
-    const bucketId = bucketIdFor(item);
+    const bucketId = bucketIdFor(item, constraints);
     if (!groups.has(bucketId)) groups.set(bucketId, []);
     groups.get(bucketId)!.push(item);
   }
   return BUCKET_ORDER.filter((id) => groups.has(id)).flatMap((baseBucketId) => {
-    const chunks = splitItemsByLaundryLoad(groups.get(baseBucketId)!);
+    const groupItems = groups.get(baseBucketId)!;
+    const chunks = UNSPLITTABLE_BUCKET_IDS.has(baseBucketId)
+      ? [groupItems]
+      : splitItemsByLaundryLoad(groupItems);
     return chunks.map((chunk, index) => ({
       bucketId: chunks.length > 1 ? `${baseBucketId}-${index + 1}` : baseBucketId,
       baseBucketId,
@@ -103,7 +239,7 @@ function splitBucketInputs(items: WardrobeItemForPlan[]): BucketInput[] {
   });
 }
 
-function bucketIdFor(item: WardrobeItemForPlan): string {
+function bucketIdFor(item: WardrobeItemForPlan, constraints: LaundryConstraints): string {
   const text = searchText(item);
   if (item.preferred_method === "do_not_wash" || containsAny(text, DO_NOT_WASH_TERMS)) return "do-not-wash";
   if (item.preferred_method === "dry_clean" || containsAny(text, DRY_CLEAN_TERMS)) return "dry-clean";
@@ -121,7 +257,7 @@ function bucketIdFor(item: WardrobeItemForPlan): string {
   return "dark-standard"; // default: treat unknown as dark for safety
 }
 
-// ─── bucket building ────────────────────────────────────────────────────
+// ─── bucket building (wash-only) ────────────────────────────────────────
 
 function buildBucket(
   bucketId: string,
@@ -140,6 +276,8 @@ function buildBucket(
       detergent_ml: null,
       use_laundry_bag: false,
       dry_method: "do_not_dry",
+      estimated_cost_yuan: 0,
+      estimated_duration_minutes: 0,
       warnings: ["该批次含不可水洗衣物，不进入本次水洗流程。"],
     };
   }
@@ -154,6 +292,8 @@ function buildBucket(
       detergent_ml: null,
       use_laundry_bag: false,
       dry_method: "do_not_dry",
+      estimated_cost_yuan: 0,
+      estimated_duration_minutes: 0,
       warnings: ["该批次建议送专业干洗，不进入共享洗衣机。"],
     };
   }
@@ -168,6 +308,8 @@ function buildBucket(
       detergent_ml: detergentMl(baseBucketId, items),
       use_laundry_bag: true,
       dry_method: "air_dry",
+      estimated_cost_yuan: 0,
+      estimated_duration_minutes: 0,
       warnings: handWashWarnings(items, context),
     };
   }
@@ -176,13 +318,14 @@ function buildBucket(
   const machineType: MachineType = "standard_washer";
   const machine = requireAvailableMachine(context.available_machines, machineType, program, constraints.preferred_machine_floor);
   requireWashProgram(context, program);
+  const washCost = washProgramValue(context, program, "price_yuan");
+  const washDuration = Math.round(washProgramValue(context, program, "duration_minutes"));
 
-  const [dryMethod, dryer, dryWarnings] = dryingDecision(items, constraints, context);
   const warnings = [
     ...machineBucketWarnings(baseBucketId, items),
     ...capacityBucketWarnings(bucketId, baseBucketId),
     machineRecommendationWarning(machine, program),
-    ...dryWarnings,
+    ...airDryContextWarnings(context),
   ];
 
   return {
@@ -195,66 +338,40 @@ function buildBucket(
     machine_floor: machine.machine_floor ?? null,
     program,
     detergent_ml: detergentMl(baseBucketId, items),
-    use_laundry_bag: baseBucketId === "dark-standard" || anyRecommendsBag(items),
-    dry_method: dryMethod,
-    dryer_machine_id: dryer?.machine_id,
-    dryer_machine_location: dryer?.location,
-    dryer_machine_floor: dryer?.machine_floor ?? null,
+    use_laundry_bag: baseBucketId === "dark-standard" || constraints.hygiene_sensitive || anyRecommendsBag(items),
+    dry_method: "air_dry", // safe default; overridden by recommendDrying
+    estimated_cost_yuan: Math.round(washCost * 100) / 100,
+    estimated_duration_minutes: washDuration,
     warnings: dedupe(warnings),
   };
 }
 
-// ─── drying decision ────────────────────────────────────────────────────
+// ─── cost helpers ───────────────────────────────────────────────────────
 
-function dryingDecision(
-  items: WardrobeItemForPlan[],
-  constraints: LaundryConstraints,
-  context: CampusContext,
-): [DryMethod, MachineInfo | null, string[]] {
-  if (!constraints.allow_dryer) {
-    return ["air_dry", null, ["用户未允许烘干，本批次自然晾干。", ...airDryContextWarnings(context)]];
+function washCostBreakdown(buckets: LaundryBucket[], context: CampusContext): LaundryChargeLine[] {
+  const lines: LaundryChargeLine[] = [];
+  for (const bucket of buckets) {
+    if (bucket.wash_method !== "machine_wash") continue;
+    const program = bucket.program;
+    lines.push({
+      bucket_id: bucket.bucket_id,
+      label: `${bucket.bucket_id} ${program} 洗`,
+      amount_yuan: Math.round(washProgramValue(context, program, "price_yuan") * 100) / 100,
+      duration_minutes: Math.round(washProgramValue(context, program, "duration_minutes")),
+      machine_id: bucket.machine_id,
+      machine_type: bucket.machine_type,
+      program,
+    });
   }
-
-  const unsafe = items.filter(dryerUnsafe).map((item) => item.profile.name);
-  if (unsafe.length) {
-    return [
-      "air_dry",
-      null,
-      [`${unsafe.join("、")} 不可烘干或存在高温损伤风险，改为自然晾干。`, ...airDryContextWarnings(context)],
-    ];
-  }
-
-  const dryer = requireAvailableMachine(context.available_machines, "dryer", "low", constraints.preferred_machine_floor);
-  requireDryerProgram(context, "low");
-  return ["low_heat_dryer", dryer, [machineRecommendationWarning(dryer, "low")]];
+  return lines;
 }
 
-// ─── cost and duration ──────────────────────────────────────────────────
-
-function estimateCost(buckets: LaundryBucket[], context: CampusContext): number {
-  let total = 0;
-  for (const bucket of buckets) {
-    if (bucket.wash_method === "machine_wash") {
-      total += washProgramValue(context, bucket.program, "price_yuan");
-    }
-    if (bucket.dry_method === "low_heat_dryer") {
-      total += dryerProgramValue(context, "low", "price_yuan");
-    }
-  }
-  return Math.round(total * 100) / 100;
+function estimateCost(breakdown: LaundryChargeLine[]): number {
+  return Math.round(breakdown.reduce((sum, line) => sum + line.amount_yuan, 0) * 100) / 100;
 }
 
-function estimateDuration(buckets: LaundryBucket[], context: CampusContext): number {
-  let total = 0;
-  for (const bucket of buckets) {
-    if (bucket.wash_method === "machine_wash") {
-      total += Math.round(washProgramValue(context, bucket.program, "duration_minutes"));
-    }
-    if (bucket.dry_method === "low_heat_dryer") {
-      total += Math.round(dryerProgramValue(context, "low", "duration_minutes"));
-    }
-  }
-  return total;
+function estimateDuration(breakdown: LaundryChargeLine[]): number {
+  return breakdown.reduce((sum, line) => sum + line.duration_minutes, 0);
 }
 
 // ─── warnings ───────────────────────────────────────────────────────────
@@ -309,7 +426,6 @@ function requiredMachineTypes(buckets: LaundryBucket[]): MachineType[] {
   for (const bucket of buckets) {
     if (bucket.wash_method !== "machine_wash" || !bucket.machine_type) continue;
     types.push(bucket.machine_type);
-    if (bucket.dry_method === "low_heat_dryer") types.push("dryer");
   }
   return [...new Set(types)];
 }

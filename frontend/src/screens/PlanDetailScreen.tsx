@@ -27,6 +27,7 @@ interface ExclusionItem {
 
 export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: PlanDetailScreenProps) {
   const planBuckets = mobileSummary?.plan.buckets ?? [];
+  const dryingPlan = mobileSummary?.drying_plan;
   const hasSummary = Boolean(mobileSummary);
   const hasBuckets = planBuckets.length > 0;
   const nameMap = useMemo(() => {
@@ -54,7 +55,7 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
           id: "empty-plan",
           title: "暂无本次分桶",
           machine: "待选择",
-          detail: "请先在衣柜勾选这批要清洗的衣物。",
+          detail: "请先在衣柜勾选本次要清洗的衣物。",
           tags: [{ label: "未选择衣物", tone: "orange" as const }],
           accent: "purple" as const,
         }]
@@ -84,26 +85,31 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
       });
     }
 
-    const dryBuckets = planBuckets.filter((b) => b.dry_method === "low_heat_dryer");
-    if (dryBuckets.length > 0) {
+    return steps.length > 0 ? steps : defaultPreparationSteps();
+  }, [planBuckets, hasBuckets, hasSummary]);
+
+  // Drying-phase preparation steps.
+  const dryingSteps: PreparationStep[] = useMemo(() => {
+    if (!dryingPlan || !dryingPlan.steps.length) return [];
+    const drySteps = dryingPlan.steps.filter((s) => s.dry_method === "low_heat_dryer");
+    const airSteps = dryingPlan.steps.filter((s) => s.dry_method === "air_dry");
+    const steps: PreparationStep[] = [];
+    if (drySteps.length) {
       steps.push({
         icon: "amber",
         title: "烘干安排",
-        description: `${dryBuckets.map((b) => bucketDisplayName(b.bucket_id)).join("、")}使用低温烘干，注意不可高温的衣物已改为晾干。`,
+        description: `${drySteps.map((s) => bucketDisplayName(s.bucket_id)).join("、")}洗完后使用低温烘干。`,
       });
     }
-
-    const airDryBuckets = planBuckets.filter((b) => b.dry_method === "air_dry");
-    if (airDryBuckets.length > 0 && dryBuckets.length === 0) {
+    if (airSteps.length && !drySteps.length) {
       steps.push({
         icon: "teal",
         title: "自然晾干",
         description: "本批次全部自然晾干，建议选择通风位置或阳台。",
       });
     }
-
-    return steps.length > 0 ? steps : defaultPreparationSteps();
-  }, [planBuckets, hasBuckets, hasSummary]);
+    return steps;
+  }, [dryingPlan]);
 
   const exclusionItems: ExclusionItem[] = useMemo(() => {
     if (!hasSummary) return defaultExclusionItems();
@@ -182,6 +188,26 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
           </div>
         </Card>
       </Section>
+
+      {dryingSteps.length > 0 && (
+        <Section title="洗完后烘干">
+          <Card>
+            <div className="list-stack">
+              {dryingSteps.map((step) => (
+                <div className="dense-row" key={step.title}>
+                  <span className={`round-icon round-icon-${step.icon}`}>
+                    <CheckCircle2 size={18} />
+                  </span>
+                  <div>
+                    <h3>{step.title}</h3>
+                    <p>{step.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </Section>
+      )}
 
       {exclusionItems.length > 0 ? (
         <Section title="排除与提醒">
@@ -270,7 +296,8 @@ function bucketDisplayName(bucketId: string): string {
     "dark-standard": "深色标准洗",
     "light-standard": "浅色标准洗",
   };
-  return labels[bucketId] ?? "本批衣物";
+  const base = bucketId.replace(/-\d+$/, "");
+  return labels[base] ?? labels[bucketId] ?? "本批衣物";
 }
 
 function userFacingWarning(text: string): string {

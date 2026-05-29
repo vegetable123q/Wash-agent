@@ -12,7 +12,7 @@ import { listCampusTowerOptions } from "./campusTowerDirectory";
 import { buildProfileFromInput, storedToPlanItem, type StoredWardrobeItem } from "./clothingExtractor";
 import { adviseAllFrequencies } from "./frequencyAdvisor";
 import { estimatedWasherLoadCount, loadPercentForItems } from "./laundryLoad";
-import { planLaundry } from "./laundryPlanner";
+import { planLaundry, recommendDrying } from "./laundryPlanner";
 import { DRYING_CONTEXT, PRICING_RULES } from "./pricingRules";
 import { generateReport } from "./reportGenerator";
 import type {
@@ -24,6 +24,7 @@ import type {
   DirtyBasketAddedAtSource,
   DirtyBasketItem,
   DirtyBasketSummary,
+  DryingPlan,
   FrequencyAdvice,
   LaundryConstraints,
   LaundryPlan,
@@ -81,7 +82,7 @@ export function rebuildMobileSummaryForSelection(
   const selectedSet = new Set(selectedLaundryItemIds);
   const selectedItems = storedItems.filter((item) => selectedSet.has(item.item_id));
   const campusContext = mobileSummaryCampusContextToPlanner(summary.campus_context);
-  const { frequencyAdvice, plan, report } = buildLaundryArtifacts(storedItems, selectedLaundryItemIds, campusContext, profile);
+  const { frequencyAdvice, plan, dryingPlan, report } = buildLaundryArtifacts(storedItems, selectedLaundryItemIds, campusContext, profile);
 
   return {
     ...summary,
@@ -89,6 +90,7 @@ export function rebuildMobileSummaryForSelection(
     dirty_basket: buildDirtyBasketSummary(selectedItems, dirtyBasketRecords),
     frequency_advice: frequencyAdvice,
     plan: toMobileLaundryPlan(plan),
+    drying_plan: dryingPlan,
     report,
   };
 }
@@ -200,7 +202,7 @@ async function buildIntegratedMobileSummary(profile?: Pick<UserProfile, "dormNam
   }
   const selectedLaundryItemIds = dirtyBasketRecords.map((record) => record.item_id);
   const selectedItems = storedItems.filter((item) => selectedLaundryItemIds.includes(item.item_id));
-  const { frequencyAdvice, plan, report } = buildLaundryArtifacts(storedItems, selectedLaundryItemIds, campusContext, profile);
+  const { frequencyAdvice, plan, dryingPlan, report } = buildLaundryArtifacts(storedItems, selectedLaundryItemIds, campusContext, profile);
 
   // Build the summary for screens
   const allMachines: BackendMachine[] = campusContext.all_machines.map(toBackendMachine);
@@ -228,6 +230,7 @@ async function buildIntegratedMobileSummary(profile?: Pick<UserProfile, "dormNam
       },
     },
     plan: toMobileLaundryPlan(plan),
+    drying_plan: dryingPlan,
     report,
   };
 }
@@ -237,7 +240,7 @@ function buildLaundryArtifacts(
   selectedLaundryItemIds: string[],
   campusContext: CampusContext,
   profile?: Pick<UserProfile, "dormFloor" | "allowDryer">,
-): { frequencyAdvice: FrequencyAdvice[]; plan: LaundryPlan; report: WashReport } {
+): { frequencyAdvice: FrequencyAdvice[]; plan: LaundryPlan; dryingPlan?: DryingPlan; report: WashReport } {
   const planItems = storedItems.map(storedToPlanItem);
   const constraints: LaundryConstraints = {
     selected_item_ids: selectedLaundryItemIds,
@@ -280,7 +283,12 @@ function buildLaundryArtifacts(
       selectedLaundryItemIds.includes(item.profile.item_id),
     );
     const plan = planLaundry(selectedPlanItems, constraints, campusContext);
-    return { frequencyAdvice, plan, report: generateReport(plan, selectedPlanItems, campusContext) };
+    const dryingPlan = recommendDrying(plan.buckets, campusContext, {
+      allowDryer: Boolean(profile?.allowDryer),
+      preferredMachineFloor: profileFloorNumber(profile?.dormFloor),
+      items: selectedPlanItems,
+    });
+    return { frequencyAdvice, plan, dryingPlan, report: generateReport(plan, selectedPlanItems, campusContext, dryingPlan) };
   } catch {
     return {
       frequencyAdvice,
@@ -320,9 +328,8 @@ function toMobileLaundryPlan(plan: LaundryPlan): MobileSummary["plan"] {
       detergent_ml: b.detergent_ml,
       use_laundry_bag: b.use_laundry_bag,
       dry_method: b.dry_method,
-      dryer_machine_id: b.dryer_machine_id,
-      dryer_machine_location: b.dryer_machine_location,
-      dryer_machine_floor: b.dryer_machine_floor,
+      estimated_cost_yuan: b.estimated_cost_yuan,
+      estimated_duration_minutes: b.estimated_duration_minutes,
       warnings: b.warnings,
     })),
     estimated_cost_yuan: plan.estimated_cost_yuan,

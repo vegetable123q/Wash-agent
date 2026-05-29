@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import unittest
 
-from backend.laundry.planner import plan_laundry
+from backend.laundry.planner import plan_laundry, recommend_drying
 from backend.reports.generator import generate_report
 from backend.shared.models import (
     CampusContext,
     ClothingProfile,
     DryMethod,
+    DryingPlan,
     LaundryConstraints,
     MachineInfo,
     MachineQueueEstimate,
@@ -189,6 +190,7 @@ class EModuleTests(unittest.TestCase):
         self.assertEqual(buckets_by_id["hand-wash"].wash_method, WashMethod.HAND_WASH)
         self.assertEqual(buckets_by_id["light-standard"].machine_id, "washer-1")
         self.assertEqual(buckets_by_id["large-bedding"].machine_id, "washer-large-1")
+        # Wash-phase costs only (no drying).
         self.assertEqual(buckets_by_id["light-standard"].estimated_cost_yuan, 4.0)
         self.assertEqual(buckets_by_id["large-bedding"].estimated_duration_minutes, 45)
         self.assertEqual(buckets_by_id["light-standard"].detergent_ml, 24.0)
@@ -199,6 +201,7 @@ class EModuleTests(unittest.TestCase):
         self.assertTrue(buckets_by_id["dark-standard"].use_laundry_bag)
         self.assertIn("推荐使用 washer-1", " ".join(buckets_by_id["light-standard"].warnings))
         self.assertIn("推荐使用 washer-large-1", " ".join(buckets_by_id["large-bedding"].warnings))
+        # Wash plan defaults all to air_dry; dryer is assigned later.
         self.assertTrue(all(bucket.dry_method == DryMethod.AIR_DRY for bucket in plan.buckets))
         self.assertEqual(plan.estimated_cost_yuan, 14.0)
         self.assertEqual(plan.estimated_duration_minutes, 115)
@@ -208,7 +211,7 @@ class EModuleTests(unittest.TestCase):
             "light-standard standard 洗",
         ])
 
-    def test_dryer_is_used_only_when_allowed_and_safe(self) -> None:
+    def test_drying_plan_assigns_dryer_when_allowed_and_safe(self) -> None:
         items = [
             _item("white-tee", "白色纯棉 T 恤", colors=["white"], materials={"cotton": 1.0}),
             _item(
@@ -227,19 +230,46 @@ class EModuleTests(unittest.TestCase):
             _campus_context(),
         )
 
+        # Wash plan defaults to air_dry for everything.
         buckets_by_id = {bucket.bucket_id: bucket for bucket in plan.buckets}
-        self.assertEqual(buckets_by_id["light-standard"].dry_method, DryMethod.LOW_HEAT_DRYER)
+        self.assertEqual(buckets_by_id["light-standard"].dry_method, DryMethod.AIR_DRY)
         self.assertEqual(buckets_by_id["hand-wash"].dry_method, DryMethod.AIR_DRY)
-        self.assertEqual(plan.estimated_cost_yuan, 6.0)
-        self.assertEqual(plan.estimated_duration_minutes, 60)
-        self.assertEqual(buckets_by_id["light-standard"].dryer_machine_id, "dryer-1")
-        self.assertEqual(buckets_by_id["light-standard"].estimated_cost_yuan, 6.0)
-        self.assertEqual(
-            [(line.bucket_id, line.machine_id, line.amount_yuan) for line in plan.cost_breakdown],
-            [("light-standard", "washer-1", 4.0), ("light-standard", "dryer-1", 2.0)],
+
+        # Drying plan assigns dryer only to safe items.
+        drying = recommend_drying(
+            plan.buckets,
+            _campus_context(),
+            allow_dryer=True,
+            items=items,
         )
-        self.assertIn("推荐使用 dryer-1", " ".join(buckets_by_id["light-standard"].warnings))
-        self.assertIn("不可烘干", " ".join(buckets_by_id["hand-wash"].warnings))
+        steps_by_id = {step.bucket_id: step for step in drying.steps}
+        self.assertEqual(steps_by_id["light-standard"].dry_method, DryMethod.LOW_HEAT_DRYER)
+        self.assertEqual(steps_by_id["hand-wash"].dry_method, DryMethod.AIR_DRY)
+        self.assertEqual(drying.estimated_cost_yuan, 2.0)
+        self.assertEqual(drying.estimated_duration_minutes, 25)
+        self.assertEqual(steps_by_id["light-standard"].dryer_machine_id, "dryer-1")
+        self.assertEqual(
+            [(line.bucket_id, line.machine_id, line.amount_yuan) for line in drying.cost_breakdown],
+            [("light-standard", "dryer-1", 2.0)],
+        )
+        self.assertIn("推荐使用 dryer-1", " ".join(steps_by_id["light-standard"].warnings))
+        self.assertIn("不可烘干", " ".join(steps_by_id["hand-wash"].warnings))
+
+    def test_drying_plan_falls_back_to_air_dry_when_no_dryer_available(self) -> None:
+        items = [_item("white-tee", "白色纯棉 T 恤", colors=["white"], materials={"cotton": 1.0})]
+        plan = plan_laundry(
+            items,
+            LaundryConstraints(selected_item_ids=["white-tee"], allow_dryer=False),
+            _campus_context(),
+        )
+        context_no_dryer = _campus_context()
+        context_no_dryer.available_machines = [
+            m for m in context_no_dryer.available_machines
+            if m.machine_type != MachineType.DRYER
+        ]
+
+        drying = recommend_drying(plan.buckets, context_no_dryer, allow_dryer=True, items=items)
+        self.assertEqual(drying.steps[0].dry_method, DryMethod.AIR_DRY)
 
     def test_allow_mixed_colors_combines_low_risk_standard_items(self) -> None:
         items = [
@@ -262,6 +292,34 @@ class EModuleTests(unittest.TestCase):
         self.assertEqual(bucket.item_ids, ["white-tee", "navy-tee"])
         self.assertEqual(bucket.detergent_ml, 30.0)
         self.assertIn("允许混色", " ".join(bucket.warnings))
+
+    def test_capacity_splitting_produces_multiple_buckets(self) -> None:
+        """Many items of the same color must be split by load capacity."""
+        items = [
+            _item(f"dark-tee-{i}", f"黑色 T 恤 {i}", colors=["black", "dark"], materials={"cotton": 1.0})
+            for i in range(12)
+        ]
+        plan = plan_laundry(
+            items,
+            LaundryConstraints(
+                selected_item_ids=[item.profile.item_id for item in items],
+                allow_dryer=False,
+            ),
+            _campus_context(),
+        )
+
+        # 12 default items (12 units each = 144 total) should split into 2 buckets.
+        self.assertGreaterEqual(len(plan.buckets), 2)
+        # All items accounted for.
+        all_ids = [item_id for bucket in plan.buckets for item_id in bucket.item_ids]
+        self.assertEqual(len(all_ids), 12)
+        # Bucket IDs have suffixes.
+        self.assertTrue(any(b.bucket_id.startswith("dark-standard-") for b in plan.buckets))
+        # Capacity warning present.
+        self.assertIn(
+            "按洗衣机容量拆成多桶",
+            " ".join(plan.global_warnings),
+        )
 
     def test_urgent_items_must_be_selected(self) -> None:
         items = [_item("white-tee", "白色纯棉 T 恤", colors=["white"], materials={"cotton": 1.0})]
@@ -392,6 +450,31 @@ class EModuleTests(unittest.TestCase):
         self.assertIn("晾晒条件", report.sections["机器环境"])
         self.assertTrue(any("自然晾干" in note for note in report.savings_notes))
         self.assertTrue(any("掉色" in note for note in report.risk_notes))
+
+    def test_report_includes_drying_section_when_drying_plan_provided(self) -> None:
+        items = [
+            _item("white-tee", "白色纯棉 T 恤", colors=["white"], materials={"cotton": 1.0}),
+            _item(
+                "wool-sweater",
+                "羊毛衫",
+                colors=["gray"],
+                materials={"wool": 1.0},
+                risks={"shrink": RiskLevel.HIGH},
+                warnings=["do_not_tumble_dry"],
+            ),
+        ]
+        plan = plan_laundry(
+            items,
+            LaundryConstraints(selected_item_ids=["white-tee", "wool-sweater"], allow_dryer=True),
+            _campus_context(),
+        )
+        drying = recommend_drying(plan.buckets, _campus_context(), allow_dryer=True, items=items)
+        report = generate_report(plan, items, _campus_context(), drying)
+
+        self.assertIn("烘干安排", report.sections)
+        self.assertIn("dryer-1", report.sections["烘干安排"])
+        self.assertIn("洗涤费用", report.sections["费用和时间"])
+        self.assertIn("烘干费用", report.sections["费用和时间"])
 
 
 if __name__ == "__main__":

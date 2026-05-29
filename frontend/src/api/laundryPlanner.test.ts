@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planLaundry } from "./laundryPlanner";
+import { planLaundry, recommendDrying } from "./laundryPlanner";
 import type { CampusContext, LaundryConstraints, MachineInfo, WardrobeItemForPlan } from "./types";
 
 describe("planLaundry", () => {
@@ -76,6 +76,8 @@ describe("planLaundry", () => {
       machine_type: "standard_washer",
       program: "large",
     });
+    // Wash plan defaults to air_dry; drying is deferred.
+    expect(plan.buckets[0].dry_method).toBe("air_dry");
     expect(JSON.stringify(plan)).not.toContain("large_washer");
   });
 
@@ -189,5 +191,146 @@ describe("planLaundry", () => {
       machine_floor: 6,
     });
     expect(plan.global_warnings.join("\n")).toContain("推荐使用 sixth-floor");
+  });
+});
+
+describe("recommendDrying", () => {
+  const standardWasher: MachineInfo = {
+    machine_id: "washer-1",
+    location: "Dorm A",
+    machine_type: "standard_washer",
+    status: "available",
+    remaining_minutes: null,
+    price_yuan: null,
+    modes: ["standard"],
+  };
+  const dryer: MachineInfo = {
+    machine_id: "dryer-1",
+    location: "Dorm A",
+    machine_type: "dryer",
+    status: "available",
+    remaining_minutes: null,
+    price_yuan: null,
+    modes: ["low"],
+  };
+  const context: CampusContext = {
+    all_machines: [standardWasher, dryer],
+    available_machines: [standardWasher, dryer],
+    queue_estimates: [],
+    weather: {},
+    drying_context: {},
+    pricing_rules: {
+      wash_programs: {
+        standard: { price_yuan: 3.5, duration_minutes: 40 },
+      },
+      dryer_programs: {
+        low: { price_yuan: 2, duration_minutes: 50 },
+      },
+    },
+  };
+
+  const safeItem: WardrobeItemForPlan = {
+    profile: {
+      item_id: "white-tee",
+      name: "白色纯棉 T 恤",
+      user_note: "",
+      material_ratios: { cotton: 1 },
+      colors: ["white"],
+      care_warnings: [],
+      care_recommendations: [],
+      care_forbidden: [],
+      care_symbols: {},
+      risks: {},
+      recommended_wash: "machine_wash",
+    },
+    wear_count_since_wash: 1,
+    preferred_method: "machine_wash",
+    user_notes: [],
+  };
+
+  const woolItem: WardrobeItemForPlan = {
+    profile: {
+      item_id: "wool",
+      name: "羊毛衫",
+      user_note: "",
+      material_ratios: { wool: 1 },
+      colors: ["gray"],
+      care_warnings: ["do_not_tumble_dry"],
+      care_recommendations: [],
+      care_forbidden: ["do_not_tumble_dry"],
+      care_symbols: {},
+      risks: { shrink: "high" },
+      recommended_wash: "hand_wash",
+    },
+    wear_count_since_wash: 1,
+    preferred_method: "hand_wash",
+    user_notes: [],
+  };
+
+  it("assigns dryer to safe machine-wash buckets when allowDryer is true", () => {
+    const plan = planLaundry([safeItem], {
+      selected_item_ids: ["white-tee"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, context);
+
+    // Wash plan defaults to air_dry.
+    expect(plan.buckets[0].dry_method).toBe("air_dry");
+
+    const drying = recommendDrying(plan.buckets, context, {
+      allowDryer: true,
+      items: [safeItem],
+    });
+
+    expect(drying.steps).toHaveLength(1);
+    expect(drying.steps[0].dry_method).toBe("low_heat_dryer");
+    expect(drying.steps[0].dryer_machine_id).toBe("dryer-1");
+    expect(drying.estimated_cost_yuan).toBe(2);
+  });
+
+  it("keeps hand-wash items on air_dry even when allowDryer is true", () => {
+    const plan = planLaundry([woolItem], {
+      selected_item_ids: ["wool"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, context);
+
+    const drying = recommendDrying(plan.buckets, context, {
+      allowDryer: true,
+      items: [woolItem],
+    });
+
+    const handWashStep = drying.steps.find((s) => s.bucket_id === "hand-wash");
+    expect(handWashStep?.dry_method).toBe("air_dry");
+    expect(handWashStep?.warnings.join(" ")).toContain("不可烘干");
+  });
+
+  it("falls back to air_dry when no dryer is available", () => {
+    const noDryerContext = { ...context, available_machines: [standardWasher] };
+    const plan = planLaundry([safeItem], {
+      selected_item_ids: ["white-tee"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, noDryerContext);
+
+    const drying = recommendDrying(plan.buckets, noDryerContext, {
+      allowDryer: true,
+      items: [safeItem],
+    });
+
+    expect(drying.steps[0].dry_method).toBe("air_dry");
+    expect(drying.steps[0].warnings.join(" ")).toContain("没有可用烘干机");
   });
 });
