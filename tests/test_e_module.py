@@ -236,6 +236,31 @@ class EModuleTests(unittest.TestCase):
                 _campus_context(),
             )
 
+    def test_constraints_require_string_item_id_lists(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        invalid_values: list[object] = ["white-tee", [True], [123], [""]]
+
+        for selected_item_ids in invalid_values:
+            with self.subTest(field="selected_item_ids", value=selected_item_ids):
+                with self.assertRaisesRegex(ValueError, "selected_item_ids"):
+                    plan_laundry(
+                        items,
+                        LaundryConstraints(selected_item_ids=selected_item_ids),  # type: ignore[arg-type]
+                        _campus_context(),
+                    )
+
+        for urgent_item_ids in invalid_values:
+            with self.subTest(field="urgent_item_ids", value=urgent_item_ids):
+                with self.assertRaisesRegex(ValueError, "urgent_item_ids"):
+                    plan_laundry(
+                        items,
+                        LaundryConstraints(
+                            selected_item_ids=["white-tee"],
+                            urgent_item_ids=urgent_item_ids,  # type: ignore[arg-type]
+                        ),
+                        _campus_context(),
+                    )
+
     def test_air_dry_and_budget_warnings_use_explicit_context(self) -> None:
         context = _campus_context()
         context.drying_context = {"balcony_available": False, "ventilation": "poor"}

@@ -45,6 +45,7 @@ def plan_laundry(
 ) -> LaundryPlan:
     """Create wash buckets, machine modes, drying advice, and risk warnings."""
 
+    _validate_constraints(constraints)
     selected_items = _selected_items(items, constraints.selected_item_ids)
     _validate_urgent_items(constraints)
     bucket_inputs = _split_bucket_inputs(selected_items, constraints)
@@ -66,6 +67,19 @@ def plan_laundry(
         cost_breakdown=cost_breakdown,
         global_warnings=global_warnings,
     )
+
+
+def _validate_constraints(constraints: LaundryConstraints) -> None:
+    _item_id_list(constraints.selected_item_ids, "selected_item_ids")
+    _item_id_list(constraints.urgent_item_ids, "urgent_item_ids")
+
+
+def _item_id_list(value: object, field_name: str) -> list[str]:
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be a list of non-empty strings")
+    if not all(isinstance(item, str) and item.strip() for item in value):
+        raise ValueError(f"{field_name} must be a list of non-empty strings")
+    return value
 
 
 def _selected_items(items: list[WardrobeItem], selected_item_ids: list[str]) -> list[WardrobeItem]:
