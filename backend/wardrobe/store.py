@@ -123,6 +123,7 @@ def _profile_from_dict(data: dict[str, Any]) -> ClothingProfile:
     if unknown_keys:
         raise ValueError(f"unknown ClothingProfile fields: {', '.join(sorted(unknown_keys))}")
     cleaned = dict(data)
+    cleaned["item_id"] = _required_text(cleaned["item_id"], "item_id")
     cleaned["risks"] = {
         key: RiskLevel(value)
         for key, value in dict(cleaned.get("risks", {})).items()
