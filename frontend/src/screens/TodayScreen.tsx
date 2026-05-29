@@ -240,6 +240,8 @@ export function TodayScreen({
         </div>
       </PrimaryPanel>
 
+      {refreshError ? <p className="refresh-error" role="status">{refreshError}</p> : null}
+
       <div className="constraint-row" aria-label="本次约束">
         {constraints.map((item) => (
           <span key={item}>{item}</span>
@@ -267,7 +269,6 @@ export function TodayScreen({
               </div>
             </Card>
           )}
-          {refreshError ? <p className="refresh-error" role="status">{refreshError}</p> : null}
         </Section>
       ) : null}
 

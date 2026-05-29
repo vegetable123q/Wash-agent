@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { fetchMobileSummary, type MobileSummary } from "./api/mobileSummary";
 
@@ -18,6 +18,10 @@ describe("App manual refresh", () => {
     vi.mocked(fetchMobileSummary).mockReset();
   });
 
+  afterEach(() => {
+    cleanup();
+  });
+
   it("keeps the current summary visible when a manual refresh fails", async () => {
     vi.mocked(fetchMobileSummary)
       .mockResolvedValueOnce(summaryWithWeather(24.6))
@@ -32,6 +36,13 @@ describe("App manual refresh", () => {
     await waitFor(() => expect(fetchMobileSummary).toHaveBeenCalledTimes(2));
     expect(await screen.findByText("刷新失败，请稍后重试")).toBeInTheDocument();
     expect(screen.getByText("24.6°C")).toBeInTheDocument();
+  });
+  it("shows explicit local data errors when the initial summary load fails", async () => {
+    vi.mocked(fetchMobileSummary).mockRejectedValueOnce(new Error("本地衣柜数据无法读取"));
+
+    render(<App />);
+
+    expect(await screen.findByText("本地衣柜数据无法读取")).toBeInTheDocument();
   });
 });
 

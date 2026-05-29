@@ -26,6 +26,8 @@ type RefreshState = {
   error: string | null;
 };
 
+const GENERIC_REFRESH_ERROR = "刷新失败，请稍后重试";
+
 const parentTab: Record<ScreenId, TabId> = {
   today: "today",
   wardrobe: "wardrobe",
@@ -41,6 +43,13 @@ const parentTab: Record<ScreenId, TabId> = {
 
 function isScreenId(value: unknown): value is ScreenId {
   return typeof value === "string" && value in parentTab;
+}
+
+function refreshErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.startsWith("本地")) {
+    return error.message;
+  }
+  return GENERIC_REFRESH_ERROR;
 }
 
 export default function App() {
@@ -125,11 +134,11 @@ export default function App() {
       setMobileSummary(summary);
       setBackendStatus("connected");
       setRefreshState({ isRefreshing: false, error: null });
-    } catch {
+    } catch (error) {
       if (!mobileSummary) {
         setBackendStatus("offline");
       }
-      setRefreshState({ isRefreshing: false, error: "刷新失败，请稍后重试" });
+      setRefreshState({ isRefreshing: false, error: refreshErrorMessage(error) });
     }
   }, [mobileSummary, userProfile]);
 
@@ -190,10 +199,10 @@ export default function App() {
         setBackendStatus("connected");
         setRefreshState({ isRefreshing: false, error: null });
       })
-      .catch(() => {
+      .catch((error) => {
         if (active) {
           setBackendStatus("offline");
-          setRefreshState({ isRefreshing: false, error: null });
+          setRefreshState({ isRefreshing: false, error: refreshErrorMessage(error) });
         }
       });
     return () => {
