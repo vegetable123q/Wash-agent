@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearModelHubConfig,
+  hasCompleteModelHubConfig,
   loadModelHubConfig,
   saveModelHubConfig,
 } from "./modelHubConfig";
@@ -42,6 +43,16 @@ describe("modelHubConfig persistence", () => {
 
     expect(loadModelHubConfig().apikey).toBe("");
     expect(JSON.stringify(localStorage)).not.toContain("sk-local-test-key");
+  });
+
+  it("does not treat malformed baseUrl values as complete config", () => {
+    expect(
+      hasCompleteModelHubConfig({
+        baseUrl: "not a url",
+        apikey: "sk-local-test-key",
+        model_name: "gemini-3.1-pro-preview",
+      }),
+    ).toBe(false);
   });
 });
 

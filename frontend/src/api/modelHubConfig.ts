@@ -52,7 +52,7 @@ export function clearModelHubConfig(): ModelHubConfig {
 }
 
 export function hasCompleteModelHubConfig(config: ModelHubConfig): boolean {
-  return Boolean(config.baseUrl && config.apikey && supportedModelNames.includes(config.model_name as SupportedModelName));
+  return Boolean(hasHttpModelHubBaseUrl(config.baseUrl) && config.apikey && supportedModelNames.includes(config.model_name as SupportedModelName));
 }
 
 export function normalizeModelHubConfig(value: unknown): ModelHubConfig {
@@ -70,4 +70,17 @@ function normalizeModelHubBaseUrl(value: unknown): string {
     return "";
   }
   return text.replace(/\/+$/, "");
+}
+
+function hasHttpModelHubBaseUrl(value: string): boolean {
+  const text = value.trim();
+  if (!text) {
+    return false;
+  }
+  try {
+    const url = new URL(text);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
