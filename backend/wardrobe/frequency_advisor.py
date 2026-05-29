@@ -148,6 +148,8 @@ def _validate_item(value: object) -> None:
         raise ValueError("item.profile must be a ClothingProfile")
     _non_empty_string(value.profile.item_id, "item.profile.item_id")
     _non_empty_string(value.profile.name, "item.profile.name")
+    _string(value.profile.user_note, "item.profile.user_note")
+    _string_list(value.user_notes, "user_notes")
     _non_negative_int(value.wear_count_since_wash, "wear_count_since_wash")
 
 
@@ -195,6 +197,18 @@ def _non_negative_int(value: object, field_name: str) -> None:
 def _non_empty_string(value: object, field_name: str) -> None:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field_name} must be a non-empty string")
+
+
+def _string(value: object, field_name: str) -> None:
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be a string")
+
+
+def _string_list(value: object, field_name: str) -> None:
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be a list of strings")
+    if not all(isinstance(item, str) for item in value):
+        raise ValueError(f"{field_name} must be a list of strings")
 
 
 def _search_text(item: WardrobeItem) -> str:
