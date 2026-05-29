@@ -38,7 +38,8 @@ export function WardrobeScreen({ mobileSummary, onNavigate, onViewItem, onDelete
           canDelete: false,
         }));
   const itemCount = isBackendSnapshot ? String(backendItems.length) : "12";
-  const suggestedCount = isBackendSnapshot ? String(Math.min(4, backendItems.length)) : "4";
+  const selectedPlanIds = mobileSummary?.plan.buckets.flatMap((b) => b.item_ids) ?? [];
+  const suggestedCount = isBackendSnapshot ? String(new Set(selectedPlanIds).size) : "4";
 
   return (
     <Page>

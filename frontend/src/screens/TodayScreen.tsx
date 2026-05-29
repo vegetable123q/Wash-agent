@@ -31,12 +31,22 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
         `最晚 ${userProfile.latestPickupTime}`,
       ]
     : todaySummary.constraints;
+  const panelMetrics = connected && mobileSummary
+    ? {
+        buckets: `${mobileSummary.plan.buckets.length} 桶分洗`,
+        costDryer:
+          mobileSummary.plan.estimated_cost_yuan != null
+            ? `¥${mobileSummary.plan.estimated_cost_yuan}${mobileSummary.plan.buckets.some((b) => b.dry_method === "low_heat_dryer") ? " · 含烘干" : ""}`
+            : "费用待确认",
+      }
+    : { buckets: "3 桶分洗", costDryer: "¥24 · 2 次烘干" };
+
   const planSummary = connected
     ? {
         buckets:
           mobileSummary.plan.buckets.length > 0
             ? `${mobileSummary.plan.buckets.length} 个洗护批次`
-            : "已生成洗护批次",
+            : "暂无待洗衣物",
         cost:
           mobileSummary.plan.estimated_cost_yuan === null
             ? "费用待确认"
@@ -45,7 +55,7 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
           mobileSummary.plan.estimated_duration_minutes === null
             ? "时长待确认"
             : `机器占用约 ${mobileSummary.plan.estimated_duration_minutes} 分钟`,
-        risk: mobileSummary.plan.global_warnings[0] ?? "真实后端已生成本次方案",
+        risk: mobileSummary.plan.buckets.length > 0 ? "已按风险自动分桶" : "暂无方案",
         note: mobileSummary.plan.summary,
       }
     : backendPlanSummary;
@@ -80,8 +90,8 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
             <p>{todaySummary.recommendedLabel}</p>
           </div>
           <div className="panel-metrics">
-            <span>3 桶分洗</span>
-            <span>¥24 · 2 次烘干</span>
+            <span>{panelMetrics.buckets}</span>
+            <span>{panelMetrics.costDryer}</span>
           </div>
         </div>
       </PrimaryPanel>

@@ -22,7 +22,7 @@ export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate, onVi
   const backendQueues = mobileSummary?.campus_context.queue_estimates ?? [];
   const hasBackend = backendMachines.length > 0;
   const dormName = userProfile?.dormName || "请选择宿舍楼";
-  const towerKey = userProfile?.towerKey || "待选择";
+  const towerKey = userProfile?.towerKey || mobileSummary?.campus_towers?.[0]?.tower_key || "待选择";
   const latestPickup = userProfile?.latestPickupTime || "22:30";
   const availableCount = hasBackend
     ? (mobileSummary?.campus_context.available_machines.length ?? 0)
@@ -51,7 +51,7 @@ export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate, onVi
         </div>
         <Chip tone="blue">
           <Clock3 size={14} />
-          {campusContext.updatedAt}
+          {hasBackend ? `更新于 ${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}` : campusContext.updatedAt}
         </Chip>
       </Card>
 
@@ -60,8 +60,8 @@ export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate, onVi
           <div className="context-card-head">
             <MapPin size={18} />
             <div>
-              <h3>{campusContext.providerLabel}</h3>
-              <p>{campusContext.weather} · {campusContext.dryingContext}</p>
+              <h3>{hasBackend && mobileSummary?.campus_towers?.length ? mobileSummary.campus_towers.map(t => t.name).join("、") : campusContext.providerLabel}</h3>
+              <p>{hasBackend && mobileSummary ? weatherSummary(mobileSummary) : `${campusContext.weather} · ${campusContext.dryingContext}`}</p>
             </div>
           </div>
           <div className="contract-grid">
@@ -75,7 +75,7 @@ export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate, onVi
             </div>
           </div>
           <div className="provider-row">
-            {campusContext.towerKeys.map(([provider, key]) => (
+            {(hasBackend && mobileSummary?.campus_towers?.length ? mobileSummary.campus_towers.flatMap(t => Object.entries(t.provider_keys).map(([p, k]) => [p, k] as [string, string])) : campusContext.towerKeys).map(([provider, key]) => (
               <Chip key={provider} tone={provider === "haier" ? "blue" : "teal"}>
                 {provider}: {key}
               </Chip>
@@ -222,4 +222,14 @@ function capacityText(machine: BackendMachine) {
 
 function priceText(machine: BackendMachine) {
   return machine.price_yuan === null ? "价格待定" : `¥${machine.price_yuan}`;
+}
+
+function weatherSummary(mobileSummary: MobileSummary): string {
+  const w = mobileSummary.weather;
+  if (!w || w.status !== "live" || !w.current) return "天气数据不可用";
+  const parts: string[] = [];
+  if (w.current.temperature_2m != null) parts.push(`${w.current.temperature_2m}°C`);
+  if (w.current.relative_humidity_2m != null) parts.push(`湿度 ${w.current.relative_humidity_2m}%`);
+  if (w.current.precipitation != null) parts.push(`降水 ${w.current.precipitation}mm`);
+  return parts.join(" · ") || "天气数据不可用";
 }

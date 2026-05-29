@@ -3,6 +3,10 @@ import type { MobileSummary } from "../api/mobileSummary";
 import { Card, Chip, Page, PrimaryPanel, Section } from "../components/AppChrome";
 import { report, reportSections } from "../data/washMateContent";
 
+function formatPrice(price: number | null | undefined): string {
+  return price != null ? `¥${price}` : "¥—";
+}
+
 export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary | null }) {
   const backendReport = mobileSummary?.report;
   const totalCost = mobileSummary?.plan.estimated_cost_yuan;
@@ -13,6 +17,30 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
   const backendSections = backendReport
     ? Object.entries(backendReport.sections).map(([title, copy]) => ({ title, copy }))
     : reportSections;
+  const hasPlan = Boolean(mobileSummary?.plan.buckets.length);
+  const pricingRules = mobileSummary?.campus_context.pricing_rules;
+
+  const breakdown = hasPlan && mobileSummary?.plan && pricingRules
+    ? mobileSummary.plan.buckets
+        .filter((b) => b.wash_method === "machine_wash" || b.dry_method === "low_heat_dryer")
+        .flatMap((b) => {
+          const items: Array<[string, string]> = [];
+          if (b.wash_method === "machine_wash") {
+            const washPrice = (pricingRules as Record<string, Record<string, { price_yuan?: number }>>).wash_programs?.[b.program]?.price_yuan;
+            items.push([`${b.bucket_id} ${b.program}洗`, formatPrice(washPrice)]);
+          }
+          if (b.dry_method === "low_heat_dryer") {
+            const dryerPrice = (pricingRules as Record<string, Record<string, { price_yuan?: number }>>).dryer_programs?.["low"]?.price_yuan;
+            items.push([`${b.bucket_id} 低温烘干`, formatPrice(dryerPrice)]);
+          }
+          return items;
+        })
+    : report.breakdown;
+
+  // Show savings notes from the backend report, or static fallback
+  const savingsNotes = backendReport?.savings_notes.length
+    ? backendReport.savings_notes
+    : [report.valueCopy];
   const avoided = backendReport?.risk_notes.length ? backendReport.risk_notes.slice(0, 4) : report.avoided;
 
   return (
@@ -36,14 +64,16 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
             <strong>{totalText}</strong>
             <p>{subtitle}</p>
           </div>
-          <Chip tone="amber">{report.saved}</Chip>
+          {hasPlan && backendReport?.savings_notes.length
+            ? <Chip tone="amber">{backendReport.savings_notes[0]}</Chip>
+            : null}
         </div>
       </PrimaryPanel>
 
       <Section title="费用拆分">
         <Card>
           <div className="price-list">
-            {report.breakdown.map(([label, value]) => (
+            {breakdown.map(([label, value]) => (
               <div className="price-row" key={label}>
                 <span>{label}</span>
                 <strong>{value}</strong>
@@ -74,7 +104,9 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
             <div className="progress-bar">
               <span style={{ width: "76%" }} />
             </div>
-            <p>{report.valueCopy}</p>
+            {savingsNotes.map((note) => (
+              <p key={note}>{note}</p>
+            ))}
           </div>
         </Card>
       </Section>
