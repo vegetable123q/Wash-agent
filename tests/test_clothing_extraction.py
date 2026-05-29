@@ -936,6 +936,30 @@ class ClothingExtractionTests(unittest.TestCase):
 
         self.assertEqual(profile.missing_fields, ["care_forbidden"])
 
+    def test_llm_string_metadata_requires_strings(self) -> None:
+        response = {
+            "name": "test shirt",
+            "material_ratios": {"cotton": 1.0},
+            "colors": ["black"],
+            "care_forbidden": [],
+            "risks": {},
+            "confidence": 0.7,
+            "recommended_wash": True,
+            "field_sources": {
+                True: "manual",
+                "colors": 123,
+                "care_forbidden": " vision_extraction ",
+            },
+        }
+
+        profile = extract_clothing_info(
+            ClothingInput(name="test shirt"),
+            llm_client=FakeLLMClient(json.dumps(response, ensure_ascii=False)),
+        )
+
+        self.assertEqual(profile.recommended_wash, "")
+        self.assertEqual(profile.field_sources, {"care_forbidden": "vision_extraction"})
+
     def test_missing_fields_are_reported_when_sources_are_insufficient(self) -> None:
         profile = extract_clothing_info(
             ClothingInput(name="外套", user_description="只知道是日常穿的外套"),

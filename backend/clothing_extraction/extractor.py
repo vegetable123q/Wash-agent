@@ -25,6 +25,18 @@ _USER_FILL_SUGGESTIONS = {
     "care_forbidden": "请补充洗护禁忌，例如 不可漂白、不可烘干、只能手洗。",
 }
 
+_FIELD_SOURCE_KEYS = {
+    "material_ratios",
+    "colors",
+    "care_forbidden",
+    "care_warnings",
+    "care_recommendations",
+    "care_actions",
+    "care_symbols",
+    "risks",
+    "recommended_wash",
+}
+
 _CANONICAL_CARE_LABELS = {
     "air_dry",
     "avoid_hot_water",
@@ -314,6 +326,22 @@ def _string_list(value: Any) -> list[str]:
         text = item.strip()
         if text:
             items.append(text)
+    return items
+
+
+def _optional_string(value: Any) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _string_dict(value: Any) -> dict[str, str]:
+    items: dict[str, str] = {}
+    for key, item_value in _object_dict(value).items():
+        if not isinstance(key, str) or not isinstance(item_value, str):
+            continue
+        normalized_key = key.strip()
+        normalized_value = item_value.strip()
+        if normalized_key in _FIELD_SOURCE_KEYS and normalized_value:
+            items[normalized_key] = normalized_value
     return items
 
 
@@ -704,11 +732,8 @@ def _profile_from_llm(raw: ClothingInput, payload: dict[str, Any]) -> ClothingPr
             payload.get("material_evidence_level")
         ),
         care_evidence_level=care_evidence_level,
-        recommended_wash=str(payload.get("recommended_wash") or ""),
-        field_sources={
-            str(key): str(value)
-            for key, value in _object_dict(payload.get("field_sources")).items()
-        },
+        recommended_wash=_optional_string(payload.get("recommended_wash")),
+        field_sources=_string_dict(payload.get("field_sources")),
         agent_trace=_string_list(payload.get("agent_trace")),
         extraction_status="llm_success",
     )
