@@ -455,6 +455,49 @@ class EModuleTests(unittest.TestCase):
                         _campus_context(),
                     )
 
+    def test_plan_requires_valid_item_risks(self) -> None:
+        invalid_items = [
+            (
+                "risks",
+                WardrobeItem(
+                    profile=ClothingProfile(
+                        item_id="bad-risks",
+                        name="white tee",
+                        risks="high",  # type: ignore[arg-type]
+                    )
+                ),
+            ),
+            (
+                "risks",
+                WardrobeItem(
+                    profile=ClothingProfile(
+                        item_id="bad-risk-key",
+                        name="white tee",
+                        risks={True: RiskLevel.HIGH},  # type: ignore[dict-item]
+                    )
+                ),
+            ),
+            (
+                "risks",
+                WardrobeItem(
+                    profile=ClothingProfile(
+                        item_id="bad-risk-value",
+                        name="white tee",
+                        risks={"shrink": "high"},  # type: ignore[dict-item]
+                    )
+                ),
+            ),
+        ]
+
+        for field_name, item in invalid_items:
+            with self.subTest(field_name=field_name, item=item):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    plan_laundry(
+                        [item],
+                        LaundryConstraints(selected_item_ids=[item.profile.item_id]),
+                        _campus_context(),
+                    )
+
     def test_plan_requires_laundry_constraints(self) -> None:
         items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
         invalid_constraints: list[object] = [None, object(), {"selected_item_ids": ["white-tee"]}]
