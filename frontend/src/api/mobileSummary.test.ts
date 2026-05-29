@@ -216,6 +216,23 @@ describe("mobileSummary wardrobe selection", () => {
     expect(summary.wardrobe.items[0].risks.color_bleed).toBe("high");
   });
 
+  it("trims legacy stored risk keys before validation", async () => {
+    localStorage.setItem(
+      wardrobeStorageKey,
+      JSON.stringify([
+        {
+          item_id: "legacy-jeans",
+          name: "legacy jeans",
+          risks: { " color_bleed ": "high" },
+        },
+      ]),
+    );
+
+    const summary = await fetchMobileSummary();
+
+    expect(summary.wardrobe.items[0].risks).toEqual({ color_bleed: "high" });
+  });
+
   it("assigns unique wardrobe ids when several items are saved in the same millisecond", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-29T12:00:00.000Z"));

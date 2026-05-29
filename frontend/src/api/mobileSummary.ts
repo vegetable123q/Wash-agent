@@ -470,8 +470,10 @@ function normalizeStoredRiskRecord(value: unknown): Record<string, string> {
   }
   const result: Record<string, string> = {};
   for (const [key, rawLevel] of Object.entries(value as Record<string, unknown>)) {
+    const riskKey = key.trim();
+    if (!riskKey) continue;
     const level = String(rawLevel).trim().toLowerCase();
-    result[key] = ["low", "medium", "high", "unknown"].includes(level) ? level : "unknown";
+    result[riskKey] = ["low", "medium", "high", "unknown"].includes(level) ? level : "unknown";
   }
   return result;
 }
