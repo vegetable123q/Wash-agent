@@ -147,6 +147,28 @@ def _queue_estimate_list(value: object, field_name: str) -> None:
             raise ValueError(
                 f"campus_context.{field_name}[{index}] must be a MachineQueueEstimate"
             )
+        _validate_queue_estimate(estimate, f"campus_context.{field_name}[{index}]")
+
+
+def _validate_queue_estimate(estimate: MachineQueueEstimate, field_name: str) -> None:
+    _enum_field(estimate.machine_type, MachineType, f"{field_name}.machine_type")
+    _non_negative_int(estimate.total_count, f"{field_name}.total_count")
+    _non_negative_int(estimate.available_count, f"{field_name}.available_count")
+    _non_negative_int(estimate.running_count, f"{field_name}.running_count")
+    _non_negative_int(
+        estimate.out_of_service_count,
+        f"{field_name}.out_of_service_count",
+    )
+    _non_negative_int(estimate.unknown_count, f"{field_name}.unknown_count")
+    _optional_non_negative_int(
+        estimate.estimated_wait_minutes,
+        f"{field_name}.estimated_wait_minutes",
+    )
+
+
+def _non_negative_int(value: object, field_name: str) -> None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"{field_name} must be a non-negative integer")
 
 
 def _dict_field(value: object, field_name: str) -> None:

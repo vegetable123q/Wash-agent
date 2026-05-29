@@ -388,6 +388,33 @@ class EModuleTests(unittest.TestCase):
                         context,
                     )
 
+    def test_plan_requires_valid_queue_estimate_fields(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        cases: list[tuple[str, object]] = [
+            ("machine_type", "washer"),
+            ("total_count", True),
+            ("total_count", -1),
+            ("available_count", -1),
+            ("running_count", 1.5),
+            ("out_of_service_count", -1),
+            ("unknown_count", -1),
+            ("estimated_wait_minutes", True),
+            ("estimated_wait_minutes", 1.5),
+            ("estimated_wait_minutes", -1),
+        ]
+
+        for field_name, value in cases:
+            with self.subTest(field_name=field_name, value=value):
+                context = _campus_context()
+                setattr(context.queue_estimates[0], field_name, value)
+
+                with self.assertRaisesRegex(ValueError, field_name):
+                    plan_laundry(
+                        items,
+                        LaundryConstraints(selected_item_ids=["white-tee"], max_wait_minutes=5),
+                        context,
+                    )
+
     def test_air_dry_and_budget_warnings_use_explicit_context(self) -> None:
         context = _campus_context()
         context.drying_context = {"balcony_available": False, "ventilation": "poor"}
