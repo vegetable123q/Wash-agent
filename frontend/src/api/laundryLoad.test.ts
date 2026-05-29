@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimateLaundryLoadUnits, loadPercentForItems } from "./laundryLoad";
+import { estimatedWasherLoadCount, estimateLaundryLoadUnits, loadPercentForItems } from "./laundryLoad";
 
 describe("laundryLoad", () => {
   it("estimates dresses as larger than default small garments", () => {
@@ -14,5 +14,12 @@ describe("laundryLoad", () => {
     expect(estimateLaundryLoadUnits({ name: "dressage tee" })).toBe(12);
     expect(estimateLaundryLoadUnits({ name: "downstream tee" })).toBe(12);
     expect(estimateLaundryLoadUnits({ name: "socket tee" })).toBe(12);
+  });
+
+  it("falls back to the default target for invalid washer load targets", () => {
+    const items = [{ name: "tee" }];
+
+    expect(estimatedWasherLoadCount(items, 0)).toBe(1);
+    expect(Number.isFinite(estimatedWasherLoadCount(items, 0))).toBe(true);
   });
 });

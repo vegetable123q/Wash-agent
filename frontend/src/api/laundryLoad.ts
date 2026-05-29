@@ -32,7 +32,8 @@ export function loadPercentForItems(items: LoadEstimateItem[]): number {
 export function estimatedWasherLoadCount(items: LoadEstimateItem[], targetUnits = TARGET_WASHER_LOAD_UNITS): number {
   const totalUnits = totalLaundryLoadUnits(items);
   if (totalUnits <= 0) return 0;
-  return Math.max(1, Math.ceil(totalUnits / targetUnits));
+  const safeTargetUnits = Number.isFinite(targetUnits) && targetUnits > 0 ? targetUnits : TARGET_WASHER_LOAD_UNITS;
+  return Math.max(1, Math.ceil(totalUnits / safeTargetUnits));
 }
 
 export function splitItemsByLaundryLoad<T extends LoadEstimateItem>(
