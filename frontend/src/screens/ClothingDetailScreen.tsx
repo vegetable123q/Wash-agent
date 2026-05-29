@@ -1,4 +1,7 @@
 import { Edit3 } from "lucide-react";
+import { useEffect, useState } from "react";
+import type { ModelHubConfig } from "../api/modelHubConfig";
+import { fallbackRiskDescription, generateRiskDescription, riskKeyLabel } from "../api/llmSummary";
 import type { WardrobeSummaryItem } from "../api/mobileSummary";
 import { Card, Chip, MetricCard, Page, Section, TopBar } from "../components/AppChrome";
 import { ClothingArt } from "../components/ClothingArt";
@@ -8,10 +11,25 @@ interface ClothingDetailScreenProps {
   onBack: () => void;
   backendItem?: WardrobeSummaryItem | null;
   staticItem?: WardrobeItemView | null;
+  modelHubConfig?: ModelHubConfig;
 }
 
-export function ClothingDetailScreen({ onBack, backendItem, staticItem }: ClothingDetailScreenProps) {
-  if (!backendItem && !staticItem) {
+export function ClothingDetailScreen({ onBack, backendItem, staticItem, modelHubConfig }: ClothingDetailScreenProps) {
+  // LLM-enhanced risk description (backend items only)
+  const [llmRiskText, setLlmRiskText] = useState<string | null>(null);
+
+  const item = backendItem ? detailFromBackend(backendItem) : staticItem ? detailFromStatic(staticItem) : null;
+
+  useEffect(() => {
+    if (!backendItem || !modelHubConfig) return;
+    let cancelled = false;
+    generateRiskDescription(backendItem.risks, backendItem.name, backendItem.material_ratios, modelHubConfig).then((result) => {
+      if (!cancelled && result.source === "llm") setLlmRiskText(result.text);
+    });
+    return () => { cancelled = true; };
+  }, [backendItem, modelHubConfig]);
+
+  if (!item) {
     return (
       <Page compact>
         <TopBar title="衣物详情" onBack={onBack} />
@@ -23,7 +41,7 @@ export function ClothingDetailScreen({ onBack, backendItem, staticItem }: Clothi
     );
   }
 
-  const item = backendItem ? detailFromBackend(backendItem) : detailFromStatic(staticItem as WardrobeItemView);
+  const riskDescription = llmRiskText ?? item.riskDescription;
 
   return (
     <Page compact>
@@ -69,7 +87,7 @@ export function ClothingDetailScreen({ onBack, backendItem, staticItem }: Clothi
             <div className="progress-bar">
               <span style={{ width: item.riskProgress }} />
             </div>
-            <p>{item.riskDescription}</p>
+            <p>{riskDescription}</p>
           </div>
         </Card>
       </Section>
@@ -124,7 +142,7 @@ function detailFromBackend(item: WardrobeSummaryItem) {
     riskTitle: riskTitle(item.risks),
     riskLevel: highRisk ? "高" : mediumRisk ? "中" : "低",
     riskProgress: highRisk ? "82%" : mediumRisk ? "54%" : "24%",
-    riskDescription: riskValues.length > 0 ? `后端风险字段：${JSON.stringify(item.risks)}` : "后端未记录额外风险。",
+    riskDescription: fallbackRiskDescription(item.risks, item.name, item.material_ratios),
     recommendation: userNote,
     historyText: `已穿 ${item.wear_count_since_wash} 次，累计洗涤 ${item.wash_count} 次。`,
   };
@@ -158,24 +176,15 @@ function materialText(materialRatios: Record<string, number>) {
 
 function riskTitle(risks: Record<string, string>) {
   const keys = Object.keys(risks);
-  return keys.length > 0 ? keys.join("、") : "后端风险画像";
+  if (!keys.length) return "风险画像";
+  return keys.map((k) => riskKeyLabel(k)).join("、");
 }
 
 function artForName(name: string) {
-  if (name.includes("裤")) {
-    return "jeans" as const;
-  }
-  if (name.includes("羊毛") || name.includes("开衫")) {
-    return "wool" as const;
-  }
-  if (name.includes("床") || name.includes("被")) {
-    return "bedding" as const;
-  }
-  if (name.includes("运动")) {
-    return "sport" as const;
-  }
-  if (name.includes("卫衣") || name.includes("帽")) {
-    return "hoodie" as const;
-  }
+  if (name.includes("裤")) return "jeans" as const;
+  if (name.includes("羊毛") || name.includes("开衫")) return "wool" as const;
+  if (name.includes("床") || name.includes("被")) return "bedding" as const;
+  if (name.includes("运动")) return "sport" as const;
+  if (name.includes("卫衣") || name.includes("帽")) return "hoodie" as const;
   return "tee" as const;
 }

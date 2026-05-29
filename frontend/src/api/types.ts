@@ -203,6 +203,7 @@ export interface MobileSummary {
   wardrobe: {
     items: WardrobeSummaryItem[];
   };
+  frequency_advice?: FrequencyAdvice[];
   campus_context: {
     all_machines: BackendMachine[];
     available_machines: BackendMachine[];
@@ -211,21 +212,7 @@ export interface MobileSummary {
     drying_context: Record<string, unknown>;
     pricing_rules: Record<string, unknown>;
   };
-  plan: {
-    buckets: Array<{
-      bucket_id: string;
-      item_ids: string[];
-      wash_method: string;
-      machine_type: string;
-      program: string;
-      dry_method: string;
-      warnings: string[];
-    }>;
-    estimated_cost_yuan: number | null;
-    estimated_duration_minutes: number | null;
-    summary: string;
-    global_warnings: string[];
-  };
+  plan: LaundryPlan;
   report: {
     title: string;
     sections: Record<string, string>;

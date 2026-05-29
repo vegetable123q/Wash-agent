@@ -180,6 +180,7 @@ async function buildIntegratedMobileSummary(): Promise<MobileSummary> {
     weather,
     campus_towers: CAMPUS_TOWERS,
     wardrobe: { items: wardrobeItems },
+    frequency_advice: frequencyAdvice,
     campus_context: {
       all_machines: allMachines,
       available_machines: availableMachines,
@@ -199,6 +200,8 @@ async function buildIntegratedMobileSummary(): Promise<MobileSummary> {
         wash_method: b.wash_method,
         machine_type: b.machine_type,
         program: b.program,
+        detergent_ml: b.detergent_ml,
+        use_laundry_bag: b.use_laundry_bag,
         dry_method: b.dry_method,
         warnings: b.warnings,
       })),

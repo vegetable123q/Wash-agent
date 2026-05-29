@@ -41,6 +41,9 @@ export function WardrobeScreen({ mobileSummary, onNavigate, onViewItem, onDelete
   const selectedPlanIds = mobileSummary?.plan.buckets.flatMap((b) => b.item_ids) ?? [];
   const suggestedCount = isBackendSnapshot ? String(new Set(selectedPlanIds).size) : "4";
 
+  // Build real priority list from frequency advice
+  const priorityItems = buildPriorityItems(mobileSummary);
+
   return (
     <Page>
       <header className="hero-header">
@@ -123,42 +126,57 @@ export function WardrobeScreen({ mobileSummary, onNavigate, onViewItem, onDelete
         )}
       </Section>
 
-      {!isEmptyBackendWardrobe ? (
+      {!isEmptyBackendWardrobe && priorityItems.length > 0 ? (
         <Section title="优先级">
-          <Card>
-            <div className="dense-row">
-              <span className="round-icon round-icon-orange">
-                <Plus size={17} />
-              </span>
-              <div>
-                <h3>运动 T 恤建议本次清洗</h3>
-                <p>运动后穿着，明天早课可能要穿。</p>
-              </div>
-              <Chip tone="orange">急</Chip>
-            </div>
-          </Card>
+          <div className="list-stack">
+            {priorityItems.map((p) => (
+              <Card key={p.itemId}>
+                <div className="dense-row">
+                  <span className="round-icon round-icon-orange">
+                    <Plus size={17} />
+                  </span>
+                  <div>
+                    <h3>{p.title}</h3>
+                    <p>{p.description}</p>
+                  </div>
+                  <Chip tone={p.tone}>{p.badge}</Chip>
+                </div>
+              </Card>
+            ))}
+          </div>
         </Section>
       ) : null}
     </Page>
   );
 }
 
+function buildPriorityItems(summary: MobileSummary | null | undefined) {
+  const advice = summary?.frequency_advice;
+  const wardrobeItems = summary?.wardrobe.items ?? [];
+  if (!advice || !advice.length) {
+    // Static fallback
+    return [{ itemId: "static", title: "运动 T 恤建议本次清洗", description: "运动后穿着，明天早课可能要穿。", badge: "急", tone: "orange" as const }];
+  }
+
+  const nameMap = new Map(wardrobeItems.map((i) => [i.item_id, i.name]));
+  return advice
+    .filter((a) => a.priority_score >= 45)
+    .slice(0, 3)
+    .map((a) => ({
+      itemId: a.item_id,
+      title: `${nameMap.get(a.item_id) ?? a.item_id}${a.recommendation}`,
+      description: a.reasons[0] ?? "",
+      badge: a.priority_score >= 75 ? "急" : a.priority_score >= 45 ? "建议" : "可选",
+      tone: (a.priority_score >= 75 ? "orange" : "teal") as Tone,
+    }));
+}
+
 function artForName(name: string): ClothingArtKind {
-  if (name.includes("裤")) {
-    return "jeans";
-  }
-  if (name.includes("羊毛") || name.includes("开衫")) {
-    return "wool";
-  }
-  if (name.includes("床") || name.includes("被")) {
-    return "bedding";
-  }
-  if (name.includes("运动")) {
-    return "sport";
-  }
-  if (name.includes("卫衣") || name.includes("帽")) {
-    return "hoodie";
-  }
+  if (name.includes("裤")) return "jeans";
+  if (name.includes("羊毛") || name.includes("开衫")) return "wool";
+  if (name.includes("床") || name.includes("被")) return "bedding";
+  if (name.includes("运动")) return "sport";
+  if (name.includes("卫衣") || name.includes("帽")) return "hoodie";
   return "tee";
 }
 

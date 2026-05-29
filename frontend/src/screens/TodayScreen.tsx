@@ -1,4 +1,7 @@
 import { ArrowRight, Clock3, CloudRain, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import type { ModelHubConfig } from "../api/modelHubConfig";
+import { computeRecommendedStartTime, generateTodayAdvice } from "../api/llmSummary";
 import type { MobileSummary } from "../api/mobileSummary";
 import { Card, Chip, MetricCard, Page, PrimaryPanel, Section } from "../components/AppChrome";
 import { backendPlanSummary, bucketPlans, todaySummary, type ScreenId } from "../data/washMateContent";
@@ -8,10 +11,11 @@ interface TodayScreenProps {
   backendStatus?: "unconfigured" | "loading" | "connected" | "offline";
   mobileSummary?: MobileSummary | null;
   userProfile?: UserProfile;
+  modelHubConfig?: ModelHubConfig;
   onNavigate: (screen: ScreenId) => void;
 }
 
-export function TodayScreen({ backendStatus = "offline", mobileSummary, userProfile, onNavigate }: TodayScreenProps) {
+export function TodayScreen({ backendStatus = "offline", mobileSummary, userProfile, modelHubConfig, onNavigate }: TodayScreenProps) {
   const connected = backendStatus === "connected" && mobileSummary;
   const weather = connected ? liveWeather(mobileSummary) : null;
   const hasPersonalContext = Boolean(
@@ -68,6 +72,38 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
           ? "APK 内置"
           : "本地数据异常";
 
+  // Dynamic recommended start time
+  const recommendedTime = useMemo(
+    () => computeRecommendedStartTime(
+      mobileSummary?.plan.estimated_duration_minutes ?? null,
+      userProfile?.latestPickupTime ?? null,
+    ),
+    [mobileSummary?.plan.estimated_duration_minutes, userProfile?.latestPickupTime],
+  );
+
+  const recommendedLabel = useMemo(() => {
+    if (!mobileSummary?.plan.buckets.length) return "暂无待洗衣物";
+    const duration = mobileSummary.plan.estimated_duration_minutes;
+    if (duration != null) return `全部洗完约 ${duration} 分钟`;
+    return "全部洗完并低温烘干";
+  }, [mobileSummary?.plan.buckets.length, mobileSummary?.plan.estimated_duration_minutes]);
+
+  // LLM-enhanced today advice
+  const [llmAdvice, setLlmAdvice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!mobileSummary?.plan || !modelHubConfig) return;
+    let cancelled = false;
+    generateTodayAdvice(
+      mobileSummary.plan,
+      mobileSummary.weather,
+      mobileSummary.frequency_advice,
+      modelHubConfig,
+    ).then((result) => {
+      if (!cancelled && result.source === "llm") setLlmAdvice(result.text);
+    });
+    return () => { cancelled = true; };
+  }, [mobileSummary, modelHubConfig]);
+
   return (
     <Page>
       <header className="hero-header">
@@ -86,8 +122,8 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
         </div>
         <div className="hero-number-row">
           <div>
-            <strong className="hero-number">{todaySummary.recommendedTime}</strong>
-            <p>{todaySummary.recommendedLabel}</p>
+            <strong className="hero-number">{recommendedTime}</strong>
+            <p>{recommendedLabel}</p>
           </div>
           <div className="panel-metrics">
             <span>{panelMetrics.buckets}</span>
@@ -143,7 +179,7 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
             <Clock3 size={16} />
             <span>{planSummary.risk}</span>
           </div>
-          <p>{planSummary.note}</p>
+          <p>{llmAdvice ?? planSummary.note}</p>
         </Card>
       </Section>
 

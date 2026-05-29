@@ -122,11 +122,12 @@ export default function App() {
             backendStatus={backendStatus}
             mobileSummary={mobileSummary}
             userProfile={userProfile}
+            modelHubConfig={modelHubConfig}
             onNavigate={navigate}
           />
         );
       case "planDetail":
-        return <PlanDetailScreen onBack={goBack} mobileSummary={mobileSummary} />;
+        return <PlanDetailScreen onBack={goBack} mobileSummary={mobileSummary} modelHubConfig={modelHubConfig} />;
       case "wardrobe":
         return (
           <WardrobeScreen
@@ -139,7 +140,7 @@ export default function App() {
       case "addClothing":
         return <AddClothingScreen modelHubConfig={modelHubConfig} onBack={goBack} onSaved={refreshMobileSummary} />;
       case "clothingDetail":
-        return <ClothingDetailScreen onBack={goBack} backendItem={selectedBackendItem} staticItem={selectedStaticItem} />;
+        return <ClothingDetailScreen onBack={goBack} backendItem={selectedBackendItem} staticItem={selectedStaticItem} modelHubConfig={modelHubConfig} />;
       case "laundryRoom":
         return (
           <LaundryRoomScreen
