@@ -66,8 +66,7 @@ class WardrobeStore:
     def record_wear(self, item_id: str, count: int = 1) -> WardrobeItem:
         """Increment the wear count for a wardrobe item."""
 
-        if count < 1:
-            raise ValueError("count must be positive")
+        count = _positive_int(count, "count")
         item = self.get_item(item_id)
         if item is None:
             raise KeyError(f"wardrobe item not found: {item_id}")
@@ -152,6 +151,14 @@ def _non_negative_int(value: Any, field_name: str) -> int:
         raise ValueError(f"{field_name} must be a non-negative integer")
     if value < 0:
         raise ValueError(f"{field_name} must be a non-negative integer")
+    return value
+
+
+def _positive_int(value: Any, field_name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{field_name} must be a positive integer")
+    if value < 1:
+        raise ValueError(f"{field_name} must be a positive integer")
     return value
 
 

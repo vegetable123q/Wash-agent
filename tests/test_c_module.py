@@ -49,6 +49,13 @@ class CModuleTests(unittest.TestCase):
         self.assertEqual(washed.preferred_method, WashMethod.MACHINE_WASH)
         self.assertEqual(len(washed.wash_history), 2)
 
+    def test_record_wear_rejects_invalid_count(self) -> None:
+        invalid_counts: list[object] = [True, 0, -1, 1.5, "2"]
+        for count in invalid_counts:
+            with self.subTest(count=count):
+                with self.assertRaisesRegex(ValueError, "count"):
+                    self.store.record_wear("wm-white-tee-001", count=count)  # type: ignore[arg-type]
+
     def test_select_items_preserves_order_and_delete_requires_existing_item(self) -> None:
         selected = self.store.select_items(["wm-black-jeans-001", "wm-white-tee-001"])
         self.assertEqual([item.profile.item_id for item in selected], ["wm-black-jeans-001", "wm-white-tee-001"])
