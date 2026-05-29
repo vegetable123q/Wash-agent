@@ -59,6 +59,13 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
           accent: "purple" as const,
         }]
       : bucketPlans;
+  const globalWarningRows = useMemo(() => {
+    const bucketWarnings = new Set(planBuckets.flatMap((bucket) => bucket.warnings));
+    const warnings = (mobileSummary?.plan.global_warnings ?? [])
+      .filter((warning) => !bucketWarnings.has(warning))
+      .map(userFacingWarning);
+    return [...new Set(warnings)];
+  }, [mobileSummary?.plan.global_warnings, planBuckets]);
 
   const preparationSteps: PreparationStep[] = useMemo(() => {
     if (!hasSummary) return defaultPreparationSteps();
@@ -140,6 +147,27 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
         </div>
         <Chip tone={hasBuckets ? "teal" : "orange"}>{hasBuckets ? "已生成" : hasSummary ? "待选择" : "可执行"}</Chip>
       </Card>
+
+      {globalWarningRows.length > 0 ? (
+        <Section title="本次约束提醒">
+          <div className="list-stack">
+            {globalWarningRows.map((warning) => (
+              <Card key={warning} accent="orange" className="warning-surface">
+                <div className="row-between">
+                  <div>
+                    <h3>需要确认</h3>
+                    <p>{warning}</p>
+                  </div>
+                  <Chip tone="orange">
+                    <AlertTriangle size={14} />
+                    提醒
+                  </Chip>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </Section>
+      ) : null}
 
       <Section title="洗衣顺序">
         <div className="timeline">
