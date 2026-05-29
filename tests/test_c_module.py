@@ -205,6 +205,19 @@ class CModuleTests(unittest.TestCase):
 
         self.assertIn("wm-white-tee-001", ids)
 
+    def test_recommended_item_ids_requires_numeric_min_score(self) -> None:
+        items = self.store.list_items()
+        invalid_min_scores: list[object] = [True, "45", None]
+
+        for min_score in invalid_min_scores:
+            with self.subTest(min_score=min_score):
+                with self.assertRaisesRegex(ValueError, "min_score"):
+                    recommended_item_ids(
+                        items,
+                        LaundryConstraints(),
+                        min_score=min_score,  # type: ignore[arg-type]
+                    )
+
     def test_unknown_frequency_category_is_explicit_error(self) -> None:
         item = WardrobeItem(
             profile=ClothingProfile(

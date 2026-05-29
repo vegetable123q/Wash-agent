@@ -122,7 +122,7 @@ def recommended_item_ids(
 ) -> list[str]:
     """Return item ids whose explicit score meets min_score."""
 
-    safe_min_score = min_score if math.isfinite(min_score) else 0.0
+    safe_min_score = _min_score(min_score)
     return [
         advice.item_id
         for advice in advise_all_frequencies(items, constraints)
@@ -157,6 +157,13 @@ def _validate_items(value: object) -> None:
 def _validate_constraints(value: object) -> None:
     if not isinstance(value, LaundryConstraints):
         raise ValueError("constraints must be LaundryConstraints")
+
+
+def _min_score(value: object) -> float:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ValueError("min_score must be numeric")
+    score = float(value)
+    return score if math.isfinite(score) else 0.0
 
 
 def _search_text(item: WardrobeItem) -> str:
