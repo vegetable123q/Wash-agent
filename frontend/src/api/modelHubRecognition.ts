@@ -240,7 +240,7 @@ function parseGeminiJsonText(raw: unknown): Record<string, unknown> {
   }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(stripJsonCodeFence(text));
   } catch {
     throw new Error("ModelHub returned invalid recognition JSON");
   }
@@ -248,6 +248,12 @@ function parseGeminiJsonText(raw: unknown): Record<string, unknown> {
     throw new Error("ModelHub recognition result must be a JSON object");
   }
   return parsed as Record<string, unknown>;
+}
+
+function stripJsonCodeFence(text: string): string {
+  const trimmed = text.trim();
+  const match = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return match ? match[1].trim() : trimmed;
 }
 
 function normalizeRecognitionPayload(payload: Record<string, unknown>, source: RecognitionSource): ClothingRecognitionResult {
