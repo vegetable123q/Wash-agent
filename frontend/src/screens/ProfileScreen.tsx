@@ -34,6 +34,7 @@ export function ProfileScreen({
   const [draft, setDraft] = useState(profile);
   const [modelHubDraft, setModelHubDraft] = useState(modelHubConfig);
   const [saved, setSaved] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [modelHubSaved, setModelHubSaved] = useState(false);
   const selectedDormIsListed = towerOptions.some((tower) => tower.name === draft.dormName);
   const normalizedModelHubDraft = normalizeModelHubConfig(modelHubDraft);
@@ -42,6 +43,7 @@ export function ProfileScreen({
 
   const updateDraft = (patch: Partial<UserProfile>) => {
     setSaved(false);
+    setProfileError(null);
     setDraft((current) => ({ ...current, ...patch }));
   };
 
@@ -51,6 +53,12 @@ export function ProfileScreen({
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
+    if (!isValidPickupTime(draft.latestPickupTime)) {
+      setSaved(false);
+      setProfileError("请填写有效的最晚取衣时间");
+      return;
+    }
+    setProfileError(null);
     onSave(draft);
     setSaved(true);
   };
@@ -166,6 +174,7 @@ export function ProfileScreen({
           </div>
         </Section>
 
+        {profileError ? <p className="form-status form-status-error">{profileError}</p> : null}
         {saved ? <p className="form-status form-status-ok">个人信息已保存</p> : null}
 
         <button className="primary-button" type="submit">
@@ -260,6 +269,16 @@ function modelHubConnectionStatus(backendStatus: BackendStatus, hasSavedConfig: 
 
 function numberInputValue(value: number | null | undefined): string {
   return value == null ? "" : String(value);
+}
+
+function isValidPickupTime(value: string): boolean {
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  if (!match) {
+    return false;
+  }
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
 }
 
 function positiveNumberOrNull(value: string): number | null {

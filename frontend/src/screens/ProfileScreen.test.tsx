@@ -72,4 +72,35 @@ describe("ProfileScreen", () => {
       }),
     );
   });
+
+  it("blocks saving when the latest pickup time is empty", () => {
+    const onSave = vi.fn();
+    const { container } = render(
+      <ProfileScreen
+        profile={{
+          displayName: "",
+          dormName: "",
+          latestPickupTime: "22:30",
+          allowDryer: false,
+          budgetYuan: null,
+          maxWaitMinutes: null,
+        }}
+        modelHubConfig={emptyModelHubConfig}
+        backendStatus="connected"
+        towerOptions={[]}
+        onSave={onSave}
+        onSaveModelHubConfig={vi.fn((config) => config)}
+        onClearModelHubConfig={vi.fn()}
+      />,
+    );
+
+    const pickupTimeInput = container.querySelector<HTMLInputElement>('input[type="time"]');
+
+    expect(pickupTimeInput).not.toBeNull();
+    fireEvent.change(pickupTimeInput!, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /保存个人信息/ }));
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByText("请填写有效的最晚取衣时间")).toBeInTheDocument();
+  });
 });
