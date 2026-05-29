@@ -418,7 +418,11 @@ function washProgramValue(context: CampusContext, program: string, key: "price_y
   if (!(key in rule)) {
     throw new Error(`missing wash program ${key}: ${program}`);
   }
-  return Number(rule[key]);
+  const value = Number(rule[key]);
+  if (!Number.isFinite(value)) {
+    throw new Error(`invalid wash program ${key}: ${program}`);
+  }
+  return value;
 }
 
 function dryerProgramValue(context: CampusContext, program: string, key: "price_yuan" | "duration_minutes"): number {
@@ -430,7 +434,11 @@ function dryerProgramValue(context: CampusContext, program: string, key: "price_
   if (!(key in rule)) {
     throw new Error(`missing dryer program ${key}: ${program}`);
   }
-  return Number(rule[key]);
+  const value = Number(rule[key]);
+  if (!Number.isFinite(value)) {
+    throw new Error(`invalid dryer program ${key}: ${program}`);
+  }
+  return value;
 }
 
 // ─── item analysis helpers ──────────────────────────────────────────────
