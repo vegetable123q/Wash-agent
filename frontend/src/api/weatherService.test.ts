@@ -52,4 +52,30 @@ describe("fetchTsinghuaWeather", () => {
     expect(snapshot.status).toBe("live");
     expect(snapshot.units).toEqual({ precipitation: "mm" });
   });
+
+  it("trims weather unit strings and ignores blank units", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          current: {
+            temperature_2m: 20,
+            relative_humidity_2m: 50,
+            precipitation: 0,
+          },
+          current_units: {
+            temperature_2m: " °C ",
+            relative_humidity_2m: "   ",
+            precipitation: " mm ",
+          },
+        }),
+      }),
+    );
+
+    const snapshot = await fetchTsinghuaWeather();
+
+    expect(snapshot.status).toBe("live");
+    expect(snapshot.units).toEqual({ temperature_2m: "°C", precipitation: "mm" });
+  });
 });

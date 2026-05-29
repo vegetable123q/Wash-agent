@@ -61,9 +61,13 @@ function isValidCurrentWeather(value: unknown): value is WeatherSnapshot["curren
 
 function unitStrings(value: unknown): Record<string, string> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).filter(
-      (entry): entry is [string, string] => typeof entry[1] === "string",
-    ),
-  );
+  const entries: Array<[string, string]> = [];
+  for (const [key, rawUnit] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof rawUnit !== "string") continue;
+    const unit = rawUnit.trim();
+    if (unit) {
+      entries.push([key, unit]);
+    }
+  }
+  return Object.fromEntries(entries);
 }
