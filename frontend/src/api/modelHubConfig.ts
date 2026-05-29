@@ -58,10 +58,11 @@ export function hasCompleteModelHubConfig(config: ModelHubConfig): boolean {
 
 export function normalizeModelHubConfig(value: unknown): ModelHubConfig {
   const config = typeof value === "object" && value !== null ? (value as Partial<ModelHubConfig>) : {};
+  const modelName = String(config.model_name ?? "").trim();
   return {
     baseUrl: normalizeModelHubBaseUrl(config.baseUrl),
     apikey: String(config.apikey ?? "").trim(),
-    model_name: supportedModelNames.includes(config.model_name as SupportedModelName) ? String(config.model_name) : "",
+    model_name: supportedModelNames.includes(modelName as SupportedModelName) ? modelName : "",
   };
 }
 
