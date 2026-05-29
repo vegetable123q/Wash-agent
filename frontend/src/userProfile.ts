@@ -52,7 +52,7 @@ function normalizeProfile(value: unknown): UserProfile {
     displayName: String(profile.displayName ?? "").trim(),
     dormName: String(profile.dormName ?? "").trim(),
     latestPickupTime: isValidPickupTime(latestPickupTime) ? latestPickupTime : defaultUserProfile.latestPickupTime,
-    allowDryer: Boolean(profile.allowDryer),
+    allowDryer: booleanValue(profile.allowDryer),
     budgetYuan: positiveNumberOrNull(profile.budgetYuan),
     maxWaitMinutes: positiveNumberOrNull(profile.maxWaitMinutes),
   };
@@ -71,4 +71,12 @@ export function isValidPickupTime(value: string): boolean {
 function positiveNumberOrNull(value: unknown): number | null {
   const numberValue = typeof value === "string" && value.trim() ? Number(value) : value;
   return typeof numberValue === "number" && Number.isFinite(numberValue) && numberValue > 0 ? numberValue : null;
+}
+
+function booleanValue(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    return value.trim().toLowerCase() === "true";
+  }
+  return false;
 }

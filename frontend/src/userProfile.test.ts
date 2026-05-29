@@ -61,6 +61,17 @@ describe("userProfile", () => {
     });
   });
 
+  it("normalizes string false dryer preference to false", () => {
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        allowDryer: "false",
+      }),
+    );
+
+    expect(loadUserProfile().allowDryer).toBe(false);
+  });
+
   it("normalizes invalid stored pickup time to the default", () => {
     localStorage.setItem(
       storageKey,
