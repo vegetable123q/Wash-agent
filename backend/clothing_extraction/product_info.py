@@ -15,6 +15,19 @@ def _normalize_text(value: str) -> str:
     return re.sub(r"\s+", " ", value or "").strip()
 
 
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    items: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        text = _normalize_text(item)
+        if text:
+            items.append(text)
+    return items
+
+
 def _format_source(label: str, value: str) -> str:
     text = _normalize_text(value)
     return f"{label}: {text}" if text else ""
@@ -74,7 +87,7 @@ def enrich_product_info(raw: ClothingInput) -> ClothingInput:
             + json.dumps(manual_fields, ensure_ascii=False, sort_keys=True)
         )
 
-    source_notes = list(raw.extra.get("source_notes", []))
+    source_notes = _string_list(raw.extra.get("source_notes", []))
     if tag_text:
         source_notes.append("包含吊牌或洗护标签文字")
     if name:

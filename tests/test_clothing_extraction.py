@@ -148,6 +148,16 @@ class ClothingExtractionTests(unittest.TestCase):
         self.assertIn("source_notes", enriched.extra)
         self.assertNotIn("店铺名", enriched.extra["normalized_source_text"])
 
+    def test_enrich_product_info_normalizes_extra_source_notes(self) -> None:
+        raw = ClothingInput(
+            name="",
+            extra={"source_notes": [" kept note ", True, "", 123]},
+        )
+
+        enriched = enrich_product_info(raw)
+
+        self.assertEqual(enriched.extra["source_notes"], ["kept note"])
+
     def test_user_note_is_preserved_without_product_metadata_in_core_profile(self) -> None:
         profile = extract_clothing_info(
             ClothingInput(
