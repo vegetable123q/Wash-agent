@@ -189,6 +189,7 @@ Wash-agent/
 - 存放跨模块使用的 dataclass 和 Enum。
 - 作为页面、衣物抽取、衣柜、校园上下文、洗衣计划和报告模块之间的唯一共享数据契约。
 - 当前校园模块新增 `MachineTower`，用于把 CleverSchool 楼号和海乐生活点位列表传给页面层；`MachineTower.provider_keys` 显式记录同一统一楼名下的所有来源 id，避免把两套外部 id 混用；`CampusContext` 同时保留 `all_machines`、`available_machines` 和 `queue_estimates`，避免丢失运行中机器的剩余时间和排队摘要。
+- E 模块在共享契约中输出结构化执行结果：`LaundryBucket` 保存推荐洗衣机、烘干机、本桶费用和机器占用时间；`LaundryPlan.cost_breakdown` 保存每一笔洗衣/烘干计费；`WashReport.action_steps` 和 `WashReport.cost_breakdown` 给页面层直接消费，页面不应从自然语言报告里反向解析费用和步骤。
 
 不应该做：
 
@@ -278,7 +279,10 @@ Wash-agent/
 - 负责手洗、机洗、干洗判断，分桶规则，模式推荐，洗衣袋、洗衣液、烘干强度、防串色、防缩水和公共洗衣卫生策略。
 - 第一版确定性实现要求调用方显式传入所选衣物、可用机器和 `CampusContext.pricing_rules` 中的洗衣/烘干价格与时长；缺少所选衣物、机器、价格或时长时抛出错误，不生成默认方案。
 - 当 `LaundryConstraints` 包含预算或最大等待时间时，在 `LaundryPlan.global_warnings` 中显式说明超预算、等待估算缺失、等待未知或等待超时，不能静默忽略这些约束。
-- 当前分桶规则按不可水洗、干洗、手洗、床品大件、深色/掉色风险和浅色标准批次拆分。
+- 当前分桶规则按不可水洗、干洗、手洗、床品大件、深色/掉色风险、浅色标准和允许混色的低风险标准批次拆分。
+- `urgent_item_ids` 必须属于本次 `selected_item_ids`，否则抛出错误；planner 不会替用户把未选择的急用衣物加入方案。
+- 每个机洗桶必须记录推荐机器 id/位置、程序、本桶费用、本桶机器占用时间、洗衣液用量和是否使用洗衣袋；如果使用低温烘干，还必须记录烘干机 id/位置。
+- `LaundryPlan.cost_breakdown` 必须由真实机洗和烘干动作生成，金额和时长只能来自 `CampusContext.pricing_rules`。
 
 不应该做：
 
@@ -298,6 +302,8 @@ Wash-agent/
 - 把 `LaundryPlan`、衣物列表和校园上下文转换成 `WashReport`。
 - 负责用户可读文案、风险说明、节水节电省钱说明和操作步骤。
 - 报告只解释 planner 已生成的方案，不重新分桶、不重算洗衣决策。
+- 报告必须保留结构化输出：`sections` 面向阅读，`action_steps` 面向执行步骤展示，`cost_breakdown` 面向费用拆分展示。
+- 报告中的费用、时间、机器和烘干信息必须来自 `LaundryPlan`，不能使用写死样例。
 
 不应该做：
 

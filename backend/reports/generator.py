@@ -34,6 +34,8 @@ def generate_report(
     return WashReport(
         title="本次校园洗衣方案",
         sections=sections,
+        action_steps=_action_steps(plan, item_names),
+        cost_breakdown=list(plan.cost_breakdown),
         savings_notes=_savings_notes(plan),
         risk_notes=_risk_notes(plan),
     )
@@ -48,17 +50,47 @@ def _steps_section(plan: LaundryPlan, item_names: dict[str, str]) -> str:
             f"原因：{_bucket_reason(bucket)}",
             f"洗护方式：{_wash_method_text(bucket.wash_method)}",
         ]
+        if bucket.machine_id:
+            parts.append(f"洗衣机：{bucket.machine_id}（{bucket.machine_location}）")
         if bucket.program:
             parts.append(f"程序：{bucket.program}")
         if bucket.detergent_ml is not None:
             parts.append(f"洗衣液：{bucket.detergent_ml} ml")
         if bucket.use_laundry_bag:
             parts.append("使用洗衣袋")
+        if bucket.estimated_cost_yuan is not None:
+            parts.append(f"本批费用：{bucket.estimated_cost_yuan} 元")
+        if bucket.estimated_duration_minutes is not None:
+            parts.append(f"机器占用：{bucket.estimated_duration_minutes} 分钟")
         parts.append(f"干燥：{_dry_method_text(bucket.dry_method)}")
+        if bucket.dryer_machine_id:
+            parts.append(f"烘干机：{bucket.dryer_machine_id}（{bucket.dryer_machine_location}）")
         if bucket.warnings:
             parts.append(f"提醒：{'；'.join(bucket.warnings)}")
         lines.append("；".join(parts) + "。")
     return "\n".join(lines)
+
+
+def _action_steps(plan: LaundryPlan, item_names: dict[str, str]) -> list[str]:
+    steps: list[str] = []
+    for index, bucket in enumerate(plan.buckets, start=1):
+        names = "、".join(_item_name(item_id, item_names) for item_id in bucket.item_ids)
+        if bucket.wash_method == WashMethod.MACHINE_WASH:
+            machine = bucket.machine_id or _machine_type_text(bucket.machine_type)
+            step = f"{index}. {names} 使用 {machine} 执行 {bucket.program} 程序"
+            if bucket.detergent_ml is not None:
+                step += f"，加入 {bucket.detergent_ml} ml 洗衣液"
+            if bucket.use_laundry_bag:
+                step += "，使用洗衣袋"
+            step += f"，{_dry_method_text(bucket.dry_method)}"
+            if bucket.dryer_machine_id:
+                step += f"（{bucket.dryer_machine_id}）"
+            steps.append(step + "。")
+            continue
+        steps.append(
+            f"{index}. {names} {_wash_method_text(bucket.wash_method)}，{_dry_method_text(bucket.dry_method)}，不使用共享洗衣机。"
+        )
+    return steps
 
 
 def _cost_time_section(plan: LaundryPlan) -> str:
@@ -66,9 +98,11 @@ def _cost_time_section(plan: LaundryPlan) -> str:
         raise ValueError("plan estimated_cost_yuan is required for report generation")
     if plan.estimated_duration_minutes is None:
         raise ValueError("plan estimated_duration_minutes is required for report generation")
-    charged_batches = _charged_batches(plan)
-    if charged_batches:
-        batch_text = "；".join(charged_batches)
+    if plan.cost_breakdown:
+        batch_text = "；".join(
+            f"{line.label} {line.amount_yuan} 元/{line.duration_minutes} 分钟"
+            for line in plan.cost_breakdown
+        )
     else:
         batch_text = "本次没有共享洗衣机或烘干机计费批次"
     return (
@@ -107,6 +141,8 @@ def _savings_notes(plan: LaundryPlan) -> list[str]:
     notes: list[str] = []
     if any(bucket.dry_method == DryMethod.AIR_DRY for bucket in plan.buckets):
         notes.append("自然晾干批次减少烘干用电，也能降低缩水和变形风险。")
+    if any(bucket.bucket_id == "mixed-standard" for bucket in plan.buckets):
+        notes.append("用户允许混色且衣物无高掉色风险时合并标准批次，减少空筒和重复用水。")
     if any(bucket.bucket_id in {"dark-standard", "hand-wash"} for bucket in plan.buckets):
         notes.append("高风险衣物分开处理，能减少串色、返洗和重复用水。")
     if any(bucket.bucket_id == "large-bedding" for bucket in plan.buckets):
@@ -133,18 +169,9 @@ def _bucket_reason(bucket: LaundryBucket) -> str:
         "large-bedding": "床品体积大，使用大件批次减少过载和返洗",
         "dark-standard": "深色或高掉色风险衣物单独处理，避免串色",
         "light-standard": "浅色普通机洗衣物集中标准洗",
+        "mixed-standard": "用户允许混色，低掉色风险普通衣物合并标准洗",
     }
     return reasons.get(bucket.bucket_id, f"{bucket.bucket_id} 批次")
-
-
-def _charged_batches(plan: LaundryPlan) -> list[str]:
-    batches: list[str] = []
-    for bucket in plan.buckets:
-        if bucket.wash_method == WashMethod.MACHINE_WASH:
-            batches.append(f"{bucket.bucket_id} 使用 {bucket.program} 洗")
-        if bucket.dry_method == DryMethod.LOW_HEAT_DRYER:
-            batches.append(f"{bucket.bucket_id} 低温烘干")
-    return batches
 
 
 def _available_machine_locations(machines: list[MachineInfo]) -> str:

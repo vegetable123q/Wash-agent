@@ -6,6 +6,7 @@ from backend.shared.models import (
     CampusContext,
     DryMethod,
     LaundryBucket,
+    LaundryChargeLine,
     LaundryConstraints,
     LaundryPlan,
     MachineInfo,
@@ -32,6 +33,7 @@ _STANDARD_DETERGENT_ML_BASE = 18.0
 _STANDARD_DETERGENT_ML_PER_ITEM = 6.0
 _LARGE_DETERGENT_ML_BASE = 32.0
 _LARGE_DETERGENT_ML_PER_ITEM = 8.0
+_STANDARD_BUCKET_IDS = {"dark-standard", "light-standard", "mixed-standard"}
 
 
 def plan_laundry(
@@ -42,14 +44,16 @@ def plan_laundry(
     """Create wash buckets, machine modes, drying advice, and risk warnings."""
 
     selected_items = _selected_items(items, constraints.selected_item_ids)
-    bucket_inputs = _split_bucket_inputs(selected_items)
+    _validate_urgent_items(constraints)
+    bucket_inputs = _split_bucket_inputs(selected_items, constraints)
     buckets = [
         _build_bucket(bucket_id, bucket_items, constraints, campus_context)
         for bucket_id, bucket_items in bucket_inputs
     ]
 
-    estimated_cost = _estimate_cost(buckets, campus_context)
-    estimated_duration = _estimate_duration(buckets, campus_context)
+    cost_breakdown = _cost_breakdown(buckets, campus_context)
+    estimated_cost = _estimate_cost(cost_breakdown)
+    estimated_duration = _estimate_duration(cost_breakdown)
     global_warnings = _global_warnings(buckets, constraints, estimated_cost, campus_context)
 
     return LaundryPlan(
@@ -57,6 +61,7 @@ def plan_laundry(
         estimated_cost_yuan=estimated_cost,
         estimated_duration_minutes=estimated_duration,
         summary=f"本次共 {len(buckets)} 个洗护批次，已按颜色、材质、床品和高风险衣物分开处理。",
+        cost_breakdown=cost_breakdown,
         global_warnings=global_warnings,
     )
 
@@ -71,17 +76,34 @@ def _selected_items(items: list[WardrobeItem], selected_item_ids: list[str]) -> 
     return [items_by_id[item_id] for item_id in selected_item_ids]
 
 
-def _split_bucket_inputs(items: list[WardrobeItem]) -> list[tuple[str, list[WardrobeItem]]]:
+def _validate_urgent_items(constraints: LaundryConstraints) -> None:
+    missing = [item_id for item_id in constraints.urgent_item_ids if item_id not in constraints.selected_item_ids]
+    if missing:
+        raise ValueError(f"urgent item ids must be selected for laundry planning: {', '.join(missing)}")
+
+
+def _split_bucket_inputs(
+    items: list[WardrobeItem],
+    constraints: LaundryConstraints,
+) -> list[tuple[str, list[WardrobeItem]]]:
     groups: dict[str, list[WardrobeItem]] = {}
     for item in items:
-        bucket_id = _bucket_id_for(item)
+        bucket_id = _bucket_id_for(item, constraints)
         groups.setdefault(bucket_id, []).append(item)
 
-    order = ["do-not-wash", "dry-clean", "hand-wash", "large-bedding", "dark-standard", "light-standard"]
+    order = [
+        "do-not-wash",
+        "dry-clean",
+        "hand-wash",
+        "large-bedding",
+        "dark-standard",
+        "light-standard",
+        "mixed-standard",
+    ]
     return [(bucket_id, groups[bucket_id]) for bucket_id in order if bucket_id in groups]
 
 
-def _bucket_id_for(item: WardrobeItem) -> str:
+def _bucket_id_for(item: WardrobeItem, constraints: LaundryConstraints) -> str:
     search_text = _search_text(item)
     if item.preferred_method == WashMethod.DO_NOT_WASH or contains_any(search_text, _DO_NOT_WASH_TERMS):
         return "do-not-wash"
@@ -97,9 +119,11 @@ def _bucket_id_for(item: WardrobeItem) -> str:
     if contains_any(search_text, _BEDDING_TERMS):
         return "large-bedding"
     if contains_any(search_text, _DARK_COLOR_TERMS) or _has_high_risk(item, {"color_bleed"}):
+        if constraints.allow_mixed_colors and not _has_high_risk(item, {"color_bleed"}):
+            return "mixed-standard"
         return "dark-standard"
     if contains_any(search_text, _LIGHT_COLOR_TERMS):
-        return "light-standard"
+        return "mixed-standard" if constraints.allow_mixed_colors else "light-standard"
     raise ValueError(f"cannot assign laundry bucket from item data: {item.profile.item_id}")
 
 
@@ -115,6 +139,8 @@ def _build_bucket(
             item_ids=_item_ids(items),
             wash_method=WashMethod.DO_NOT_WASH,
             dry_method=DryMethod.DO_NOT_DRY,
+            estimated_cost_yuan=0.0,
+            estimated_duration_minutes=0,
             warnings=["该批次含不可水洗衣物，不进入本次水洗流程。"],
         )
     if bucket_id == "dry-clean":
@@ -123,6 +149,8 @@ def _build_bucket(
             item_ids=_item_ids(items),
             wash_method=WashMethod.DRY_CLEAN,
             dry_method=DryMethod.DO_NOT_DRY,
+            estimated_cost_yuan=0.0,
+            estimated_duration_minutes=0,
             warnings=["该批次建议送专业干洗，不进入共享洗衣机。"],
         )
     if bucket_id == "hand-wash":
@@ -133,6 +161,8 @@ def _build_bucket(
             detergent_ml=_detergent_ml(bucket_id, items),
             use_laundry_bag=True,
             dry_method=DryMethod.AIR_DRY,
+            estimated_cost_yuan=0.0,
+            estimated_duration_minutes=0,
             warnings=_hand_wash_warnings(items, campus_context),
         )
 
@@ -141,7 +171,11 @@ def _build_bucket(
     machine = _require_available_machine(campus_context.available_machines, machine_type, program)
     _require_wash_program(campus_context, program)
 
-    dry_method, dry_warnings = _drying_decision(items, constraints, campus_context)
+    dry_method, dryer, dry_warnings = _drying_decision(items, constraints, campus_context)
+    wash_cost = _wash_program_value(campus_context, program, "price_yuan")
+    wash_duration = int(_wash_program_value(campus_context, program, "duration_minutes"))
+    dryer_cost = _dryer_program_value(campus_context, "low", "price_yuan") if dryer is not None else 0.0
+    dryer_duration = int(_dryer_program_value(campus_context, "low", "duration_minutes")) if dryer is not None else 0
     warnings = (
         _machine_bucket_warnings(bucket_id, items)
         + [_machine_recommendation_warning(machine, program)]
@@ -153,10 +187,20 @@ def _build_bucket(
         item_ids=_item_ids(items),
         wash_method=WashMethod.MACHINE_WASH,
         machine_type=machine_type,
+        machine_id=machine.machine_id,
+        machine_location=machine.location,
         program=program,
         detergent_ml=_detergent_ml(bucket_id, items),
-        use_laundry_bag=bucket_id == "dark-standard" or _any_recommends_bag(items),
+        use_laundry_bag=(
+            bucket_id == "dark-standard"
+            or constraints.hygiene_sensitive
+            or _any_recommends_bag(items)
+        ),
         dry_method=dry_method,
+        dryer_machine_id=dryer.machine_id if dryer is not None else "",
+        dryer_machine_location=dryer.location if dryer is not None else "",
+        estimated_cost_yuan=round(wash_cost + dryer_cost, 2),
+        estimated_duration_minutes=wash_duration + dryer_duration,
         warnings=warnings,
     )
 
@@ -165,37 +209,61 @@ def _drying_decision(
     items: list[WardrobeItem],
     constraints: LaundryConstraints,
     campus_context: CampusContext,
-) -> tuple[DryMethod, list[str]]:
+) -> tuple[DryMethod, MachineInfo | None, list[str]]:
     if not constraints.allow_dryer:
-        return DryMethod.AIR_DRY, ["用户未允许烘干，本批次自然晾干。"] + _air_dry_context_warnings(campus_context)
+        return DryMethod.AIR_DRY, None, ["用户未允许烘干，本批次自然晾干。"] + _air_dry_context_warnings(campus_context)
     unsafe = [item.profile.name for item in items if _dryer_unsafe(item)]
     if unsafe:
-        return DryMethod.AIR_DRY, [
+        return DryMethod.AIR_DRY, None, [
             f"{'、'.join(unsafe)} 不可烘干或存在高温损伤风险，改为自然晾干。"
         ] + _air_dry_context_warnings(campus_context)
     dryer = _require_available_machine(campus_context.available_machines, MachineType.DRYER, "low")
     _require_dryer_program(campus_context, "low")
-    return DryMethod.LOW_HEAT_DRYER, [_machine_recommendation_warning(dryer, "low")]
+    return DryMethod.LOW_HEAT_DRYER, dryer, [_machine_recommendation_warning(dryer, "low")]
 
 
-def _estimate_cost(buckets: list[LaundryBucket], campus_context: CampusContext) -> float:
-    total = 0.0
+def _cost_breakdown(
+    buckets: list[LaundryBucket],
+    campus_context: CampusContext,
+) -> list[LaundryChargeLine]:
+    lines: list[LaundryChargeLine] = []
     for bucket in buckets:
         if bucket.wash_method == WashMethod.MACHINE_WASH:
-            total += _wash_program_value(campus_context, bucket.program, "price_yuan")
+            lines.append(
+                LaundryChargeLine(
+                    bucket_id=bucket.bucket_id,
+                    label=f"{bucket.bucket_id} {bucket.program} 洗",
+                    amount_yuan=round(_wash_program_value(campus_context, bucket.program, "price_yuan"), 2),
+                    duration_minutes=int(_wash_program_value(campus_context, bucket.program, "duration_minutes")),
+                    machine_id=bucket.machine_id,
+                    machine_type=bucket.machine_type,
+                    program=bucket.program,
+                )
+            )
         if bucket.dry_method == DryMethod.LOW_HEAT_DRYER:
-            total += _dryer_program_value(campus_context, "low", "price_yuan")
+            lines.append(
+                LaundryChargeLine(
+                    bucket_id=bucket.bucket_id,
+                    label=f"{bucket.bucket_id} 低温烘干",
+                    amount_yuan=round(_dryer_program_value(campus_context, "low", "price_yuan"), 2),
+                    duration_minutes=int(_dryer_program_value(campus_context, "low", "duration_minutes")),
+                    machine_id=bucket.dryer_machine_id,
+                    machine_type=MachineType.DRYER,
+                    program="low",
+                )
+            )
+    return lines
+
+
+def _estimate_cost(cost_breakdown: list[LaundryChargeLine]) -> float:
+    total = 0.0
+    for line in cost_breakdown:
+        total += line.amount_yuan
     return round(total, 2)
 
 
-def _estimate_duration(buckets: list[LaundryBucket], campus_context: CampusContext) -> int:
-    total = 0
-    for bucket in buckets:
-        if bucket.wash_method == WashMethod.MACHINE_WASH:
-            total += int(_wash_program_value(campus_context, bucket.program, "duration_minutes"))
-        if bucket.dry_method == DryMethod.LOW_HEAT_DRYER:
-            total += int(_dryer_program_value(campus_context, "low", "duration_minutes"))
-    return total
+def _estimate_duration(cost_breakdown: list[LaundryChargeLine]) -> int:
+    return sum(line.duration_minutes for line in cost_breakdown)
 
 
 def _global_warnings(
@@ -298,6 +366,8 @@ def _machine_bucket_warnings(bucket_id: str, items: list[WardrobeItem]) -> list[
     warnings: list[str] = []
     if bucket_id == "dark-standard":
         warnings.append("深色或高掉色风险衣物已单独成桶，减少串色和返洗。")
+    if bucket_id == "mixed-standard":
+        warnings.append("用户允许混色，低掉色风险普通衣物合并成标准批次。")
     if bucket_id == "large-bedding":
         warnings.append("床品使用大件批次，避免普通筒过载导致洗不净。")
     for item in items:
@@ -321,7 +391,7 @@ def _detergent_ml(bucket_id: str, items: list[WardrobeItem]) -> float | None:
         return round(item_count * _HAND_WASH_DETERGENT_ML_PER_ITEM, 1)
     if bucket_id == "large-bedding":
         return round(_LARGE_DETERGENT_ML_BASE + item_count * _LARGE_DETERGENT_ML_PER_ITEM, 1)
-    if bucket_id in {"dark-standard", "light-standard"}:
+    if bucket_id in _STANDARD_BUCKET_IDS:
         return round(_STANDARD_DETERGENT_ML_BASE + item_count * _STANDARD_DETERGENT_ML_PER_ITEM, 1)
     return None
 

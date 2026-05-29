@@ -147,16 +147,26 @@ class EModuleTests(unittest.TestCase):
         self.assertEqual(buckets_by_id["hand-wash"].item_ids, ["wool-sweater"])
         self.assertEqual(buckets_by_id["large-bedding"].program, "large")
         self.assertEqual(buckets_by_id["hand-wash"].wash_method, WashMethod.HAND_WASH)
+        self.assertEqual(buckets_by_id["light-standard"].machine_id, "washer-1")
+        self.assertEqual(buckets_by_id["large-bedding"].machine_id, "washer-large-1")
+        self.assertEqual(buckets_by_id["light-standard"].estimated_cost_yuan, 4.0)
+        self.assertEqual(buckets_by_id["large-bedding"].estimated_duration_minutes, 45)
         self.assertEqual(buckets_by_id["light-standard"].detergent_ml, 24.0)
         self.assertEqual(buckets_by_id["dark-standard"].detergent_ml, 24.0)
         self.assertEqual(buckets_by_id["large-bedding"].detergent_ml, 40.0)
         self.assertEqual(buckets_by_id["hand-wash"].detergent_ml, 8.0)
+        self.assertTrue(buckets_by_id["light-standard"].use_laundry_bag)
         self.assertTrue(buckets_by_id["dark-standard"].use_laundry_bag)
         self.assertIn("推荐使用 washer-1", " ".join(buckets_by_id["light-standard"].warnings))
         self.assertIn("推荐使用 washer-large-1", " ".join(buckets_by_id["large-bedding"].warnings))
         self.assertTrue(all(bucket.dry_method == DryMethod.AIR_DRY for bucket in plan.buckets))
         self.assertEqual(plan.estimated_cost_yuan, 14.0)
         self.assertEqual(plan.estimated_duration_minutes, 115)
+        self.assertEqual([line.label for line in plan.cost_breakdown], [
+            "large-bedding large 洗",
+            "dark-standard standard 洗",
+            "light-standard standard 洗",
+        ])
 
     def test_dryer_is_used_only_when_allowed_and_safe(self) -> None:
         items = [
@@ -182,8 +192,49 @@ class EModuleTests(unittest.TestCase):
         self.assertEqual(buckets_by_id["hand-wash"].dry_method, DryMethod.AIR_DRY)
         self.assertEqual(plan.estimated_cost_yuan, 6.0)
         self.assertEqual(plan.estimated_duration_minutes, 60)
+        self.assertEqual(buckets_by_id["light-standard"].dryer_machine_id, "dryer-1")
+        self.assertEqual(buckets_by_id["light-standard"].estimated_cost_yuan, 6.0)
+        self.assertEqual(
+            [(line.bucket_id, line.machine_id, line.amount_yuan) for line in plan.cost_breakdown],
+            [("light-standard", "washer-1", 4.0), ("light-standard", "dryer-1", 2.0)],
+        )
         self.assertIn("推荐使用 dryer-1", " ".join(buckets_by_id["light-standard"].warnings))
         self.assertIn("不可烘干", " ".join(buckets_by_id["hand-wash"].warnings))
+
+    def test_allow_mixed_colors_combines_low_risk_standard_items(self) -> None:
+        items = [
+            _item("white-tee", "白色纯棉 T 恤", colors=["white"], materials={"cotton": 1.0}),
+            _item("navy-tee", "藏青色 T 恤", colors=["navy"], materials={"cotton": 1.0}),
+        ]
+
+        plan = plan_laundry(
+            items,
+            LaundryConstraints(
+                selected_item_ids=["white-tee", "navy-tee"],
+                allow_mixed_colors=True,
+                allow_dryer=False,
+            ),
+            _campus_context(),
+        )
+
+        self.assertEqual([bucket.bucket_id for bucket in plan.buckets], ["mixed-standard"])
+        bucket = plan.buckets[0]
+        self.assertEqual(bucket.item_ids, ["white-tee", "navy-tee"])
+        self.assertEqual(bucket.detergent_ml, 30.0)
+        self.assertIn("允许混色", " ".join(bucket.warnings))
+
+    def test_urgent_items_must_be_selected(self) -> None:
+        items = [_item("white-tee", "白色纯棉 T 恤", colors=["white"], materials={"cotton": 1.0})]
+
+        with self.assertRaisesRegex(ValueError, "urgent item ids must be selected"):
+            plan_laundry(
+                items,
+                LaundryConstraints(
+                    selected_item_ids=["white-tee"],
+                    urgent_item_ids=["missing-urgent"],
+                ),
+                _campus_context(),
+            )
 
     def test_air_dry_and_budget_warnings_use_explicit_context(self) -> None:
         context = _campus_context()
@@ -292,6 +343,10 @@ class EModuleTests(unittest.TestCase):
         self.assertIn("8.0", report.sections["费用和时间"])
         self.assertIn("计费批次", report.sections["费用和时间"])
         self.assertIn("洗衣液：24.0 ml", report.sections["洗衣步骤"])
+        self.assertIn("洗衣机：washer-1", report.sections["洗衣步骤"])
+        self.assertIn("本批费用：4.0 元", report.sections["洗衣步骤"])
+        self.assertEqual([line.amount_yuan for line in report.cost_breakdown], [4.0, 4.0])
+        self.assertTrue(any("washer-1" in step for step in report.action_steps))
         self.assertIn("Dorm A 标准洗衣机", report.sections["机器环境"])
         self.assertIn("排队估算", report.sections["机器环境"])
         self.assertIn("晾晒条件", report.sections["机器环境"])
