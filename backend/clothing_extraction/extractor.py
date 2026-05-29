@@ -306,6 +306,21 @@ def _string_list(value: Any) -> list[str]:
     return [str(item) for item in value if str(item).strip()]
 
 
+def _normalize_colors(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    colors: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        color = item.strip().lower()
+        if color and color not in seen:
+            colors.append(color)
+            seen.add(color)
+    return colors
+
+
 def _canonical_care_label(value: Any) -> str:
     raw = str(value or "").strip()
     if not raw:
@@ -534,11 +549,7 @@ def _apply_manual_fields(
 
     colors = manual_fields.get("colors")
     if isinstance(colors, list):
-        normalized_colors = [
-            str(color).lower()
-            for color in colors
-            if str(color).strip()
-        ]
+        normalized_colors = _normalize_colors(colors)
         if normalized_colors:
             profile.colors = normalized_colors
             applied = True
@@ -660,7 +671,7 @@ def _profile_from_llm(raw: ClothingInput, payload: dict[str, Any]) -> ClothingPr
             raw.user_note or raw.extra.get("user_note") or raw.user_description or ""
         ).strip(),
         material_ratios=material_ratios,
-        colors=[str(color).lower() for color in payload.get("colors") or []],
+        colors=_normalize_colors(payload.get("colors")),
         care_forbidden=_normalize_care_labels(payload.get("care_forbidden")),
         care_warnings=care_warnings,
         care_recommendations=care_recommendations,
