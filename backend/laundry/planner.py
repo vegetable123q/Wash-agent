@@ -6,6 +6,7 @@ import math
 
 from backend.shared.models import (
     CampusContext,
+    ClothingProfile,
     DryMethod,
     LaundryBucket,
     LaundryChargeLine,
@@ -78,6 +79,12 @@ def _validate_items(value: object) -> None:
     for index, item in enumerate(value):
         if not isinstance(item, WardrobeItem):
             raise ValueError(f"items[{index}] must be a WardrobeItem")
+        _validate_item(item, f"items[{index}]")
+
+
+def _validate_item(item: WardrobeItem, field_name: str) -> None:
+    if not isinstance(item.profile, ClothingProfile):
+        raise ValueError(f"{field_name}.profile must be a ClothingProfile")
 
 
 def _validate_constraints(constraints: LaundryConstraints) -> None:

@@ -311,6 +311,16 @@ class EModuleTests(unittest.TestCase):
                         _campus_context(),
                     )
 
+    def test_plan_requires_valid_item_profile(self) -> None:
+        items = [WardrobeItem(profile="profile")]  # type: ignore[arg-type]
+
+        with self.assertRaisesRegex(ValueError, r"items\[0\].profile"):
+            plan_laundry(
+                items,
+                LaundryConstraints(selected_item_ids=["broken"]),
+                _campus_context(),
+            )
+
     def test_plan_requires_laundry_constraints(self) -> None:
         items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
         invalid_constraints: list[object] = [None, object(), {"selected_item_ids": ["white-tee"]}]
