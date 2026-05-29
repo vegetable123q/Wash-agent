@@ -62,6 +62,7 @@ class WardrobeStore:
     def add_wash_record(self, item_id: str, record: WashRecord) -> None:
         """Append one wash history record to a wardrobe item."""
 
+        record = _validated_wash_record(record)
         item = self.get_item(item_id)
         if item is None:
             raise KeyError(f"wardrobe item not found: {item_id}")
@@ -147,6 +148,15 @@ def _validated_item_dict(value: Any) -> dict[str, Any]:
         raise ValueError("item must serialize to an object")
     validated_item = _wardrobe_item_from_dict(item_dict)
     return _to_jsonable(validated_item)
+
+
+def _validated_wash_record(value: Any) -> WashRecord:
+    if not isinstance(value, WashRecord):
+        raise ValueError("record must be a WashRecord")
+    record_dict = _to_jsonable(value)
+    if not isinstance(record_dict, dict):
+        raise ValueError("record must serialize to an object")
+    return _wash_record_from_dict(record_dict)
 
 
 def _profile_from_dict(data: dict[str, Any]) -> ClothingProfile:

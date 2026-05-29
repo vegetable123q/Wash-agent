@@ -49,6 +49,16 @@ class CModuleTests(unittest.TestCase):
         self.assertEqual(washed.preferred_method, WashMethod.MACHINE_WASH)
         self.assertEqual(len(washed.wash_history), 2)
 
+    def test_add_wash_record_rejects_invalid_record_input(self) -> None:
+        invalid_records: list[object] = [object(), "record"]
+        for record in invalid_records:
+            with self.subTest(record=record):
+                with self.assertRaisesRegex(ValueError, "record"):
+                    self.store.add_wash_record(
+                        "wm-white-tee-001",
+                        record,  # type: ignore[arg-type]
+                    )
+
     def test_record_wear_rejects_invalid_count(self) -> None:
         invalid_counts: list[object] = [True, 0, -1, 1.5, "2"]
         for count in invalid_counts:
