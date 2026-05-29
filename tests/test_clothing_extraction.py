@@ -179,6 +179,23 @@ class ClothingExtractionTests(unittest.TestCase):
         self.assertNotIn("True", source_text)
         self.assertNotIn("123", source_text)
 
+    def test_enrich_product_info_ignores_non_string_extra_text_fields(self) -> None:
+        raw = ClothingInput(
+            name="",
+            extra={
+                "ocr_text": True,
+                "product_page_text": 123,
+                "taobao_text": " kept product text ",
+            },
+        )
+
+        enriched = enrich_product_info(raw)
+        source_text = enriched.extra["normalized_source_text"]
+
+        self.assertIn("kept product text", source_text)
+        self.assertNotIn("True", source_text)
+        self.assertNotIn("123", source_text)
+
     def test_user_note_is_preserved_without_product_metadata_in_core_profile(self) -> None:
         profile = extract_clothing_info(
             ClothingInput(

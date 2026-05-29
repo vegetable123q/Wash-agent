@@ -28,7 +28,9 @@ def _string_list(value: Any) -> list[str]:
     return items
 
 
-def _format_source(label: str, value: str) -> str:
+def _format_source(label: str, value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
     text = _normalize_text(value)
     return f"{label}: {text}" if text else ""
 
@@ -40,7 +42,7 @@ def _iter_supplemental_sources(extra: dict[str, Any]) -> list[str]:
         ("product_page_text", "商品页文字"),
         ("taobao_text", "淘宝商品页文字"),
     ):
-        formatted = _format_source(label, str(extra.get(key, "")))
+        formatted = _format_source(label, extra.get(key))
         if formatted:
             parts.append(formatted)
 
