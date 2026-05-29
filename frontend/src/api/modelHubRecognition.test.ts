@@ -99,6 +99,24 @@ describe("ModelHub clothing recognition", () => {
     });
   });
 
+  it("infers jpeg mime type from filename when the browser file type is empty", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      modelHubResponse({
+        is_clothing: true,
+        name: "white cotton tee",
+        material_ratios: { cotton: 1 },
+        colors: ["white"],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const file = new File(["abc"], "shirt.jpg", { type: "" });
+    await recognizeClothingImage(file, modelHubConfig);
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(body.contents[0].parts[1].inline_data.mime_type).toBe("image/jpeg");
+  });
+
   it("normalizes recognized clothing category for wardrobe grouping", async () => {
     vi.stubGlobal(
       "fetch",

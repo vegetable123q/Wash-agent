@@ -111,7 +111,8 @@ export async function recognizeClothingImage(
   if (!hasCompleteModelHubConfig(config)) {
     throw new Error("ModelHub baseUrl, apikey, and model_name are required for image recognition");
   }
-  if (!file.type.startsWith("image/")) {
+  const mimeType = imageMimeType(file);
+  if (!mimeType) {
     throw new Error(`Unsupported image type: ${file.type || file.name}`);
   }
 
@@ -130,7 +131,7 @@ export async function recognizeClothingImage(
       },
       {
         inline_data: {
-          mime_type: file.type,
+          mime_type: mimeType,
           data: await fileToBase64(file),
         },
       },
@@ -138,6 +139,20 @@ export async function recognizeClothingImage(
     config,
     "image",
   );
+}
+
+function imageMimeType(file: File): string | null {
+  const explicitType = file.type.trim().toLowerCase();
+  if (explicitType.startsWith("image/")) {
+    return explicitType;
+  }
+  const lowerName = file.name.toLowerCase();
+  if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) return "image/jpeg";
+  if (lowerName.endsWith(".png")) return "image/png";
+  if (lowerName.endsWith(".webp")) return "image/webp";
+  if (lowerName.endsWith(".gif")) return "image/gif";
+  if (lowerName.endsWith(".heic")) return "image/heic";
+  return null;
 }
 
 export async function recognizeClothingText(
