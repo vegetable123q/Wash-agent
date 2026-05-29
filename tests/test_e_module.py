@@ -274,6 +274,32 @@ class EModuleTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, field_name):
                         plan_laundry(items, constraints, _campus_context())
 
+    def test_constraints_require_valid_numeric_limits(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        invalid_budgets: list[object] = [True, "2", -1, float("nan"), float("inf")]
+        invalid_waits: list[object] = [True, "5", 1.5, -1, float("nan"), float("inf")]
+
+        for budget_yuan in invalid_budgets:
+            with self.subTest(field="budget_yuan", value=budget_yuan):
+                with self.assertRaisesRegex(ValueError, "budget_yuan"):
+                    plan_laundry(
+                        items,
+                        LaundryConstraints(selected_item_ids=["white-tee"], budget_yuan=budget_yuan),  # type: ignore[arg-type]
+                        _campus_context(),
+                    )
+
+        for max_wait_minutes in invalid_waits:
+            with self.subTest(field="max_wait_minutes", value=max_wait_minutes):
+                with self.assertRaisesRegex(ValueError, "max_wait_minutes"):
+                    plan_laundry(
+                        items,
+                        LaundryConstraints(
+                            selected_item_ids=["white-tee"],
+                            max_wait_minutes=max_wait_minutes,  # type: ignore[arg-type]
+                        ),
+                        _campus_context(),
+                    )
+
     def test_air_dry_and_budget_warnings_use_explicit_context(self) -> None:
         context = _campus_context()
         context.drying_context = {"balcony_available": False, "ventilation": "poor"}

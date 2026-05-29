@@ -75,6 +75,8 @@ def _validate_constraints(constraints: LaundryConstraints) -> None:
     _boolean(constraints.allow_mixed_colors, "allow_mixed_colors")
     _boolean(constraints.allow_dryer, "allow_dryer")
     _boolean(constraints.hygiene_sensitive, "hygiene_sensitive")
+    _optional_non_negative_number(constraints.budget_yuan, "budget_yuan")
+    _optional_non_negative_int(constraints.max_wait_minutes, "max_wait_minutes")
 
 
 def _item_id_list(value: object, field_name: str) -> list[str]:
@@ -88,6 +90,27 @@ def _item_id_list(value: object, field_name: str) -> list[str]:
 def _boolean(value: object, field_name: str) -> bool:
     if not isinstance(value, bool):
         raise ValueError(f"{field_name} must be a boolean")
+    return value
+
+
+def _optional_non_negative_number(value: object, field_name: str) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ValueError(f"{field_name} must be numeric")
+    number = float(value)
+    if not math.isfinite(number) or number < 0:
+        raise ValueError(f"{field_name} must be a non-negative finite number")
+    return number
+
+
+def _optional_non_negative_int(value: object, field_name: str) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{field_name} must be a non-negative integer")
+    if value < 0:
+        raise ValueError(f"{field_name} must be a non-negative integer")
     return value
 
 
