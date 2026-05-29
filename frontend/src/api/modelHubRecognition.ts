@@ -71,6 +71,7 @@ const careDisplayNames: Record<string, string> = {
   do_not_bleach: "不可漂白",
   no_bleach: "不可漂白",
   do_not_tumble_dry: "不可烘干",
+  no_tumble_dry: "不可烘干",
   do_not_dry: "不可烘干",
   do_not_wash: "不可水洗",
   wash_separately: "分开洗",

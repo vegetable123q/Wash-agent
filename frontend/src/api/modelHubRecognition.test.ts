@@ -371,6 +371,26 @@ describe("ModelHub clothing recognition", () => {
     expect(result.note).toContain("不可烘干");
   });
 
+  it("normalizes spaced no-tumble-dry care phrases", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        modelHubResponse({
+          is_clothing: true,
+          name: "wool cardigan",
+          material_ratios: { wool: 1 },
+          colors: ["beige"],
+          care_warnings: ["no tumble dry"],
+        }),
+      ),
+    );
+
+    const result = await recognizeClothingText("wool cardigan care label says no tumble dry", modelHubConfig);
+
+    expect(result.note).toContain("不可烘干");
+    expect(result.note).not.toContain("no tumble dry");
+  });
+
   it("keeps care label variants in the editable note", async () => {
     vi.stubGlobal(
       "fetch",
