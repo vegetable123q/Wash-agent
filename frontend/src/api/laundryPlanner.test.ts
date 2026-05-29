@@ -148,6 +148,21 @@ describe("planLaundry", () => {
 
     expect(plan.buckets[0].item_ids).toEqual(["tee-1"]);
   });
+
+  it("trims selected item ids before planning", () => {
+    const item = standardItem("tee-1", "白色棉 T 恤");
+    const plan = planLaundry([item], {
+      selected_item_ids: [" tee-1 "],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: 10,
+      budget_yuan: null,
+    }, context);
+
+    expect(plan.buckets[0].item_ids).toEqual(["tee-1"]);
+  });
 });
 
 function standardItem(itemId: string, name: string): WardrobeItemForPlan {

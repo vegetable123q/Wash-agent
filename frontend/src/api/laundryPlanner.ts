@@ -67,10 +67,10 @@ export function planLaundry(
 // ─── item selection ─────────────────────────────────────────────────────
 
 function selectedItems(items: WardrobeItemForPlan[], ids: string[]): WardrobeItemForPlan[] {
-  if (!ids.length) {
+  const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+  if (!uniqueIds.length) {
     throw new Error("selected_item_ids is required for laundry planning");
   }
-  const uniqueIds = [...new Set(ids)];
   const byId = new Map(items.map((item) => [item.profile.item_id, item]));
   const missing = uniqueIds.filter((id) => !byId.has(id));
   if (missing.length) {
