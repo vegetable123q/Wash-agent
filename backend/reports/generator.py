@@ -57,10 +57,17 @@ def _validate_plan(value: object) -> None:
 
 
 def _validate_bucket(bucket: LaundryBucket, field_name: str) -> None:
+    _non_empty_string(bucket.bucket_id, f"{field_name}.bucket_id")
     _non_empty_string_list(bucket.item_ids, f"{field_name}.item_ids")
     _enum_field(bucket.wash_method, WashMethod, f"{field_name}.wash_method")
     _enum_field(bucket.machine_type, MachineType, f"{field_name}.machine_type")
     _enum_field(bucket.dry_method, DryMethod, f"{field_name}.dry_method")
+    _string(bucket.machine_id, f"{field_name}.machine_id")
+    _string(bucket.machine_location, f"{field_name}.machine_location")
+    _string(bucket.program, f"{field_name}.program")
+    _string(bucket.dryer_machine_id, f"{field_name}.dryer_machine_id")
+    _string(bucket.dryer_machine_location, f"{field_name}.dryer_machine_location")
+    _non_empty_string_list(bucket.warnings, f"{field_name}.warnings")
 
 
 def _validate_items(value: object) -> None:
@@ -82,6 +89,11 @@ def _validate_item(item: WardrobeItem, field_name: str) -> None:
 def _non_empty_string(value: object, field_name: str) -> None:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field_name} must be a non-empty string")
+
+
+def _string(value: object, field_name: str) -> None:
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be a string")
 
 
 def _non_empty_string_list(value: object, field_name: str) -> None:

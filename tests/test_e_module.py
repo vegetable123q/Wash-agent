@@ -831,6 +831,40 @@ class EModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, field_name):
                     generate_report(plan, items, _campus_context())
 
+    def test_report_requires_valid_bucket_text_fields(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+
+        def invalid_plan(**overrides: object) -> LaundryPlan:
+            bucket_values = {
+                "bucket_id": "light-standard",
+                "item_ids": ["white-tee"],
+                "wash_method": WashMethod.MACHINE_WASH,
+            }
+            bucket_values.update(overrides)
+            return LaundryPlan(
+                buckets=[LaundryBucket(**bucket_values)],  # type: ignore[arg-type]
+                estimated_cost_yuan=0,
+                estimated_duration_minutes=0,
+            )
+
+        invalid_plans = [
+            ("bucket_id", invalid_plan(bucket_id=True)),
+            ("bucket_id", invalid_plan(bucket_id="")),
+            ("machine_id", invalid_plan(machine_id=True)),
+            ("machine_location", invalid_plan(machine_location=True)),
+            ("program", invalid_plan(program=True)),
+            ("dryer_machine_id", invalid_plan(dryer_machine_id=True)),
+            ("dryer_machine_location", invalid_plan(dryer_machine_location=True)),
+            ("warnings", invalid_plan(warnings="warning")),
+            (r"warnings\[0\]", invalid_plan(warnings=[True])),
+            (r"warnings\[0\]", invalid_plan(warnings=[""])),
+        ]
+
+        for field_name, plan in invalid_plans:
+            with self.subTest(field_name=field_name, plan=plan):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    generate_report(plan, items, _campus_context())
+
     def test_report_requires_wardrobe_item_list(self) -> None:
         items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
         plan = plan_laundry(items, LaundryConstraints(selected_item_ids=["white-tee"]), _campus_context())
