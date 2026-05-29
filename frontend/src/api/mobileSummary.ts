@@ -393,8 +393,9 @@ function fromBackendQueueEstimate(estimate: BackendQueueEstimate): MachineQueueE
 // ─── local storage ──────────────────────────────────────────────────────
 
 function readLocalWardrobeItems(): WardrobeSummaryItem[] {
-  const parsed = readLocalStorageArray<WardrobeSummaryItem>(LOCAL_WARDROBE_STORAGE_KEY, "本地衣柜数据无法读取");
-  const repaired = repairDuplicateWardrobeItemIds(parsed);
+  const parsed = readLocalStorageArray<unknown>(LOCAL_WARDROBE_STORAGE_KEY, "本地衣柜数据无法读取");
+  const normalized = parsed.map(normalizeStoredWardrobeItem);
+  const repaired = repairDuplicateWardrobeItemIds(normalized);
   if (repaired.changed) {
     writeLocalWardrobeItems(repaired.items);
   }
@@ -404,6 +405,71 @@ function readLocalWardrobeItems(): WardrobeSummaryItem[] {
 function writeLocalWardrobeItems(items: WardrobeSummaryItem[]): void {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(LOCAL_WARDROBE_STORAGE_KEY, JSON.stringify(items));
+}
+
+function normalizeStoredWardrobeItem(value: unknown): WardrobeSummaryItem {
+  const item = typeof value === "object" && value !== null ? (value as Partial<WardrobeSummaryItem>) : {};
+  const photoDataUrl = validPhotoDataUrl(item.photo_data_url) ? item.photo_data_url : undefined;
+  return {
+    item_id: String(item.item_id ?? "").trim(),
+    name: String(item.name ?? "未命名衣物").trim() || "未命名衣物",
+    category: normalizeWardrobeCategory(item.category),
+    user_note: String(item.user_note ?? "").trim(),
+    user_notes: stringArray(item.user_notes),
+    wear_count_since_wash: nonNegativeInteger(item.wear_count_since_wash),
+    wash_count: nonNegativeInteger(item.wash_count),
+    material_ratios: normalizeMaterialRatioRecord(item.material_ratios),
+    colors: stringArray(item.colors),
+    risks: normalizeStoredRiskRecord(item.risks),
+    ...(photoDataUrl ? { photo_data_url: photoDataUrl } : {}),
+  };
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean) : [];
+}
+
+function nonNegativeInteger(value: unknown): number {
+  const numeric = typeof value === "string" && value.trim() ? Number(value) : value;
+  return typeof numeric === "number" && Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : 0;
+}
+
+function normalizeMaterialRatioRecord(value: unknown): Record<string, number> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  const result: Record<string, number> = {};
+  for (const [key, rawRatio] of Object.entries(value as Record<string, unknown>)) {
+    const material = key.trim().toLowerCase();
+    const ratio = storageRatioNumber(rawRatio);
+    if (material && Number.isFinite(ratio) && ratio > 0) {
+      result[material] = Math.min(ratio > 1 ? ratio / 100 : ratio, 1);
+    }
+  }
+  return result;
+}
+
+function storageRatioNumber(value: unknown): number {
+  if (typeof value === "number") {
+    return value;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return Number(trimmed.endsWith("%") ? trimmed.slice(0, -1) : trimmed);
+  }
+  return Number(value);
+}
+
+function normalizeStoredRiskRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  const result: Record<string, string> = {};
+  for (const [key, rawLevel] of Object.entries(value as Record<string, unknown>)) {
+    const level = String(rawLevel).toLowerCase();
+    result[key] = ["low", "medium", "high", "unknown"].includes(level) ? level : "unknown";
+  }
+  return result;
 }
 
 function nextWardrobeItemId(existingIds: Iterable<string>): string {

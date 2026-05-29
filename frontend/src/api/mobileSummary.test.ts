@@ -138,6 +138,33 @@ describe("mobileSummary wardrobe selection", () => {
     expect(summary.wardrobe.items[0].category).toBeUndefined();
   });
 
+  it("normalizes legacy wardrobe records with missing structural fields", async () => {
+    localStorage.setItem(
+      wardrobeStorageKey,
+      JSON.stringify([
+        {
+          item_id: "legacy-tee",
+          name: "旧 T 恤",
+          wear_count_since_wash: "2",
+        },
+      ]),
+    );
+
+    const summary = await fetchMobileSummary();
+
+    expect(summary.wardrobe.items[0]).toMatchObject({
+      item_id: "legacy-tee",
+      name: "旧 T 恤",
+      user_note: "",
+      user_notes: [],
+      wear_count_since_wash: 2,
+      wash_count: 0,
+      material_ratios: {},
+      colors: [],
+      risks: {},
+    });
+  });
+
   it("assigns unique wardrobe ids when several items are saved in the same millisecond", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-29T12:00:00.000Z"));
