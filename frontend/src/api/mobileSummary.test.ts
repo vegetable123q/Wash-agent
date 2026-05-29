@@ -300,6 +300,35 @@ describe("mobileSummary wardrobe selection", () => {
     expect(summary.dirty_basket.recommendation).toContain("已放 3 天");
   });
 
+  it("does not mark negated sweat notes as hygiene sensitive", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-29T12:00:00.000Z"));
+    localStorage.setItem(
+      wardrobeStorageKey,
+      JSON.stringify([
+        {
+          item_id: "tee-1",
+          name: "白色棉T恤",
+          user_note: "没出汗",
+          user_notes: ["没出汗"],
+          wear_count_since_wash: 1,
+          wash_count: 0,
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          risks: {},
+        },
+      ]),
+    );
+    localStorage.setItem(
+      dirtyBasketStorageKey,
+      JSON.stringify([{ item_id: "tee-1", added_at: "2026-05-27T12:00:00.000Z" }]),
+    );
+
+    const summary = await fetchMobileSummary();
+
+    expect(summary.dirty_basket.items[0].warning_label).toBe("已放 2 天");
+  });
+
   it("does not mark explicitly not urgent notes as urgent", async () => {
     localStorage.setItem(
       wardrobeStorageKey,

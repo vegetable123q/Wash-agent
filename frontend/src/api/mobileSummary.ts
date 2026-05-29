@@ -728,6 +728,9 @@ function isUrgentItem(item: WardrobeSummaryItem): boolean {
 
 function isHygieneSensitiveItem(item: WardrobeSummaryItem): boolean {
   const text = itemSearchText(item);
+  if (["没出汗", "未出汗", "不出汗", "不潮湿", "不湿"].some((term) => text.includes(term))) {
+    return false;
+  }
   return ["运动", "速干", "内衣", "贴身", "袜", "出汗", "潮湿", "湿"].some((term) => text.includes(term));
 }
 
