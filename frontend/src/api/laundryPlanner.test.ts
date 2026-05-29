@@ -334,3 +334,431 @@ describe("recommendDrying", () => {
     expect(drying.steps[0].warnings.join(" ")).toContain("没有可用烘干机");
   });
 });
+
+// ─── regression tests for hand-wash over-classification bug ─────────────
+
+describe("hand-wash classification (bug fix regressions)", () => {
+  const washer: MachineInfo = {
+    machine_id: "washer-1",
+    location: "Dorm A",
+    machine_type: "standard_washer",
+    status: "available",
+    remaining_minutes: null,
+    price_yuan: null,
+    modes: ["standard"],
+  };
+  const context: CampusContext = {
+    all_machines: [washer],
+    available_machines: [washer],
+    queue_estimates: [],
+    weather: {},
+    drying_context: {},
+    pricing_rules: {
+      wash_programs: { standard: { price_yuan: 3.5, duration_minutes: 40 } },
+      dryer_programs: { low: { price_yuan: 2, duration_minutes: 50 } },
+    },
+  };
+
+  it("does NOT force hand-wash for a hoodie with shrink note and machine_wash preference", () => {
+    // Bug: hoodie with "缩水" in notes was forced to hand-wash
+    const hoodie: WardrobeItemForPlan = {
+      profile: {
+        item_id: "hoodie",
+        name: "优衣库灰色连帽卫衣",
+        user_note: "之前高温烘干后有点缩水，今晚想穿干净的。",
+        material_ratios: { "棉混纺": 1 },
+        colors: ["深色"],
+        care_warnings: [],
+        care_recommendations: [],
+        care_forbidden: [],
+        care_symbols: {},
+        risks: { shrink: "medium" },
+        recommended_wash: "machine_wash",
+      },
+      wear_count_since_wash: 0,
+      preferred_method: "machine_wash",
+      user_notes: ["之前高温烘干后有点缩水"],
+    };
+
+    const plan = planLaundry([hoodie], {
+      selected_item_ids: ["hoodie"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, context);
+
+    expect(plan.buckets).toHaveLength(1);
+    expect(plan.buckets[0].wash_method).toBe("machine_wash");
+    expect(plan.buckets[0].bucket_id).toBe("dark-standard");
+  });
+
+  it("does NOT force hand-wash for an item with high shrink risk but machine_wash preference", () => {
+    const riskyItem: WardrobeItemForPlan = {
+      profile: {
+        item_id: "risky-cotton",
+        name: "纯棉衬衫",
+        user_note: "",
+        material_ratios: { cotton: 1 },
+        colors: ["white"],
+        care_warnings: ["avoid_hot_water"],
+        care_recommendations: [],
+        care_forbidden: ["avoid_hot_water"],
+        care_symbols: {},
+        risks: { shrink: "high" },
+        recommended_wash: "machine_wash",
+      },
+      wear_count_since_wash: 2,
+      preferred_method: "machine_wash",
+      user_notes: [],
+    };
+
+    const plan = planLaundry([riskyItem], {
+      selected_item_ids: ["risky-cotton"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, context);
+
+    expect(plan.buckets[0].wash_method).toBe("machine_wash");
+    // Should have shrink risk warning
+    const warningText = plan.buckets[0].warnings.join(" ");
+    expect(warningText).toContain("缩水风险");
+    // Should use laundry bag as precaution
+    expect(plan.buckets[0].use_laundry_bag).toBe(true);
+  });
+
+  it("still forces hand-wash for wool items", () => {
+    const woolSweater: WardrobeItemForPlan = {
+      profile: {
+        item_id: "wool",
+        name: "羊毛衫",
+        user_note: "",
+        material_ratios: { wool: 0.9, nylon: 0.1 },
+        colors: ["gray"],
+        care_warnings: ["hand_wash_only"],
+        care_recommendations: [],
+        care_forbidden: ["hand_wash_only"],
+        care_symbols: {},
+        risks: { shrink: "high", deform: "high" },
+        recommended_wash: "hand_wash",
+      },
+      wear_count_since_wash: 3,
+      preferred_method: "hand_wash",
+      user_notes: [],
+    };
+
+    const plan = planLaundry([woolSweater], {
+      selected_item_ids: ["wool"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, context);
+
+    expect(plan.buckets[0].wash_method).toBe("hand_wash");
+    expect(plan.buckets[0].bucket_id).toBe("hand-wash");
+  });
+
+  it("still forces hand-wash when care label explicitly says 只能手洗", () => {
+    const item: WardrobeItemForPlan = {
+      profile: {
+        item_id: "delicate",
+        name: "丝绸衬衫",
+        user_note: "只能手洗",
+        material_ratios: { silk: 1 },
+        colors: ["white"],
+        care_warnings: ["hand_wash_only"],
+        care_recommendations: [],
+        care_forbidden: ["hand_wash_only"],
+        care_symbols: {},
+        risks: {},
+        recommended_wash: "hand_wash",
+      },
+      wear_count_since_wash: 1,
+      preferred_method: "hand_wash",
+      user_notes: [],
+    };
+
+    const plan = planLaundry([item], {
+      selected_item_ids: ["delicate"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, context);
+
+    expect(plan.buckets[0].wash_method).toBe("hand_wash");
+  });
+
+  it("does NOT force hand-wash from bare 手洗 in unrelated context", () => {
+    // User wrote "也可以手洗" meaning "can also hand wash" — not "only hand wash"
+    const item: WardrobeItemForPlan = {
+      profile: {
+        item_id: "casual-tee",
+        name: "休闲 T 恤",
+        user_note: "也可以手洗，但一般直接机洗",
+        material_ratios: { cotton: 1 },
+        colors: ["black"],
+        care_warnings: [],
+        care_recommendations: [],
+        care_forbidden: [],
+        care_symbols: {},
+        risks: {},
+        recommended_wash: "machine_wash",
+      },
+      wear_count_since_wash: 2,
+      preferred_method: "machine_wash",
+      user_notes: ["也可以手洗，但一般直接机洗"],
+    };
+
+    const plan = planLaundry([item], {
+      selected_item_ids: ["casual-tee"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, context);
+
+    expect(plan.buckets[0].wash_method).toBe("machine_wash");
+  });
+
+  it("defaults unknown-color items to dark-standard for safety", () => {
+    const item: WardrobeItemForPlan = {
+      profile: {
+        item_id: "mystery",
+        name: "某件衣服",
+        user_note: "",
+        material_ratios: { polyester: 1 },
+        colors: [],
+        care_warnings: [],
+        care_recommendations: [],
+        care_forbidden: [],
+        care_symbols: {},
+        risks: {},
+        recommended_wash: "machine_wash",
+      },
+      wear_count_since_wash: 1,
+      preferred_method: "machine_wash",
+      user_notes: [],
+    };
+
+    const plan = planLaundry([item], {
+      selected_item_ids: ["mystery"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, context);
+
+    expect(plan.buckets[0].bucket_id).toBe("dark-standard");
+  });
+});
+
+// ─── mixed-standard bucket support ──────────────────────────────────────
+
+describe("mixed-standard bucket (allow_mixed_colors)", () => {
+  const washer: MachineInfo = {
+    machine_id: "washer-1",
+    location: "Dorm A",
+    machine_type: "standard_washer",
+    status: "available",
+    remaining_minutes: null,
+    price_yuan: null,
+    modes: ["standard"],
+  };
+  const context: CampusContext = {
+    all_machines: [washer],
+    available_machines: [washer],
+    queue_estimates: [],
+    weather: {},
+    drying_context: {},
+    pricing_rules: {
+      wash_programs: { standard: { price_yuan: 3.5, duration_minutes: 40 } },
+      dryer_programs: { low: { price_yuan: 2, duration_minutes: 50 } },
+    },
+  };
+
+  it("combines light and dark items into mixed-standard when allow_mixed_colors is true", () => {
+    const items: WardrobeItemForPlan[] = [
+      {
+        profile: {
+          item_id: "white-tee",
+          name: "白色纯棉 T 恤",
+          user_note: "",
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          care_warnings: [],
+          care_recommendations: [],
+          care_forbidden: [],
+          care_symbols: {},
+          risks: {},
+          recommended_wash: "machine_wash",
+        },
+        wear_count_since_wash: 1,
+        preferred_method: "machine_wash",
+        user_notes: [],
+      },
+      {
+        profile: {
+          item_id: "navy-tee",
+          name: "藏青色 T 恤",
+          user_note: "",
+          material_ratios: { cotton: 1 },
+          colors: ["navy"],
+          care_warnings: [],
+          care_recommendations: [],
+          care_forbidden: [],
+          care_symbols: {},
+          risks: {},
+          recommended_wash: "machine_wash",
+        },
+        wear_count_since_wash: 1,
+        preferred_method: "machine_wash",
+        user_notes: [],
+      },
+    ];
+
+    const plan = planLaundry(items, {
+      selected_item_ids: ["white-tee", "navy-tee"],
+      urgent_item_ids: [],
+      allow_mixed_colors: true,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, context);
+
+    expect(plan.buckets).toHaveLength(1);
+    expect(plan.buckets[0].bucket_id).toBe("mixed-standard");
+    expect(plan.buckets[0].item_ids).toEqual(["white-tee", "navy-tee"]);
+    // Should have detergent calculation for mixed-standard
+    expect(plan.buckets[0].detergent_ml).toBe(30.0);
+    // Should have the mixed-standard warning
+    expect(plan.buckets[0].warnings.join(" ")).toContain("允许混色");
+  });
+
+  it("keeps dark and light separate when allow_mixed_colors is false", () => {
+    const items: WardrobeItemForPlan[] = [
+      {
+        profile: {
+          item_id: "white-tee",
+          name: "白色纯棉 T 恤",
+          user_note: "",
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          care_warnings: [],
+          care_recommendations: [],
+          care_forbidden: [],
+          care_symbols: {},
+          risks: {},
+          recommended_wash: "machine_wash",
+        },
+        wear_count_since_wash: 1,
+        preferred_method: "machine_wash",
+        user_notes: [],
+      },
+      {
+        profile: {
+          item_id: "black-tee",
+          name: "黑色 T 恤",
+          user_note: "",
+          material_ratios: { cotton: 1 },
+          colors: ["black"],
+          care_warnings: [],
+          care_recommendations: [],
+          care_forbidden: [],
+          care_symbols: {},
+          risks: {},
+          recommended_wash: "machine_wash",
+        },
+        wear_count_since_wash: 1,
+        preferred_method: "machine_wash",
+        user_notes: [],
+      },
+    ];
+
+    const plan = planLaundry(items, {
+      selected_item_ids: ["white-tee", "black-tee"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, context);
+
+    expect(plan.buckets).toHaveLength(2);
+    expect(plan.buckets.map((b) => b.bucket_id)).toContain("light-standard");
+    expect(plan.buckets.map((b) => b.bucket_id)).toContain("dark-standard");
+  });
+
+  it("does NOT mix items with high color_bleed risk even when allow_mixed_colors is true", () => {
+    const items: WardrobeItemForPlan[] = [
+      {
+        profile: {
+          item_id: "white-tee",
+          name: "白色纯棉 T 恤",
+          user_note: "",
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          care_warnings: [],
+          care_recommendations: [],
+          care_forbidden: [],
+          care_symbols: {},
+          risks: {},
+          recommended_wash: "machine_wash",
+        },
+        wear_count_since_wash: 1,
+        preferred_method: "machine_wash",
+        user_notes: [],
+      },
+      {
+        profile: {
+          item_id: "jeans",
+          name: "黑色牛仔裤",
+          user_note: "",
+          material_ratios: { denim: 1 },
+          colors: ["black"],
+          care_warnings: [],
+          care_recommendations: [],
+          care_forbidden: [],
+          care_symbols: {},
+          risks: { color_bleed: "high" },
+          recommended_wash: "machine_wash",
+        },
+        wear_count_since_wash: 3,
+        preferred_method: "machine_wash",
+        user_notes: [],
+      },
+    ];
+
+    const plan = planLaundry(items, {
+      selected_item_ids: ["white-tee", "jeans"],
+      urgent_item_ids: [],
+      allow_mixed_colors: true,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, context);
+
+    // Jeans have high color_bleed → stays in dark-standard even with allow_mixed_colors
+    expect(plan.buckets).toHaveLength(2);
+    const jeansBucket = plan.buckets.find((b) => b.item_ids.includes("jeans"));
+    expect(jeansBucket?.bucket_id).toBe("dark-standard");
+  });
+});

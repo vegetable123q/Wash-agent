@@ -133,6 +133,9 @@ function savingsNotes(plan: LaundryPlan, dryingPlan?: DryingPlan): string[] {
   if (plan.buckets.some((b) => b.dry_method === "air_dry")) {
     notes.push("自然晾干批次减少烘干用电，也能降低缩水和变形风险。");
   }
+  if (plan.buckets.some((b) => baseBucketId(b.bucket_id) === "mixed-standard")) {
+    notes.push("用户允许混色且衣物无高掉色风险时合并标准批次，减少空筒和重复用水。");
+  }
   if (plan.buckets.some((b) => baseBucketId(b.bucket_id) === "dark-standard" || baseBucketId(b.bucket_id) === "hand-wash")) {
     notes.push("高风险衣物分开处理，能减少串色、返洗和重复用水。");
   }
@@ -175,6 +178,7 @@ function bucketReason(bucket: LaundryBucket): string {
     "large-bedding": "床品体积大，单独占用洗衣机减少过载和返洗",
     "dark-standard": "深色或高掉色风险衣物单独处理，避免串色",
     "light-standard": "浅色普通机洗衣物集中标准洗",
+    "mixed-standard": "用户允许混色，低掉色风险衣物合并标准洗",
   };
   return reasons[bucketId] ?? "本批衣物需要单独处理";
 }
@@ -227,6 +231,7 @@ function bucketTitle(bucket: LaundryBucket): string {
     "large-bedding": "床品单独洗",
     "dark-standard": "深色标准洗",
     "light-standard": "浅色标准洗",
+    "mixed-standard": "混色标准洗",
   };
   return labels[bucketId] ?? "本批衣物";
 }

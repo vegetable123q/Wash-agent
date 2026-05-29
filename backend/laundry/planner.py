@@ -31,7 +31,7 @@ _DARK_COLOR_TERMS = {"black", "dark", "navy", "indigo", "深色", "黑", "藏青
 _LIGHT_COLOR_TERMS = {"white", "light", "gray", "grey", "浅色", "白", "灰"}
 _BEDDING_TERMS = {"bedding", "sheet", "duvet", "床单", "被套", "床品"}
 _WOOL_TERMS = {"wool", "羊毛", "cashmere", "羊绒"}
-_HAND_WASH_TERMS = {"hand_wash_only", "hand wash only", "只能手洗", "手洗"}
+_HAND_WASH_TERMS = {"hand_wash_only", "hand wash only", "只能手洗", "仅限手洗"}
 _DRY_CLEAN_TERMS = {"dry_clean_only", "dry clean only", "只能干洗", "干洗"}
 _DO_NOT_WASH_TERMS = {"do_not_wash", "不可水洗", "不能水洗"}
 _DO_NOT_DRY_TERMS = {"do_not_tumble_dry", "do_not_dry", "不可烘干", "不能烘干"}
@@ -284,7 +284,6 @@ def _bucket_id_for(item: WardrobeItem, constraints: LaundryConstraints) -> str:
         item.preferred_method == WashMethod.HAND_WASH
         or contains_any(search_text, _HAND_WASH_TERMS)
         or _has_material(item, _WOOL_TERMS)
-        or _has_high_risk(item, {"shrink", "deform"})
     ):
         return "hand-wash"
     if contains_any(search_text, _BEDDING_TERMS):
@@ -295,7 +294,7 @@ def _bucket_id_for(item: WardrobeItem, constraints: LaundryConstraints) -> str:
         return "dark-standard"
     if contains_any(search_text, _LIGHT_COLOR_TERMS):
         return "mixed-standard" if constraints.allow_mixed_colors else "light-standard"
-    raise ValueError(f"cannot assign laundry bucket from item data: {item.profile.item_id}")
+    return "dark-standard"
 
 
 # ─── bucket building (wash-only) ──────────────────────────────────────
@@ -378,6 +377,7 @@ def _build_bucket(
             base_bucket_id == "dark-standard"
             or constraints.hygiene_sensitive
             or _any_recommends_bag(items)
+            or _any_high_shrink_deform(items)
         ),
         dry_method=DryMethod.AIR_DRY,  # safe default; overridden by recommend_drying
         estimated_cost_yuan=round(wash_cost, 2),
@@ -485,6 +485,10 @@ def _machine_bucket_warnings(bucket_id: str, items: list[WardrobeItem]) -> list[
     for item in items:
         if _has_high_risk(item, {"color_bleed"}):
             warnings.append(f"{item.profile.name} 掉色风险高，避免与浅色衣物混洗。")
+        if _has_high_risk(item, {"shrink"}):
+            warnings.append(f"{item.profile.name} 有缩水风险，建议使用洗衣袋并自然晾干。")
+        if _has_high_risk(item, {"deform"}):
+            warnings.append(f"{item.profile.name} 有变形风险，建议使用洗衣袋并选轻柔程序。")
     return dedupe(warnings)
 
 
@@ -621,6 +625,10 @@ def _dryer_unsafe_names(items: list[WardrobeItem]) -> list[str]:
 
 def _any_recommends_bag(items: list[WardrobeItem]) -> bool:
     return any("laundry_bag" in _search_text(item) or "洗衣袋" in _search_text(item) for item in items)
+
+
+def _any_high_shrink_deform(items: list[WardrobeItem]) -> bool:
+    return any(_has_high_risk(item, {"shrink", "deform"}) for item in items)
 
 
 def _has_material(item: WardrobeItem, terms: set[str]) -> bool:

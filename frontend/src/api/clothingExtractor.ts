@@ -34,7 +34,7 @@ const CARE_LABEL_ALIASES: Record<string, string> = {
   "separate colors": "wash_separately", "分开洗": "wash_separately",
   "gentle wash": "gentle_cycle", gentle: "gentle_cycle", gentle_cycle_only: "gentle_cycle",
   "line dry": "air_dry", "hang dry": "air_dry", "dry in shade": "air_dry", "shade dry": "air_dry",
-  "hand wash": "hand_wash_only", handwash: "hand_wash_only", "手洗": "hand_wash_only",
+  "hand wash": "hand_wash_only", handwash: "hand_wash_only", "只能手洗": "hand_wash_only", "仅限手洗": "hand_wash_only",
   "no iron": "do_not_iron", no_iron: "do_not_iron", "不可熨烫": "do_not_iron",
   "no dry clean": "do_not_dry_clean", no_dry_clean: "do_not_dry_clean", "不可干洗": "do_not_dry_clean",
   "no machine wash": "do_not_machine_wash", no_machine_wash: "do_not_machine_wash", "不可机洗": "do_not_machine_wash",
@@ -213,7 +213,11 @@ function inferRisks(
 
   const text = [name, material, note].join(" ").toLowerCase();
 
-  if (text.includes("缩水") || warnings.includes("avoid_hot_water")) risks.shrink = "high";
+  if (warnings.includes("avoid_hot_water")) {
+    risks.shrink = "high";
+  } else if (text.includes("缩水")) {
+    risks.shrink = "medium";
+  }
   if (text.includes("掉色") || text.includes("褪色") || warnings.includes("wash_separately")) risks.color_bleed = "high";
   if (text.includes("变形") || text.includes("羊毛") || text.includes("wool")) risks.deform = "high";
   if (text.includes("起球") || text.includes("pilling")) risks.pilling = "medium";

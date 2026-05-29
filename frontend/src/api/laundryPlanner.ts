@@ -29,7 +29,7 @@ const DARK_COLOR_TERMS = new Set(["black", "dark", "navy", "indigo", "深色", "
 const LIGHT_COLOR_TERMS = new Set(["white", "light", "gray", "grey", "浅色", "白", "灰"]);
 const BEDDING_TERMS = new Set(["bedding", "sheet", "duvet", "床单", "被套", "床品"]);
 const WOOL_TERMS = new Set(["wool", "羊毛", "cashmere", "羊绒"]);
-const HAND_WASH_TERMS = new Set(["hand_wash_only", "hand wash only", "只能手洗", "手洗"]);
+const HAND_WASH_TERMS = new Set(["hand_wash_only", "hand wash only", "只能手洗", "仅限手洗"]);
 const DRY_CLEAN_TERMS = new Set(["dry_clean_only", "dry clean only", "只能干洗", "干洗"]);
 const DO_NOT_WASH_TERMS = new Set(["do_not_wash", "不可水洗", "不能水洗"]);
 const DO_NOT_DRY_TERMS = new Set(["do_not_tumble_dry", "do_not_dry", "不可烘干", "不能烘干"]);
@@ -41,7 +41,7 @@ const STANDARD_DETERGENT_ML_PER_ITEM = 6.0;
 const LARGE_DETERGENT_ML_BASE = 32.0;
 const LARGE_DETERGENT_ML_PER_ITEM = 8.0;
 
-const BUCKET_ORDER = ["do-not-wash", "dry-clean", "hand-wash", "large-bedding", "dark-standard", "light-standard"];
+const BUCKET_ORDER = ["do-not-wash", "dry-clean", "hand-wash", "large-bedding", "dark-standard", "light-standard", "mixed-standard"];
 const UNSPLITTABLE_BUCKET_IDS = new Set(["do-not-wash", "dry-clean", "hand-wash"]);
 
 // ─── wash-phase entry ───────────────────────────────────────────────────
@@ -246,14 +246,18 @@ function bucketIdFor(item: WardrobeItemForPlan, constraints: LaundryConstraints)
   if (
     item.preferred_method === "hand_wash" ||
     containsAny(text, HAND_WASH_TERMS) ||
-    hasMaterial(item, WOOL_TERMS) ||
-    hasHighRisk(item, new Set(["shrink", "deform"]))
+    hasMaterial(item, WOOL_TERMS)
   ) {
     return "hand-wash";
   }
   if (containsAny(text, BEDDING_TERMS)) return "large-bedding";
-  if (containsAny(text, DARK_COLOR_TERMS) || hasHighRisk(item, new Set(["color_bleed"]))) return "dark-standard";
-  if (containsAny(text, LIGHT_COLOR_TERMS)) return "light-standard";
+  if (containsAny(text, DARK_COLOR_TERMS) || hasHighRisk(item, new Set(["color_bleed"]))) {
+    if (constraints.allow_mixed_colors && !hasHighRisk(item, new Set(["color_bleed"]))) return "mixed-standard";
+    return "dark-standard";
+  }
+  if (containsAny(text, LIGHT_COLOR_TERMS)) {
+    return constraints.allow_mixed_colors ? "mixed-standard" : "light-standard";
+  }
   return "dark-standard"; // default: treat unknown as dark for safety
 }
 
@@ -338,7 +342,7 @@ function buildBucket(
     machine_floor: machine.machine_floor ?? null,
     program,
     detergent_ml: detergentMl(baseBucketId, items),
-    use_laundry_bag: baseBucketId === "dark-standard" || constraints.hygiene_sensitive || anyRecommendsBag(items),
+    use_laundry_bag: baseBucketId === "dark-standard" || constraints.hygiene_sensitive || anyRecommendsBag(items) || anyHighShrinkDeform(items),
     dry_method: "air_dry", // safe default; overridden by recommendDrying
     estimated_cost_yuan: Math.round(washCost * 100) / 100,
     estimated_duration_minutes: washDuration,
@@ -435,12 +439,21 @@ function machineBucketWarnings(bucketId: string, items: WardrobeItemForPlan[]): 
   if (bucketId === "dark-standard") {
     warnings.push("深色或高掉色风险衣物已单独成桶，减少串色和返洗。");
   }
+  if (bucketId === "mixed-standard") {
+    warnings.push("用户允许混色，低掉色风险普通衣物合并成标准批次。");
+  }
   if (bucketId === "large-bedding") {
     warnings.push("床品已单独成桶，使用标准洗衣机时不要与衣物混洗，避免过载导致洗不净。");
   }
   for (const item of items) {
     if (hasHighRisk(item, new Set(["color_bleed"]))) {
       warnings.push(`${item.profile.name} 掉色风险高，避免与浅色衣物混洗。`);
+    }
+    if (hasHighRisk(item, new Set(["shrink"]))) {
+      warnings.push(`${item.profile.name} 有缩水风险，建议使用洗衣袋并自然晾干。`);
+    }
+    if (hasHighRisk(item, new Set(["deform"]))) {
+      warnings.push(`${item.profile.name} 有变形风险，建议使用洗衣袋并选轻柔程序。`);
     }
   }
   return dedupe(warnings);
@@ -483,7 +496,7 @@ function detergentMl(bucketId: string, items: WardrobeItemForPlan[]): number | n
   if (bucketId === "hand-wash") return Math.round(count * HAND_WASH_DETERGENT_ML_PER_ITEM * 10) / 10;
   if (bucketId === "large-bedding")
     return Math.round((LARGE_DETERGENT_ML_BASE + count * LARGE_DETERGENT_ML_PER_ITEM) * 10) / 10;
-  if (bucketId === "dark-standard" || bucketId === "light-standard")
+  if (bucketId === "dark-standard" || bucketId === "light-standard" || bucketId === "mixed-standard")
     return Math.round((STANDARD_DETERGENT_ML_BASE + count * STANDARD_DETERGENT_ML_PER_ITEM) * 10) / 10;
   return null;
 }
@@ -572,6 +585,12 @@ function dryerUnsafe(item: WardrobeItemForPlan): boolean {
 function anyRecommendsBag(items: WardrobeItemForPlan[]): boolean {
   return items.some(
     (item) => searchText(item).includes("laundry_bag") || searchText(item).includes("洗衣袋"),
+  );
+}
+
+function anyHighShrinkDeform(items: WardrobeItemForPlan[]): boolean {
+  return items.some(
+    (item) => hasHighRisk(item, new Set(["shrink", "deform"])),
   );
 }
 

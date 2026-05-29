@@ -295,6 +295,7 @@ function bucketDisplayName(bucketId: string): string {
     "large-bedding": "床品单独洗",
     "dark-standard": "深色标准洗",
     "light-standard": "浅色标准洗",
+    "mixed-standard": "混色标准洗",
   };
   const base = bucketId.replace(/-\d+$/, "");
   return labels[base] ?? labels[bucketId] ?? "本批衣物";

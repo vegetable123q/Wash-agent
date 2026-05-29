@@ -268,6 +268,7 @@ function bucketTitle(bucket: LaundryBucket): string {
     "large-bedding": "床品单独洗",
     "dark-standard": "深色标准洗",
     "light-standard": "浅色标准洗",
+    "mixed-standard": "混色标准洗",
   };
   return labels[baseBucketId(bucket.bucket_id)] ?? "本批衣物";
 }
@@ -328,6 +329,7 @@ function bucketDisplayName(bucketId: string): string {
     "large-bedding": "床品单独洗",
     "dark-standard": "深色标准洗",
     "light-standard": "浅色标准洗",
+    "mixed-standard": "混色标准洗",
   };
   const base = bucketId.replace(/-\d+$/, "");
   return labels[base] ?? labels[bucketId] ?? "本批衣物";
