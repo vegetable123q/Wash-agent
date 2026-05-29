@@ -109,6 +109,34 @@ def _machine_info_list(value: object, field_name: str) -> None:
     for index, item in enumerate(value):
         if not isinstance(item, MachineInfo):
             raise ValueError(f"campus_context.{field_name}[{index}] must be a MachineInfo")
+        _validate_machine_info(item, f"campus_context.{field_name}[{index}]")
+
+
+def _validate_machine_info(machine: MachineInfo, field_name: str) -> None:
+    _non_empty_string(machine.machine_id, f"{field_name}.machine_id")
+    _non_empty_string(machine.location, f"{field_name}.location")
+    _enum_field(machine.machine_type, MachineType, f"{field_name}.machine_type")
+    _enum_field(machine.status, MachineStatus, f"{field_name}.status")
+    _optional_non_negative_int(machine.remaining_minutes, f"{field_name}.remaining_minutes")
+    _optional_non_negative_number(machine.price_yuan, f"{field_name}.price_yuan")
+    _string_list(machine.modes, f"{field_name}.modes")
+
+
+def _non_empty_string(value: object, field_name: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} must be a non-empty string")
+
+
+def _enum_field(value: object, enum_type: type[object], field_name: str) -> None:
+    if not isinstance(value, enum_type):
+        raise ValueError(f"{field_name} must be a {enum_type.__name__}")
+
+
+def _string_list(value: object, field_name: str) -> None:
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be a list of non-empty strings")
+    if not all(isinstance(item, str) and item.strip() for item in value):
+        raise ValueError(f"{field_name} must be a list of non-empty strings")
 
 
 def _queue_estimate_list(value: object, field_name: str) -> None:
