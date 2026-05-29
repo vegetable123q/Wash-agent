@@ -777,6 +777,60 @@ class EModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, field_name):
                     generate_report(plan, items, _campus_context())
 
+    def test_report_requires_valid_bucket_enum_fields(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        invalid_plans = [
+            (
+                "wash_method",
+                LaundryPlan(
+                    buckets=[
+                        LaundryBucket(
+                            bucket_id="light-standard",
+                            item_ids=["white-tee"],
+                            wash_method="machine_wash",  # type: ignore[arg-type]
+                        )
+                    ],
+                    estimated_cost_yuan=0,
+                    estimated_duration_minutes=0,
+                ),
+            ),
+            (
+                "machine_type",
+                LaundryPlan(
+                    buckets=[
+                        LaundryBucket(
+                            bucket_id="light-standard",
+                            item_ids=["white-tee"],
+                            wash_method=WashMethod.MACHINE_WASH,
+                            machine_type="standard_washer",  # type: ignore[arg-type]
+                        )
+                    ],
+                    estimated_cost_yuan=0,
+                    estimated_duration_minutes=0,
+                ),
+            ),
+            (
+                "dry_method",
+                LaundryPlan(
+                    buckets=[
+                        LaundryBucket(
+                            bucket_id="light-standard",
+                            item_ids=["white-tee"],
+                            wash_method=WashMethod.MACHINE_WASH,
+                            dry_method="air_dry",  # type: ignore[arg-type]
+                        )
+                    ],
+                    estimated_cost_yuan=0,
+                    estimated_duration_minutes=0,
+                ),
+            ),
+        ]
+
+        for field_name, plan in invalid_plans:
+            with self.subTest(field_name=field_name, plan=plan):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    generate_report(plan, items, _campus_context())
+
     def test_report_requires_wardrobe_item_list(self) -> None:
         items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
         plan = plan_laundry(items, LaundryConstraints(selected_item_ids=["white-tee"]), _campus_context())

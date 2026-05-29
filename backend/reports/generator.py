@@ -58,6 +58,9 @@ def _validate_plan(value: object) -> None:
 
 def _validate_bucket(bucket: LaundryBucket, field_name: str) -> None:
     _non_empty_string_list(bucket.item_ids, f"{field_name}.item_ids")
+    _enum_field(bucket.wash_method, WashMethod, f"{field_name}.wash_method")
+    _enum_field(bucket.machine_type, MachineType, f"{field_name}.machine_type")
+    _enum_field(bucket.dry_method, DryMethod, f"{field_name}.dry_method")
 
 
 def _validate_items(value: object) -> None:
@@ -86,6 +89,11 @@ def _non_empty_string_list(value: object, field_name: str) -> None:
         raise ValueError(f"{field_name} must be a list")
     for index, item in enumerate(value):
         _non_empty_string(item, f"{field_name}[{index}]")
+
+
+def _enum_field(value: object, enum_type: type[object], field_name: str) -> None:
+    if not isinstance(value, enum_type):
+        raise ValueError(f"{field_name} must be a {enum_type.__name__}")
 
 
 def _validate_campus_context(value: object) -> None:
