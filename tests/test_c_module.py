@@ -199,6 +199,65 @@ class CModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, field_name):
                     advise_frequency(item, LaundryConstraints())
 
+    def test_frequency_requires_valid_profile_search_fields(self) -> None:
+        invalid_profiles = [
+            (
+                "item.profile.material_ratios",
+                ClothingProfile(
+                    item_id="bad-materials",
+                    name="cotton t-shirt",
+                    material_ratios="cotton",  # type: ignore[arg-type]
+                ),
+            ),
+            (
+                "item.profile.material_ratios",
+                ClothingProfile(
+                    item_id="bad-material-keys",
+                    name="cotton t-shirt",
+                    material_ratios={True: 1.0},  # type: ignore[dict-item]
+                ),
+            ),
+            (
+                "item.profile.colors",
+                ClothingProfile(
+                    item_id="bad-colors",
+                    name="cotton t-shirt",
+                    colors="white",  # type: ignore[arg-type]
+                ),
+            ),
+            (
+                "item.profile.colors",
+                ClothingProfile(
+                    item_id="bad-colors",
+                    name="cotton t-shirt",
+                    colors=[True],  # type: ignore[list-item]
+                ),
+            ),
+            (
+                "item.profile.care_forbidden",
+                ClothingProfile(
+                    item_id="bad-care",
+                    name="cotton t-shirt",
+                    care_forbidden=[True],  # type: ignore[list-item]
+                ),
+            ),
+            (
+                "item.profile.source_notes",
+                ClothingProfile(
+                    item_id="bad-source",
+                    name="cotton t-shirt",
+                    source_notes=[True],  # type: ignore[list-item]
+                ),
+            ),
+        ]
+
+        for field_name, profile in invalid_profiles:
+            with self.subTest(field_name=field_name, profile=profile):
+                item = WardrobeItem(profile=profile)
+
+                with self.assertRaisesRegex(ValueError, field_name):
+                    advise_frequency(item, LaundryConstraints())
+
     def test_frequency_requires_valid_user_text_fields(self) -> None:
         valid_profile = ClothingProfile(item_id="text-item", name="cotton t-shirt")
         invalid_items = [

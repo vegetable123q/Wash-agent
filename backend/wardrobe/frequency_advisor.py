@@ -149,6 +149,10 @@ def _validate_item(value: object) -> None:
     _non_empty_string(value.profile.item_id, "item.profile.item_id")
     _non_empty_string(value.profile.name, "item.profile.name")
     _string(value.profile.user_note, "item.profile.user_note")
+    _string_key_dict(value.profile.material_ratios, "item.profile.material_ratios")
+    _string_list(value.profile.colors, "item.profile.colors")
+    _string_list(value.profile.care_forbidden, "item.profile.care_forbidden")
+    _string_list(value.profile.source_notes, "item.profile.source_notes")
     _string_list(value.user_notes, "user_notes")
     _non_negative_int(value.wear_count_since_wash, "wear_count_since_wash")
 
@@ -209,6 +213,13 @@ def _string_list(value: object, field_name: str) -> None:
         raise ValueError(f"{field_name} must be a list of strings")
     if not all(isinstance(item, str) for item in value):
         raise ValueError(f"{field_name} must be a list of strings")
+
+
+def _string_key_dict(value: object, field_name: str) -> None:
+    if not isinstance(value, dict):
+        raise ValueError(f"{field_name} must be an object")
+    if not all(isinstance(key, str) and key.strip() for key in value):
+        raise ValueError(f"{field_name} must contain non-empty string keys")
 
 
 def _search_text(item: WardrobeItem) -> str:
