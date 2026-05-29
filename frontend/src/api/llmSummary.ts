@@ -227,7 +227,7 @@ export function computeRecommendedStartTime(
   latestPickupTime: string | null,
 ): string {
   const now = new Date();
-  const duration = planDurationMinutes ?? 60;
+  const duration = isValidDuration(planDurationMinutes) ? planDurationMinutes : 60;
   const buffer = 15;
   if (latestPickupTime) {
     const [h, m] = latestPickupTime.split(":").map(Number);
@@ -246,4 +246,8 @@ export function computeRecommendedStartTime(
 
 function isValidTimePart(value: number, max: number): boolean {
   return Number.isInteger(value) && value >= 0 && value <= max;
+}
+
+function isValidDuration(value: number | null): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
 }

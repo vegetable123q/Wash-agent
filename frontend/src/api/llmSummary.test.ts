@@ -26,4 +26,11 @@ describe("computeRecommendedStartTime", () => {
 
     expect(computeRecommendedStartTime(60, "25:99")).toBe("19:15");
   });
+
+  it("defaults invalid plan durations before applying the pickup deadline", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-29T19:00:00.000+08:00"));
+
+    expect(computeRecommendedStartTime(-30, "22:30")).toBe("21:15");
+  });
 });
