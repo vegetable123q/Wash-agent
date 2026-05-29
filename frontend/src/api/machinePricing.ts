@@ -111,6 +111,7 @@ function isProgramPricing(value: unknown): value is ProgramPricingLike {
     isRecord(value)
     && typeof value.price_yuan === "number"
     && Number.isFinite(value.price_yuan)
+    && value.price_yuan >= 0
     && typeof value.duration_minutes === "number"
     && Number.isFinite(value.duration_minutes)
   );
