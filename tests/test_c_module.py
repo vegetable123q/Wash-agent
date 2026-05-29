@@ -131,6 +131,20 @@ class CModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "wear_count_since_wash"):
                     self.store.list_items()
 
+    def test_store_rejects_invalid_preferred_method(self) -> None:
+        invalid_methods: list[object] = [True, 123, "", "steam"]
+        for method in invalid_methods:
+            with self.subTest(method=method):
+                payload = json.loads(self.path.read_text(encoding="utf-8"))
+                payload["items"][0]["preferred_method"] = method
+                self.path.write_text(
+                    json.dumps(payload, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesRegex(ValueError, "preferred_method"):
+                    self.store.list_items()
+
     def test_store_rejects_invalid_user_notes(self) -> None:
         invalid_notes: list[object] = ["note", [True], [123]]
         for notes in invalid_notes:

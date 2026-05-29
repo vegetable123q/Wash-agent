@@ -110,7 +110,7 @@ def _wardrobe_item_from_dict(data: dict[str, Any]) -> WardrobeItem:
             data["wear_count_since_wash"],
             "wear_count_since_wash",
         ),
-        preferred_method=WashMethod(data["preferred_method"]),
+        preferred_method=_wash_method(data["preferred_method"], "preferred_method"),
         wash_history=_wash_history(data["wash_history"]),
         user_notes=_string_list(data["user_notes"], "user_notes"),
     )
@@ -189,6 +189,15 @@ def _positive_int(value: Any, field_name: str) -> int:
     if value < 1:
         raise ValueError(f"{field_name} must be a positive integer")
     return value
+
+
+def _wash_method(value: Any, field_name: str) -> WashMethod:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} must be a valid wash method")
+    try:
+        return WashMethod(value)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be a valid wash method") from exc
 
 
 def _string_list(value: Any, field_name: str) -> list[str]:
