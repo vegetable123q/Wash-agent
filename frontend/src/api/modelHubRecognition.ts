@@ -451,7 +451,10 @@ function stringValue(value: unknown): string {
 
 function colorsText(value: unknown): string {
   if (Array.isArray(value)) {
-    return value.map((item) => translateColorName(String(item))).filter(Boolean).join("、");
+    return value.map(colorsText).filter(Boolean).join("、");
+  }
+  if (value && typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).map(colorsText).filter(Boolean).join("、");
   }
   return stringValue(value)
     .split(/[、,，/]+/)

@@ -161,6 +161,24 @@ describe("ModelHub clothing recognition", () => {
     });
   });
 
+  it("normalizes object color payloads", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        modelHubResponse({
+          is_clothing: true,
+          name: "blue white tee",
+          material_ratios: { cotton: 1 },
+          colors: { primary: "blue", secondary: "white" },
+        }),
+      ),
+    );
+
+    const result = await recognizeClothingText("blue white tee", modelHubConfig);
+
+    expect(result.colors).toBe("蓝色、白色");
+  });
+
   it("accepts common ModelHub material field variants instead of showing unknown", async () => {
     vi.stubGlobal(
       "fetch",
