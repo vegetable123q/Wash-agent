@@ -82,6 +82,7 @@ class WardrobeStore:
     def select_items(self, item_ids: list[str]) -> list[WardrobeItem]:
         """Return selected items in item_ids order."""
 
+        item_ids = _item_id_list(item_ids, "item_ids")
         items_by_id = {item.profile.item_id: item for item in self.list_items()}
         missing = [item_id for item_id in item_ids if item_id not in items_by_id]
         if missing:
@@ -300,6 +301,14 @@ def _wash_method(value: Any, field_name: str) -> WashMethod:
         return WashMethod(value)
     except ValueError as exc:
         raise ValueError(f"{field_name} must be a valid wash method") from exc
+
+
+def _item_id_list(value: Any, field_name: str) -> list[str]:
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be a list of non-empty strings")
+    if not all(isinstance(item, str) and item.strip() for item in value):
+        raise ValueError(f"{field_name} must be a list of non-empty strings")
+    return [item.strip() for item in value]
 
 
 def _string_list(value: Any, field_name: str) -> list[str]:
