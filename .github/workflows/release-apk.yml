@@ -45,6 +45,13 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Read release version
+        id: release_version
+        working-directory: frontend
+        run: |
+          tag_name="$(node -e "const version=require('./package.json').version; const match=version.match(/^(0\.\d+)(?:\.0)?$/); if (!match) { console.error('Release version must use 0.xx form, got ' + version); process.exit(1); } console.log(match[1]);")"
+          echo "tag_name=$tag_name" >> "$GITHUB_OUTPUT"
+
       - name: Run frontend tests
         working-directory: frontend
         run: npm test -- --run
@@ -118,6 +125,10 @@ jobs:
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: apk-${{ github.run_number }}
-          name: WashMate Campus APK ${{ github.run_number }}
+          tag_name: ${{ steps.release_version.outputs.tag_name }}
+          name: WashMate Campus ${{ steps.release_version.outputs.tag_name }}
+          body: |
+            - APK 内置后端服务，不需要单独启动本地后端。
+            - 识图使用用户输入的 ModelHub baseUrl/apikey，apikey 不持久化保存。
+            - 模型选择限定为 gemini-3.1-pro-preview。
           files: frontend/android/app/build/outputs/apk/release/app-release.apk

@@ -27,9 +27,6 @@ Wash-agent/
     structure_design.md
   backend/
     __init__.py
-    api/
-      __init__.py
-      server.py
     shared/
       __init__.py
       models.py
@@ -66,7 +63,8 @@ Wash-agent/
     src/
       App.tsx
       api/
-        apiConnection.ts
+        modelHubConfig.ts
+        modelHubRecognition.ts
         mobileSummary.ts
       data/
       components/
@@ -88,26 +86,6 @@ Wash-agent/
 
 本节覆盖上方移动端前端视觉工程的早期静态原型描述。
 
-### 本地移动端 API
-
-文件：
-
-- `backend/api/server.py`
-
-应该做：
-
-- 提供 `/api/mobile/summary`、`/api/wardrobe/items` 和 `/api/weather/current` 等本地 HTTP JSON 边界。
-- 服务启动必须显式配置 API key：调用方传 `api_key` 或设置 `WASH_API_KEY`。除 `OPTIONS` 预检外，所有移动端 API 请求必须带 `x-api-key`；缺失或不匹配返回 `401`。
-- 提供 `DELETE /api/wardrobe/items/{item_id}`，让移动端衣柜支持删除已有衣物；删除必须通过 `WardrobeStore.delete_item()`，不存在的衣物返回显式错误，不静默成功。
-- 提供 `/api/campus/towers`，并在 `/api/mobile/summary.campus_towers` 中附带可选宿舍楼列表。移动端个人页使用该列表渲染宿舍楼下拉菜单，保存时同步 `dormName` 和 `towerKey`。
-- 编排已有后端模块，把 `WardrobeStore`、`CampusContext`、`LaundryPlan` 和 `WashReport` 转成前端可消费的 JSON。
-- 在服务不可用或天气接口失败时返回显式 `status` / `error` 字段，不生成猜测天气或机器数据。
-
-不应该做：
-
-- 不在 API 层实现衣物抽取、洗衣规则、机器解析、天气解析或报告文案。
-- 不直接操作衣柜 JSON 细节，衣柜读写必须通过 `WardrobeStore`。
-
 ### 移动端前端
 
 文件：
@@ -117,22 +95,22 @@ Wash-agent/
 应该做：
 
 - 构建手机版 WashMate Campus 交互界面和 Capacitor Android 包装。
-- 通过 `/api/*` 调用本地移动端 API，不直接导入或调用后端业务函数。
-- `baseUrl` 和 `apikey` 只能来自用户在移动端“我的”页输入；release APK 不内置真实 API 地址、API key 或服务端密钥，也不能把用户输入的 `baseUrl` / `apikey` 写入持久化存储。个人页可以用当前输入测试连接，测试通过后同一内存配置用于摘要、方案、报告、衣柜新增和衣柜删除请求。
-- 所有移动端 API 请求必须带 `x-api-key`。若 `baseUrl` 或 `apikey` 未配置，前端不得发起请求，应显示待配置状态。
+- 在 APK 内通过 TypeScript 本地服务生成移动端摘要、衣柜、机器、方案和报告视图，不要求用户单独启动后端服务。
+- ModelHub `baseUrl`、`apikey` 和 `model_name` 只能来自用户在移动端“我的”页输入；release APK 不内置真实 API key，也不能把用户输入的 `apikey` 写入持久化存储。
+- `model_name` 使用选择控件，当前只允许 `gemini-3.1-pro-preview`。
+- 非识图功能不得依赖 ModelHub 配置；识图功能缺少 `baseUrl`、`apikey` 或允许的 `model_name` 时必须显式禁用或报错。
 - 保存仅限当前设备的界面偏好和个人洗衣上下文，例如宿舍楼、最晚取衣时间和烘干偏好；后续接入账号系统后再迁移到后端 profile API。
-- 图片选择当前只保留文件名用于本地衣柜记录，不上传二进制图片内容。
-- 后端不可用时必须在 UI 上明确标记为前端预览状态。
-- 衣柜页必须同时提供查看详情和删除已有后端衣物的操作；删除中应禁用对应按钮，成功或失败都要显示状态。
-- 添加衣物页的图片入口当前只记录图片文件名，不做移动端二进制上传或前端本地识别；界面文案必须明确这一点，不能标成“已识别”。
-- 衣物详情和机器详情必须展示用户刚选择的后端或预览记录；如果没有对应记录，页面必须显式显示未找到状态，不能静默展示其他样例。
+- 图片选择默认只保留文件名用于本地衣柜记录；只有用户主动点击识图时，才把图片内容发送到用户配置的 ModelHub endpoint。
+- 衣柜页必须同时提供查看详情和删除已有本地衣物的操作；删除中应禁用对应按钮，成功或失败都要显示状态。
+- 添加衣物页的图片入口必须区分“已选图片”和“已识图”，不能把仅选择文件标成识别完成。
+- 衣物详情和机器详情必须展示用户刚选择的本地记录；如果没有对应记录，页面必须显式显示未找到状态，不能静默展示其他样例。
 - 展示型控件不能做成可点击按钮；没有真实行为的详情页按钮必须禁用并给出原因，或改为普通展示元素。
 
 不应该做：
 
-- 不直接调用外部网络服务。
-- 不在源码、构建配置、APK 或前端持久化存储中保存密钥、令牌、真实账号凭证或遥测数据；用户手动输入的 `baseUrl` 和 `apikey` 只作为本次打开期间的内存连接配置使用。
-- 不在前端重复实现洗衣规则、衣物抽取、机器解析、天气解析或报告生成逻辑。
+- 除用户主动触发的 ModelHub 识图请求外，不直接调用外部网络服务。
+- 不在源码、构建配置、APK 或前端持久化存储中保存密钥、令牌、真实账号凭证或遥测数据；用户手动输入的 `apikey` 只作为本次打开期间的内存配置使用。
+- 不在前端加入静默兜底的远程 API 地址或隐藏替代 key。
 
 ## 模块职责
 
@@ -144,16 +122,16 @@ Wash-agent/
 
 应该做：
 
-- 搭建手机版 WashMate Campus 前端视觉与本地交互壳。
-- 使用静态演示数据呈现离线预览；后端摘要存在时优先展示后端衣柜、机器、方案和报告记录。
+- 搭建手机版 WashMate Campus 前端视觉、APK 内置业务服务和本地交互壳。
+- 使用 APK 内置数据和用户本地衣柜记录呈现衣柜、机器、方案和报告。
 - 通过 Capacitor 保留 Android APK 包装路径。
-- Android APK 允许用户输入的 `baseUrl` 使用 `http` 或 `https`，以便模拟器通过 `http://10.0.2.2:8000` 调用本机 `backend.api.server`。前端不得保存真实账号凭证或密钥。
+- Android APK 的 ModelHub `baseUrl` 由用户输入；前端不得保存真实账号凭证或 API key。
 
 不应该做：
 
-- 不调用后端业务函数或外部网络服务。
+- 不调用外部网络服务，除非用户主动触发 ModelHub 识图。
 - 不在源码、构建配置或 APK 中保存真实用户数据、密钥或上传内容。
-- 不在前端重复实现洗衣规则、衣物抽取、机器解析或报告生成逻辑。
+- 不在前端加入隐藏远程后端依赖、服务端密钥或静默替代配置。
 
 ### CI/CD 与分支
 

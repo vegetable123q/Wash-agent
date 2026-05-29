@@ -4,27 +4,19 @@
 
 ## 手机版前端视觉工程
 
-移动端实现位于 `frontend/`，使用 Vite + React + TypeScript + Capacitor。当前版本使用和 `config/api_config.json` 类似的运行时配置：用户只需要在“我的”页输入 `baseUrl` 和 `apikey`，并可直接测试连接，前端才会请求 `/api/mobile/summary`；APK 不内置也不保存 `baseUrl` 或 `apikey`。后端由 `backend.api.server` 调用衣柜、校园机器上下文、洗衣计划和报告模块生成页面摘要；未配置或无法连接后端 API 时页面会明确标记为待配置 API 或前端预览状态。衣柜支持新增和删除后端衣物，个人页使用后端楼栋列表选择宿舍楼。
+移动端实现位于 `frontend/`，使用 Vite + React + TypeScript + Capacitor。当前 APK 不需要单独启动后端服务：衣柜、校园机器、洗衣方案和报告摘要由前端内置 TypeScript 服务生成。只有识图功能需要用户在“我的”页输入 ModelHub 配置；`apikey` 只保存在本次打开期间的 React 内存中，不写入 `localStorage`、源码、构建配置或 APK 持久化存储。当前模型下拉框只允许 `gemini-3.1-pro-preview`。
 
 ```powershell
 uv sync
 cd frontend
 npm install
-npm run dev:api
+npm run dev
 ```
 
-启动 API 前必须显式提供 apikey：
-
-```powershell
-$env:WASH_API_KEY="your-key"
-npm run dev:api
-```
-
-另开一个终端：
+常用验证：
 
 ```powershell
 cd frontend
-npm run dev
 npm test
 npm run build
 npm run cap:sync
@@ -38,9 +30,8 @@ npm run apk:debug
 ```
 
 生成文件位于 `frontend/android/app/build/outputs/apk/debug/app-debug.apk`。
-如果要在 Android 模拟器中连接本机后端，先设置 `WASH_API_KEY` 并运行 `npm run dev:api:emulator`，再运行 `npm run apk:debug:emulator`；打开 APK 后在“我的”页输入 `baseUrl` 为 `http://10.0.2.2:8000`，`apikey` 为同一个值。
 
-Release APK 由 GitHub Actions 在 `main` 分支 push 后自动构建并发布。发布构建不内置也不保存 `baseUrl` 或 `apikey`；用户每次打开后在“我的”页输入这两个值即可连接后端。服务端配置 `WASH_API_KEY`。`preview` 分支用于提交和修改预览，只运行测试和前端构建，不发布 APK。
+Release APK 由 GitHub Actions 在 `main` 分支 push 后自动构建并发布。发布构建不内置也不保存 ModelHub API key；用户每次打开后在“我的”页输入 `baseUrl`、`apikey` 并选择 `gemini-3.1-pro-preview` 后即可使用识图。其他功能可直接在 APK 中使用。`preview` 分支用于提交和修改预览，只运行测试和前端构建，不发布 APK。
 
 ## 衣物核心洗护信息抽取
 

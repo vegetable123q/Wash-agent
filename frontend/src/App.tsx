@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  clearApiConnectionConfig,
-  hasCompleteApiConnectionConfig,
-  loadApiConnectionConfig,
-  saveApiConnectionConfig,
-  type ApiConnectionConfig,
-} from "./api/apiConnection";
+  clearModelHubConfig,
+  loadModelHubConfig,
+  saveModelHubConfig,
+  type ModelHubConfig,
+} from "./api/modelHubConfig";
 import { deleteWardrobeItem, fetchMobileSummary, type BackendMachine, type MobileSummary, type WardrobeSummaryItem } from "./api/mobileSummary";
 import { BottomNav, StatusBar } from "./components/AppChrome";
 import { machines, wardrobeItems, type MachineView, type ScreenId, type TabId, type WardrobeItemView } from "./data/washMateContent";
@@ -20,7 +19,7 @@ import { TodayScreen } from "./screens/TodayScreen";
 import { WardrobeScreen } from "./screens/WardrobeScreen";
 import { loadUserProfile, saveUserProfile, type UserProfile } from "./userProfile";
 
-type BackendStatus = "unconfigured" | "loading" | "connected" | "offline";
+type BackendStatus = "loading" | "connected" | "offline";
 
 const parentTab: Record<ScreenId, TabId> = {
   today: "today",
@@ -49,12 +48,11 @@ const screenTime: Record<ScreenId, string> = {
 export default function App() {
   const [screen, setScreen] = useState<ScreenId>("today");
   const [mobileSummary, setMobileSummary] = useState<MobileSummary | null>(null);
-  const [backendStatus, setBackendStatus] = useState<BackendStatus>("unconfigured");
+  const [backendStatus, setBackendStatus] = useState<BackendStatus>("loading");
   const [userProfile, setUserProfile] = useState<UserProfile>(() => loadUserProfile());
-  const [apiConfig, setApiConfig] = useState<ApiConnectionConfig>(() => loadApiConnectionConfig());
+  const [modelHubConfig, setModelHubConfig] = useState<ModelHubConfig>(() => loadModelHubConfig());
   const [selectedClothingId, setSelectedClothingId] = useState("");
   const [selectedMachineId, setSelectedMachineId] = useState("");
-  const skipAutoRefreshKeyRef = useRef("");
   const activeTab = parentTab[screen];
 
   const goBack = () => setScreen(parentTab[screen]);
@@ -63,18 +61,13 @@ export default function App() {
   const handleProfileSave = (profile: UserProfile) => {
     setUserProfile(saveUserProfile(profile));
   };
-  const handleApiConfigSave = (config: ApiConnectionConfig, options: { skipAutoRefresh?: boolean } = {}) => {
-    const savedConfig = saveApiConnectionConfig(config);
-    if (options.skipAutoRefresh) {
-      skipAutoRefreshKeyRef.current = apiConfigKey(savedConfig);
-    }
-    setApiConfig(savedConfig);
+  const handleModelHubConfigSave = (config: ModelHubConfig) => {
+    const savedConfig = saveModelHubConfig(config);
+    setModelHubConfig(savedConfig);
     return savedConfig;
   };
-  const handleApiConfigClear = () => {
-    setApiConfig(clearApiConnectionConfig());
-    setMobileSummary(null);
-    setBackendStatus("unconfigured");
+  const handleModelHubConfigClear = () => {
+    setModelHubConfig(clearModelHubConfig());
   };
   const viewClothingDetail = (itemId: string) => {
     setSelectedClothingId(itemId);
@@ -85,14 +78,9 @@ export default function App() {
     setScreen("machineDetail");
   };
 
-  const refreshMobileSummary = async (configOverride: ApiConnectionConfig = apiConfig) => {
-    if (!hasCompleteApiConnectionConfig(configOverride)) {
-      setMobileSummary(null);
-      setBackendStatus("unconfigured");
-      return;
-    }
+  const refreshMobileSummary = async () => {
     setBackendStatus("loading");
-    return fetchMobileSummary(configOverride)
+    return fetchMobileSummary()
       .then((summary) => {
         setMobileSummary(summary);
         setBackendStatus("connected");
@@ -103,7 +91,7 @@ export default function App() {
   };
 
   const handleDeleteWardrobeItem = async (itemId: string) => {
-    await deleteWardrobeItem(itemId, apiConfig);
+    await deleteWardrobeItem(itemId);
     if (selectedClothingId === itemId) {
       setSelectedClothingId("");
     }
@@ -112,22 +100,8 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
-    if (!hasCompleteApiConnectionConfig(apiConfig)) {
-      setMobileSummary(null);
-      setBackendStatus("unconfigured");
-      return () => {
-        active = false;
-      };
-    }
-    const currentConfigKey = apiConfigKey(apiConfig);
-    if (skipAutoRefreshKeyRef.current === currentConfigKey) {
-      skipAutoRefreshKeyRef.current = "";
-      return () => {
-        active = false;
-      };
-    }
     setBackendStatus("loading");
-    fetchMobileSummary(apiConfig)
+    fetchMobileSummary()
       .then((summary) => {
         if (!active) {
           return;
@@ -143,7 +117,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [apiConfig]);
+  }, []);
 
   const content = useMemo(() => {
     const selectedBackendItem: WardrobeSummaryItem | null =
@@ -175,7 +149,7 @@ export default function App() {
           />
         );
       case "addClothing":
-        return <AddClothingScreen apiConfig={apiConfig} onBack={goBack} onSaved={refreshMobileSummary} />;
+        return <AddClothingScreen modelHubConfig={modelHubConfig} onBack={goBack} onSaved={refreshMobileSummary} />;
       case "clothingDetail":
         return <ClothingDetailScreen onBack={goBack} backendItem={selectedBackendItem} staticItem={selectedStaticItem} />;
       case "laundryRoom":
@@ -195,17 +169,16 @@ export default function App() {
         return (
           <ProfileScreen
             profile={userProfile}
-            apiConfig={apiConfig}
+            modelHubConfig={modelHubConfig}
             towerOptions={mobileSummary?.campus_towers ?? []}
             onSave={handleProfileSave}
-            onSaveApiConfig={handleApiConfigSave}
-            onClearApiConfig={handleApiConfigClear}
+            onSaveModelHubConfig={handleModelHubConfigSave}
+            onClearModelHubConfig={handleModelHubConfigClear}
             backendStatus={backendStatus}
-            onTestApiConnection={refreshMobileSummary}
           />
         );
     }
-  }, [apiConfig, backendStatus, mobileSummary, screen, selectedClothingId, selectedMachineId, userProfile]);
+  }, [backendStatus, mobileSummary, modelHubConfig, screen, selectedClothingId, selectedMachineId, userProfile]);
 
   const isTabScreen = screen === activeTab;
 
@@ -218,8 +191,4 @@ export default function App() {
       </div>
     </div>
   );
-}
-
-function apiConfigKey(config: ApiConnectionConfig): string {
-  return `${config.baseUrl}\n${config.apikey}`;
 }

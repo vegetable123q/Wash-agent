@@ -51,12 +51,12 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
     : backendPlanSummary;
   const statusLabel =
     backendStatus === "connected"
-      ? "后端已连接"
+      ? "APK 内置"
       : backendStatus === "loading"
-        ? "连接后端中"
+        ? "加载本地数据"
         : backendStatus === "unconfigured"
-          ? "待配置 API"
-          : "前端预览";
+          ? "APK 内置"
+          : "本地数据异常";
 
   return (
     <Page>

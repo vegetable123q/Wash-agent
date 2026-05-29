@@ -1,27 +1,32 @@
 import { Camera, Save } from "lucide-react";
 import { FormEvent, useState } from "react";
-import { hasCompleteApiConnectionConfig, type ApiConnectionConfig } from "../api/apiConnection";
+import { hasCompleteModelHubConfig, type ModelHubConfig } from "../api/modelHubConfig";
+import { recognizeClothingImage } from "../api/modelHubRecognition";
 import { createWardrobeItem } from "../api/mobileSummary";
 import { Card, Chip, Page, Section, TopBar } from "../components/AppChrome";
 
 interface AddClothingScreenProps {
-  apiConfig: ApiConnectionConfig;
+  modelHubConfig: ModelHubConfig;
   onBack: () => void;
   onSaved?: () => void | Promise<void>;
 }
 
-export function AddClothingScreen({ apiConfig, onBack, onSaved }: AddClothingScreenProps) {
+export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothingScreenProps) {
   const [mode, setMode] = useState<"photo" | "text">("photo");
   const [name, setName] = useState("优衣库灰色连帽卫衣");
   const [material, setMaterial] = useState("棉混纺");
   const [colors, setColors] = useState("深色");
   const [note, setNote] = useState("之前高温烘干后有点缩水，今晚想穿干净的。");
   const [imageFilename, setImageFilename] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [recognitionStatus, setRecognitionStatus] = useState<"idle" | "recognizing" | "recognized" | "error">("idle");
   const [error, setError] = useState("");
+  const [recognitionError, setRecognitionError] = useState("");
 
-  const hasApiConfig = hasCompleteApiConnectionConfig(apiConfig);
-  const canSubmit = hasApiConfig && name.trim().length > 0 && status !== "saving";
+  const hasModelHubConfig = hasCompleteModelHubConfig(modelHubConfig);
+  const canSubmit = name.trim().length > 0 && status !== "saving";
+  const canRecognize = hasModelHubConfig && Boolean(imageFile) && recognitionStatus !== "recognizing";
 
   const resultRows = [
     ["类别", name.trim() || "待填写"],
@@ -45,14 +50,40 @@ export function AddClothingScreen({ apiConfig, onBack, onSaved }: AddClothingScr
           colors: colors.trim(),
           note: note.trim(),
           image_filename: imageFilename,
-        },
-        apiConfig,
+        }
       );
       setStatus("saved");
       await onSaved?.();
     } catch (saveError) {
       setStatus("error");
       setError(saveError instanceof Error ? saveError.message : "保存失败");
+    }
+  };
+
+  const handleRecognize = async () => {
+    if (!imageFile || !canRecognize) {
+      return;
+    }
+    setRecognitionStatus("recognizing");
+    setRecognitionError("");
+    try {
+      const result = await recognizeClothingImage(imageFile, modelHubConfig);
+      if (result.name) {
+        setName(result.name);
+      }
+      if (result.material) {
+        setMaterial(result.material);
+      }
+      if (result.colors) {
+        setColors(result.colors);
+      }
+      if (result.note) {
+        setNote(result.note);
+      }
+      setRecognitionStatus("recognized");
+    } catch (recognizeError) {
+      setRecognitionStatus("error");
+      setRecognitionError(recognizeError instanceof Error ? recognizeError.message : "识图失败");
     }
   };
 
@@ -72,15 +103,26 @@ export function AddClothingScreen({ apiConfig, onBack, onSaved }: AddClothingScr
       <label className="upload-panel">
         <Camera size={32} />
         <strong>{imageFilename || "上传衣物、吊牌或洗护标签"}</strong>
-        <span>{mode === "photo" ? "当前移动端只保存图片文件名，洗护抽取以文字字段和后端结果为准" : "文字输入也可以直接保存"}</span>
+        <span>{mode === "photo" ? "选择图片后可调用 ModelHub 识别；不识图也可以手动保存" : "文字输入可直接保存到 APK 内置衣柜"}</span>
         <input
           className="file-input"
           type="file"
           accept="image/*"
           aria-label="上传衣物图片"
-          onChange={(event) => setImageFilename(event.currentTarget.files?.[0]?.name ?? "")}
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0] ?? null;
+            setImageFile(file);
+            setImageFilename(file?.name ?? "");
+            setRecognitionStatus("idle");
+            setRecognitionError("");
+          }}
         />
       </label>
+
+      <button className="secondary-button" type="button" onClick={handleRecognize} disabled={!canRecognize}>
+        <Camera size={18} />
+        {recognitionStatus === "recognizing" ? "识别中" : "拍照识别"}
+      </button>
 
       <form className="form-stack" onSubmit={handleSubmit}>
         <label>
@@ -118,7 +160,9 @@ export function AddClothingScreen({ apiConfig, onBack, onSaved }: AddClothingScr
           </Card>
         </Section>
 
-        {!hasApiConfig ? <p className="form-status form-status-error">请先在“我的”页面输入 baseUrl 和 apikey</p> : null}
+        {!hasModelHubConfig ? <p className="form-status form-status-error">识图需要先在“我的”页面输入 ModelHub baseUrl 和 apikey</p> : null}
+        {recognitionStatus === "recognized" ? <p className="form-status form-status-ok">识图完成，已填入可编辑字段</p> : null}
+        {recognitionStatus === "error" ? <p className="form-status form-status-error">{recognitionError}</p> : null}
         {status === "saved" ? <p className="form-status form-status-ok">保存成功，已加入衣柜</p> : null}
         {status === "error" ? <p className="form-status form-status-error">{error}</p> : null}
 

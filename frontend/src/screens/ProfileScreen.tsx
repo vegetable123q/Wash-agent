@@ -1,42 +1,44 @@
-import { Save, UserRound, Wifi } from "lucide-react";
+import { Save, UserRound } from "lucide-react";
 import { FormEvent, useState } from "react";
-import { hasCompleteApiConnectionConfig, normalizeApiConnectionConfig, type ApiConnectionConfig } from "../api/apiConnection";
+import {
+  hasCompleteModelHubConfig,
+  normalizeModelHubConfig,
+  supportedModelNames,
+  type ModelHubConfig,
+} from "../api/modelHubConfig";
 import { Card, Chip, Page, Section } from "../components/AppChrome";
 import type { CampusTower } from "../api/mobileSummary";
 import type { UserProfile } from "../userProfile";
 
-type BackendStatus = "unconfigured" | "loading" | "connected" | "offline";
+type BackendStatus = "loading" | "connected" | "offline";
 
 interface ProfileScreenProps {
   profile: UserProfile;
-  apiConfig: ApiConnectionConfig;
+  modelHubConfig: ModelHubConfig;
   backendStatus: BackendStatus;
   towerOptions?: CampusTower[];
   onSave: (profile: UserProfile) => void;
-  onSaveApiConfig: (config: ApiConnectionConfig, options?: { skipAutoRefresh?: boolean }) => ApiConnectionConfig;
-  onClearApiConfig: () => void;
-  onTestApiConnection: (config: ApiConnectionConfig) => Promise<void> | void;
+  onSaveModelHubConfig: (config: ModelHubConfig) => ModelHubConfig;
+  onClearModelHubConfig: () => void;
 }
 
 export function ProfileScreen({
   profile,
-  apiConfig,
+  modelHubConfig,
   backendStatus,
   towerOptions = [],
   onSave,
-  onSaveApiConfig,
-  onClearApiConfig,
-  onTestApiConnection,
+  onSaveModelHubConfig,
+  onClearModelHubConfig,
 }: ProfileScreenProps) {
   const [draft, setDraft] = useState(profile);
-  const [apiDraft, setApiDraft] = useState(apiConfig);
+  const [modelHubDraft, setModelHubDraft] = useState(modelHubConfig);
   const [saved, setSaved] = useState(false);
-  const [apiSaved, setApiSaved] = useState(false);
-  const [apiTesting, setApiTesting] = useState(false);
+  const [modelHubSaved, setModelHubSaved] = useState(false);
   const selectedDormIsListed = towerOptions.some((tower) => tower.name === draft.dormName);
-  const normalizedApiDraft = normalizeApiConnectionConfig(apiDraft);
-  const hasApiDraft = hasCompleteApiConnectionConfig(normalizedApiDraft);
-  const apiStatus = apiConnectionStatus(backendStatus, hasCompleteApiConnectionConfig(apiConfig));
+  const normalizedModelHubDraft = normalizeModelHubConfig(modelHubDraft);
+  const hasModelDraft = hasCompleteModelHubConfig(normalizedModelHubDraft);
+  const modelHubStatus = modelHubConnectionStatus(backendStatus, hasCompleteModelHubConfig(modelHubConfig));
 
   const updateDraft = (patch: Partial<UserProfile>) => {
     setSaved(false);
@@ -51,30 +53,14 @@ export function ProfileScreen({
 
   const handleApiSubmit = (event: FormEvent) => {
     event.preventDefault();
-    onSaveApiConfig(apiDraft);
-    setApiSaved(true);
-  };
-
-  const handleApiTest = async () => {
-    if (!hasApiDraft) {
-      return;
-    }
-    setApiTesting(true);
-    setApiSaved(false);
-    try {
-      const savedConfig = onSaveApiConfig(apiDraft, { skipAutoRefresh: true });
-      await onTestApiConnection(savedConfig);
-      setApiSaved(true);
-    } finally {
-      setApiTesting(false);
-    }
+    onSaveModelHubConfig(modelHubDraft);
+    setModelHubSaved(true);
   };
 
   const handleApiClear = () => {
-    setApiDraft({ baseUrl: "", apikey: "" });
-    setApiSaved(false);
-    setApiTesting(false);
-    onClearApiConfig();
+    setModelHubDraft({ baseUrl: "https://modelhub.ailemac.com/v1beta", apikey: "", model_name: "gemini-3.1-pro-preview" });
+    setModelHubSaved(false);
+    onClearModelHubConfig();
   };
 
   return (
@@ -176,18 +162,18 @@ export function ProfileScreen({
       </form>
 
       <form className="form-stack api-config-form" onSubmit={handleApiSubmit}>
-        <Section title="API 连接" action={<Chip tone={apiStatus.tone}>{apiStatus.label}</Chip>}>
+        <Section title="识图模型" action={<Chip tone={modelHubStatus.tone}>{modelHubStatus.label}</Chip>}>
           <div className="form-stack">
             <label>
-              <span>baseUrl</span>
+              <span>ModelHub baseUrl</span>
               <input
                 className="input-like"
-                value={apiDraft.baseUrl}
+                value={modelHubDraft.baseUrl}
                 onChange={(event) => {
-                  setApiSaved(false);
-                  setApiDraft((current) => ({ ...current, baseUrl: event.target.value }));
+                  setModelHubSaved(false);
+                  setModelHubDraft((current) => ({ ...current, baseUrl: event.target.value }));
                 }}
-                placeholder="例如 http://10.0.2.2:8000"
+                placeholder="https://modelhub.ailemac.com/v1beta"
                 autoCapitalize="none"
                 autoCorrect="off"
               />
@@ -197,33 +183,45 @@ export function ProfileScreen({
               <input
                 className="input-like"
                 type="password"
-                value={apiDraft.apikey}
+                value={modelHubDraft.apikey}
                 onChange={(event) => {
-                  setApiSaved(false);
-                  setApiDraft((current) => ({ ...current, apikey: event.target.value }));
+                  setModelHubSaved(false);
+                  setModelHubDraft((current) => ({ ...current, apikey: event.target.value }));
                 }}
-                placeholder="与后端 WASH_API_KEY 一致"
+                placeholder="sk-your-api-key-here"
                 autoCapitalize="none"
                 autoCorrect="off"
               />
             </label>
+            <label>
+              <span>model_name</span>
+              <select
+                className="input-like"
+                aria-label="model_name"
+                value={modelHubDraft.model_name}
+                onChange={(event) => {
+                  setModelHubSaved(false);
+                  setModelHubDraft((current) => ({ ...current, model_name: event.target.value }));
+                }}
+              >
+                {supportedModelNames.map((modelName) => (
+                  <option key={modelName} value={modelName}>
+                    {modelName}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
         </Section>
 
-        {apiSaved ? <p className="form-status form-status-ok">API 配置仅在本次打开期间生效，请测试连接</p> : null}
-        {apiSaved && backendStatus === "connected" ? <p className="form-status form-status-ok">API 已连接，完整功能可用</p> : null}
-        {apiSaved && backendStatus === "offline" ? (
-          <p className="form-status form-status-error">API 连接失败，请检查 baseUrl、apikey 或网络</p>
+        {modelHubSaved && hasModelDraft ? (
+          <p className="form-status form-status-ok">识图配置仅在本次打开期间生效，apikey 不会保存</p>
         ) : null}
 
         <div className="button-row">
           <button className="primary-button" type="submit">
             <Save size={18} />
-            应用 API 配置
-          </button>
-          <button className="secondary-button" type="button" onClick={handleApiTest} disabled={!hasApiDraft || apiTesting}>
-            <Wifi size={18} />
-            {apiTesting ? "连接中" : "测试连接"}
+            应用识图配置
           </button>
           <button className="secondary-button" type="button" onClick={handleApiClear}>
             清除
@@ -234,15 +232,15 @@ export function ProfileScreen({
   );
 }
 
-function apiConnectionStatus(backendStatus: BackendStatus, hasSavedConfig: boolean) {
-  if (!hasSavedConfig || backendStatus === "unconfigured") {
-    return { label: "未配置", tone: "amber" as const };
+function modelHubConnectionStatus(backendStatus: BackendStatus, hasSavedConfig: boolean) {
+  if (hasSavedConfig) {
+    return { label: "识图已配置", tone: "teal" as const };
   }
   if (backendStatus === "connected") {
-    return { label: "已连接", tone: "teal" as const };
+    return { label: "APK 内置", tone: "blue" as const };
   }
   if (backendStatus === "loading") {
-    return { label: "连接中", tone: "blue" as const };
+    return { label: "加载中", tone: "blue" as const };
   }
-  return { label: "连接失败", tone: "red" as const };
+  return { label: "本地数据异常", tone: "red" as const };
 }

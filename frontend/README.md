@@ -4,61 +4,19 @@ This folder contains the mobile-only frontend visual design for WashMate Campus.
 
 ## Scope
 
-- Mobile frontend design with an optional local backend API connection.
-- The app calls `/api/mobile/summary` only after the user enters `baseUrl` and `apikey` in the Profile screen, then saves or tests that connection.
-- Release builds do not embed or persist `baseUrl` or `apikey`. Runtime requests use the `x-api-key` header.
-- If the backend API is not configured, the UI marks itself as waiting for API configuration. If a configured API is unavailable, the UI marks itself as a frontend preview state.
-- No analytics, telemetry, or binary image uploads. The current image picker stores only the selected file name in wardrobe records and the UI says so explicitly.
-- Wardrobe records can be added and deleted through the local backend API.
-- Dorm selection uses backend `MachineTower` choices from `/api/mobile/summary`.
+- Mobile frontend design with an in-APK TypeScript backend service.
+- The app no longer requires a separately started HTTP backend for summary, plan, report, wardrobe add, or wardrobe delete behavior.
+- Release builds do not embed or persist the ModelHub `apikey`; it is kept only in React memory for the current app session.
+- Image recognition calls ModelHub directly only after the user enters `baseUrl`, `apikey`, and selects `gemini-3.1-pro-preview`.
+- No analytics or telemetry. Binary image data is sent only to the user-configured ModelHub endpoint when the user taps image recognition.
+- Wardrobe records can be added and deleted through the in-APK local service.
+- Dorm selection uses packaged in-APK campus tower choices.
 - Clothing and machine detail screens show the selected backend or preview record; missing records render an explicit missing state.
 - Capacitor is configured so the web build can be wrapped as an Android app.
 
 ## Local Preview
 
-Start the backend API in one terminal:
-
-```powershell
-cd ..
-uv sync
-cd frontend
-$env:WASH_API_KEY="<local-api-key>"
-npm run dev:api
-```
-
-For Android emulator validation, bind the API to all interfaces so the emulator can reach it through `10.0.2.2`:
-
-```powershell
-cd frontend
-$env:WASH_API_KEY="<local-api-key>"
-npm run dev:api:emulator
-```
-
-In the app, open `我的`, set:
-
-```text
-baseUrl: http://127.0.0.1:8000
-apikey: <local-api-key>
-```
-
-Tap `测试连接` on the same screen. A connected state means the same in-memory API settings will be used for summary, plan, report, wardrobe add, and wardrobe delete requests until the app is closed or refreshed.
-
-For the Android emulator, use:
-
-```text
-baseUrl: http://10.0.2.2:8000
-apikey: <local-api-key>
-```
-
-For any non-demo deployment, run the backend with an operator-controlled API key:
-
-```powershell
-WASH_API_KEY=<shared-key> uv run python -m backend.api.server --host 0.0.0.0 --port 8000
-```
-
-Do not put the production API key in `package.json`, source files, or APK build variables.
-
-Start the mobile frontend in another terminal:
+Install dependencies and start the mobile frontend:
 
 ```powershell
 cd frontend
@@ -67,7 +25,17 @@ npm run dev
 npm test
 ```
 
-Open the printed localhost URL in a browser. Vite proxies `/api` to `http://127.0.0.1:8000`.
+Open the printed localhost URL in a browser. No backend API process is required for the mobile frontend.
+
+For image recognition, open `我的`, set:
+
+```text
+ModelHub baseUrl: https://modelhub.ailemac.com/v1beta
+apikey: sk-your-api-key-here
+model_name: gemini-3.1-pro-preview
+```
+
+Tap `应用识图配置`. The key is not persisted; reloading the app requires entering it again.
 
 ## Build
 
@@ -89,13 +57,6 @@ npm run cap:sync
 npm run apk:debug
 ```
 
-To build a debug APK that connects from the Android emulator to the local API:
-
-```powershell
-cd frontend
-npm run apk:debug:emulator
-```
-
 APK generation requires a local Android build toolchain:
 
 - JDK 21
@@ -111,7 +72,6 @@ frontend/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 The Android project also sets `android.overridePathCheck=true` because this workspace path contains non-ASCII characters.
-Debug and release APKs allow the user-entered `baseUrl` to use either `http` or `https`.
 
 ## Branch and Release Workflow
 

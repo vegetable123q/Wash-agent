@@ -1,18 +1,15 @@
 {
   "name": "washmate-campus-mobile",
-  "version": "0.1.0",
+  "version": "0.10.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev:api": "cd .. && uv run python -m backend.api.server --host 127.0.0.1 --port 8000",
-    "dev:api:emulator": "cd .. && uv run python -m backend.api.server --host 0.0.0.0 --port 8000",
     "dev": "vite --host 127.0.0.1",
     "build": "tsc && vite build",
     "test": "vitest run",
     "preview": "vite preview --host 127.0.0.1",
     "cap:sync": "npm run build && cap sync android",
-    "apk:debug": "npm run cap:sync && cd android && ./gradlew assembleDebug",
-    "apk:debug:emulator": "npm run apk:debug"
+    "apk:debug": "npm run cap:sync && cd android && ./gradlew assembleDebug"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",

@@ -2,9 +2,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AddClothingScreen } from "./AddClothingScreen";
 
-const apiConfig = {
-  baseUrl: "http://127.0.0.1:8000",
-  apikey: "test-key",
+const modelHubConfig = {
+  baseUrl: "https://modelhub.ailemac.com/v1beta",
+  apikey: "test-modelhub-key",
+  model_name: "gemini-3.1-pro-preview",
 };
 
 describe("AddClothingScreen", () => {
@@ -13,25 +14,12 @@ describe("AddClothingScreen", () => {
     vi.unstubAllGlobals();
   });
 
-  it("submits manual wardrobe input to the backend and reports success", async () => {
+  it("saves manual wardrobe input inside the APK without ModelHub settings", async () => {
     const onSaved = vi.fn();
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        status: "created",
-        item: {
-          item_id: "wm-user-purple-hoodie",
-          name: "清华紫连帽卫衣",
-          material_ratios: { 棉: 1 },
-          colors: ["紫色"],
-          risks: {},
-          user_notes: ["之前烘干后轻微缩水"],
-        },
-      }),
-    });
+    const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<AddClothingScreen apiConfig={apiConfig} onBack={() => undefined} onSaved={onSaved} />);
+    render(<AddClothingScreen modelHubConfig={{ ...modelHubConfig, apikey: "" }} onBack={() => undefined} onSaved={onSaved} />);
 
     fireEvent.click(screen.getByRole("button", { name: "文字输入" }));
     fireEvent.change(screen.getByLabelText("衣物名称"), { target: { value: "清华紫连帽卫衣" } });
@@ -40,69 +28,91 @@ describe("AddClothingScreen", () => {
     fireEvent.change(screen.getByLabelText("个人备注"), { target: { value: "之前烘干后轻微缩水" } });
     fireEvent.click(screen.getByRole("button", { name: /保存到衣柜/ }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(fetchMock).toHaveBeenCalledWith(
-      "http://127.0.0.1:8000/api/wardrobe/items",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({
-          name: "清华紫连帽卫衣",
-          material: "棉",
-          colors: "紫色",
-          note: "之前烘干后轻微缩水",
-          image_filename: "",
-        }),
-      }),
-    );
-    const requestHeaders = fetchMock.mock.calls[0][1]?.headers as Headers;
-    expect(requestHeaders.get("Content-Type")).toBe("application/json");
-    expect(requestHeaders.get("x-api-key")).toBe("test-key");
     expect(await screen.findByText("保存成功，已加入衣柜")).toBeInTheDocument();
     expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("does not present image selection as completed recognition", () => {
-    render(<AddClothingScreen apiConfig={apiConfig} onBack={() => undefined} />);
+  it("requires ModelHub settings before image recognition", () => {
+    render(<AddClothingScreen modelHubConfig={{ ...modelHubConfig, apikey: "" }} onBack={() => undefined} />);
 
     expect(screen.getByRole("button", { name: "图片记录" })).toBeInTheDocument();
-    expect(screen.getByText("当前移动端只保存图片文件名，洗护抽取以文字字段和后端结果为准")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "拍照识别" })).not.toBeInTheDocument();
+    expect(screen.getByText("识图需要先在“我的”页面输入 ModelHub baseUrl 和 apikey")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /拍照识别/ })).toBeDisabled();
   });
 
-  it("keeps save disabled while a slow request is in flight", async () => {
-    let resolveSave: (value: { ok: boolean; json: () => Promise<object> }) => void = () => undefined;
+  it("keeps recognition disabled while a slow ModelHub request is in flight", async () => {
+    let resolveRecognition: (value: { ok: boolean; json: () => Promise<object> }) => void = () => undefined;
     const fetchMock = vi.fn(
       () =>
         new Promise<{ ok: boolean; json: () => Promise<object> }>((resolve) => {
-          resolveSave = resolve;
+          resolveRecognition = resolve;
         }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<AddClothingScreen apiConfig={apiConfig} onBack={() => undefined} />);
+    render(<AddClothingScreen modelHubConfig={modelHubConfig} onBack={() => undefined} />);
 
-    const saveButton = screen.getByRole("button", { name: /保存到衣柜/ });
-    fireEvent.click(saveButton);
+    const file = new File(["abc"], "shirt.png", { type: "image/png" });
+    fireEvent.change(screen.getByLabelText("上传衣物图片"), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: /拍照识别/ }));
 
-    expect(await screen.findByRole("button", { name: /正在保存/ })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: /正在保存/ }));
+    expect(await screen.findByRole("button", { name: /识别中/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /识别中/ }));
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    resolveSave({
+    resolveRecognition({
       ok: true,
-      json: async () => ({ status: "created" }),
+      json: async () => ({
+        candidates: [{ content: { parts: [{ text: JSON.stringify({ name: "蓝色衬衫" }) }] } }],
+      }),
     });
-    expect(await screen.findByText("保存成功，已加入衣柜")).toBeInTheDocument();
+    expect(await screen.findByText("识图完成，已填入可编辑字段")).toBeInTheDocument();
   });
 
-  it("requires API connection settings before saving", () => {
+  it("recognizes a selected image through ModelHub and fills the form", async () => {
     const fetchMock = vi.fn();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify({
+                    name: "蓝色棉质衬衫",
+                    material_ratios: { cotton: 1 },
+                    colors: ["blue"],
+                    recommended_wash: "冷水机洗，悬挂晾干",
+                  }),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<AddClothingScreen apiConfig={{ baseUrl: "", apikey: "" }} onBack={() => undefined} />);
+    render(<AddClothingScreen modelHubConfig={modelHubConfig} onBack={() => undefined} />);
 
-    expect(screen.getByRole("button", { name: /保存到衣柜/ })).toBeDisabled();
-    expect(screen.getByText("请先在“我的”页面输入 baseUrl 和 apikey")).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    const file = new File(["abc"], "shirt.png", { type: "image/png" });
+    fireEvent.change(screen.getByLabelText("上传衣物图片"), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: /拍照识别/ }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://modelhub.ailemac.com/v1beta/models/gemini-3.1-pro-preview:generateContent",
+      expect.objectContaining({
+        method: "POST",
+      }),
+    );
+    const headers = fetchMock.mock.calls[0][1]?.headers as Headers;
+    expect(headers.get("x-goog-api-key")).toBe("test-modelhub-key");
+    expect(await screen.findByDisplayValue("蓝色棉质衬衫")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("cotton 100%")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("blue")).toBeInTheDocument();
   });
+
 });

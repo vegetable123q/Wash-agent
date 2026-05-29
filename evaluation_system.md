@@ -40,13 +40,13 @@
 | 价格时长 | 只能来自 `config/machine_rules.json`，缺失就显式报错 |
 | 洗衣计划 | 手洗、机洗、干洗、大件、深色、浅色、烘干限制能正确分桶 |
 | 报告生成 | 只解释 `LaundryPlan`，不重新决策，不修改计划 |
-| API | `/api/mobile/summary`、`/api/wardrobe/items`、`/api/weather/current` 返回结构稳定 |
+| APK 内置服务 | 移动端摘要、衣柜增删、机器、方案和报告结构稳定，不依赖单独启动后端 |
 
 ## 4. 移动端功能验收
 
 | 页面 | 必须验收内容 |
 | --- | --- |
-| 今日页 | 展示后端连接状态、方案摘要、费用、时长、风险提醒 |
+| 今日页 | 展示 APK 内置状态、方案摘要、费用、时长、风险提醒 |
 | 方案详情 | 展示每个批次、衣物、机器程序、注意事项 |
 | 衣柜页 | 展示衣物列表、材质、颜色、风险、穿着/洗涤次数 |
 | 添加衣物页 | 文字输入、图片文件名、保存成功、保存失败都有明确状态 |
@@ -59,13 +59,13 @@
 
 必须专门覆盖以下边界情况：
 
-1. 后端 API 未启动：前端显示预览、离线或后端不可用状态，不能白屏。
+1. APK 内置服务异常：前端显示明确错误状态，不能白屏。
 2. LLM 不可用：不生成猜测材质和风险，显示抽取失败。
 3. LLM 返回非 JSON：显式错误，不进入正常抽取结果。
 4. 用户只填衣物名称：允许保存，但低置信度、缺失字段要明确。
 5. 衣物名称超长、中英混合、特殊符号、空格：UI 不溢出、不崩溃。
 6. 空衣柜：显示空态和添加入口。
-7. 衣柜 JSON 损坏：后端报错，不静默重建。
+7. 衣柜本地数据损坏：前端报错，不静默生成远程兜底数据。
 8. 机器 mock 缺少字段：缺什么报什么，不猜价格、容量、时长。
 9. 所有机器都在运行：显示等待时间或未知，不生成立即可洗结论。
 10. 所有机器故障：方案应提示不可执行或风险，而不是推荐故障机器。
@@ -145,16 +145,15 @@ npm run apk:debug
 
 人工验收建议按以下顺序执行：
 
-1. 启动本地 API。
-2. 启动移动端前端。
-3. 打开今日页，确认后端连接状态和方案摘要。
+1. 启动移动端前端。
+2. 打开今日页，确认 APK 内置状态和方案摘要。
+3. 进入“我的”页，只在需要识图时输入 ModelHub `baseUrl`、`apikey` 并选择 `gemini-3.1-pro-preview`。
 4. 进入衣柜页，确认样例衣物、风险、材质、洗涤次数。
 5. 添加一件新衣物，确认保存成功并刷新后可见。
 6. 进入洗衣房页，确认宿舍楼、机器状态、排队信息。
 7. 进入方案详情，确认分桶、程序、风险、费用、时长。
 8. 进入报告页，确认洗衣步骤、费用时间、机器环境、风险提醒。
 9. 进入我的页，修改宿舍楼和最晚取衣时间，确认其他页面同步展示。
-10. 停止后端 API，刷新前端，确认显示离线或预览状态而非白屏。
 
 ## 10. 缺陷分级
 
@@ -223,39 +222,38 @@ npm run apk:debug
 
 ### 已完成自动化验收
 
-- Python unittest：通过，`uv run python -m unittest discover -v`，79 项。
-- Frontend test：通过，`npm test -- --run`，8 个测试文件、19 项；覆盖运行时 `baseUrl`/`apikey` 配置、`x-api-key` 请求、API 配置不写入持久化存储、衣柜删除、宿舍楼选择、图片记录文案、保存中禁用防重复提交、离线预览、空后端衣柜、所选衣物详情、所选机器详情和缺失机器显式状态。
+- Python unittest：通过，`uv run python -m unittest discover -v`。
+- Frontend test：通过，`npm test -- --run`；覆盖 APK 内置服务、ModelHub 配置不写入持久化存储、衣柜删除、宿舍楼选择、图片识别配置、空衣柜、所选衣物详情、所选机器详情和缺失记录显式状态。
 - Frontend build：通过，`npm run build`。
 - Capacitor sync：通过，`npm run cap:sync`。
 - APK debug build：通过，`npm run apk:debug`，生成 `frontend/android/app/build/outputs/apk/debug/app-debug.apk`，文件大小约 4.0M。
 - APK 静态解析：通过，`apkanalyzer` 可读取包名 `edu.tsinghua.washmatecampus`、minSdk 23、targetSdk 35、versionCode 1、versionName 1.0。
 - APK 安装/打开：通过。已安装 Android Emulator 和 `system-images;android-35;google_apis;arm64-v8a`，创建临时 AVD `wash_agent_eval_api35`，`adb devices` 识别 `emulator-5554`，`adb install -r frontend/android/app/build/outputs/apk/debug/app-debug.apk` 返回 `Success`，`am start -n edu.tsinghua.washmatecampus/.MainActivity` 后当前焦点为 `edu.tsinghua.washmatecampus/.MainActivity`。
-- APK 后端连接：通过。使用 `npm run dev:api:emulator` 暴露本机 API，使用 `npm run apk:debug:emulator` 构建调试 APK；Today 页在模拟器中显示“后端已连接”、实时天气、后端费用 ¥14 和机器占用 115 分钟。截图为临时评测产物，已按清理要求删除。
+- APK 内置服务：通过。无需启动本机后端，Today 页显示 APK 内置状态、内置费用和机器占用信息。
 - APK WebView CDP 冒烟：通过。通过 `webview_devtools_remote` 执行页面级点击和断言，覆盖 Today、衣柜、衣物详情、添加衣物、删除衣物、洗衣房、机器详情、方案详情、报告、我的和个人设置联动；未捕获 `Mixed Content`、`ERR_`、`Uncaught`、`TypeError`、`ReferenceError` 等关键控制台错误。
-- API 冒烟：通过，重启本地 API 后 `/api/campus/towers` 返回楼栋选项，`/api/mobile/summary` 包含实时天气、`campus_towers` 和后端洗衣方案摘要。
+- ModelHub 识图入口：通过。未配置 `apikey` 时识图禁用；配置后仅向用户输入的 ModelHub endpoint 发送图片。
 
 ### 本轮发现并修复的问题
 
-- P1：衣柜只能新增不能删除。已新增 `DELETE /api/wardrobe/items/{item_id}`，前端衣柜卡片提供删除按钮、删除中禁用、成功/失败状态提示，并刷新后端摘要。
-- P1：宿舍楼不能从后端楼栋列表中选择。已新增 `/api/campus/towers` 和 `/api/mobile/summary.campus_towers`，个人页改为宿舍楼下拉选择并同步 `towerKey`。
-- P1/P2：图片入口文案像“拍照识别”，但当前移动端只保存文件名。已改为“图片记录”，并明确显示“当前移动端只保存图片文件名，洗护抽取以文字字段和后端结果为准”。
+- P1：衣柜只能新增不能删除。已在 APK 内置服务中提供删除能力，前端衣柜卡片提供删除按钮、删除中禁用、成功/失败状态提示，并刷新本地摘要。
+- P1：宿舍楼不能从楼栋列表中选择。已在 APK 内置服务中提供 `campus_towers`，个人页改为宿舍楼下拉选择并同步 `towerKey`。
+- P1/P2：图片入口文案像“拍照识别”，但旧移动端只保存文件名。已改为只有用户主动点击识图时才调用 ModelHub；仅选图不会标成已识别。
 - P1：详情页存在展示型按钮无实际行为。已将衣物详情编辑/加入本次洗衣、机器详情用于深色桶按钮设置为禁用态并写明原因；机器模式由按钮改成普通展示元素。
 - P2：按钮默认 `type` 不明确。已为导航、分段控件、提交、禁用按钮补齐 `type`，降低表单误提交风险。
-- P1：后端已连接但衣柜为空时仍显示静态样例。已改为空衣柜状态和添加第一件衣物入口；离线/无摘要时才显示预览样例。
-- P1：今日页离线状态计算了“前端预览”但实际显示天气徽标，用户无法判断后端不可用。已改为直接显示后端连接状态，并用集成测试覆盖。
+- P1：内置摘要存在但衣柜为空时仍显示静态样例。已改为空衣柜状态和添加第一件衣物入口。
+- P1：今日页旧离线状态文案会误导用户以为还要连接后端。已改为显示 APK 内置状态，并用集成测试覆盖。
 - P1：衣物和机器“查看详情”会进入固定样例详情，容易被认为按钮无效或数据错乱。已改为传递所选记录；无对应记录时显示显式未找到状态。
-- P1：APK 能打开但默认无法连接本机后端；`https://localhost` 页面请求 `http://10.0.2.2:8000` 被 WebView mixed content 拦截。已将 Capacitor Android scheme 改为 `http`，Android manifest 显式允许 cleartext 本地 API，并新增 `dev:api:emulator` / `apk:debug:emulator` 脚本复现模拟器验收。
-- P1：release APK 不应内置或保存真实 API 地址或 key。已新增运行时 API 配置页；未输入 `baseUrl` 和 `apikey` 时前端不发起请求，所有移动端 API 请求携带 `x-api-key`，并且该配置只保留在本次打开期间的内存状态中。
-- P1：移动端 API 需要显式 apikey。已要求 `backend.api.server` 启动时显式配置 `WASH_API_KEY` 或 `--api-key`，非 `OPTIONS` 请求缺失或 key 不匹配时返回 `401`。
-- P1：发布 APK 应允许用户输入的 `baseUrl` 直接连接。已改为 debug 和 release 均允许 cleartext，用户只需在“我的”页输入 `baseUrl` 和 `apikey`。
+- P1：APK 不应要求用户启动和连接本机后端。已删除移动端 HTTP 后端路径，改为 APK 内置 TypeScript 服务。
+- P1：release APK 不应内置或保存真实 API key。已改为 ModelHub 识图配置页；`apikey` 只保留在本次打开期间的内存状态中。
+- P1：模型选择应受控。已将 `model_name` 改为单选下拉，当前只允许 `gemini-3.1-pro-preview`。
 - P1：提交到 GitHub 后缺少自动 APK 发布链路。已新增 `preview` 分支验证 workflow 和 `main` 分支 signed release APK 发布 workflow；签名 keystore 只从 GitHub Secrets 注入。
 - P1：`LaundryConstraints.max_wait_minutes` 已建模但 planner 未对最大等待时间不足生成显式提醒。已在全局 warning 中补充等待时间缺失、未知和超时提醒，并新增预算不足 + 最大等待不足测试。
 - P1：添加衣物保存遇到慢请求时缺少重复点击回归测试。已新增前端测试覆盖保存中按钮 disabled，重复点击不重复 POST。
 
 ### APK 人工/半自动验收记录
 
-- Today：通过，显示“后端已连接”、实时天气、后端方案摘要、费用和时长。
-- 衣柜：通过，显示后端衣柜和“白色纯棉 T 恤”。
+- Today：通过，显示“APK 内置”、本地方案摘要、费用和时长。
+- 衣柜：通过，显示 APK 内置衣柜和“白色纯棉 T 恤”。
 - 衣物详情：通过，从衣柜点“查看详情”后显示所选“白色纯棉 T 恤”。
 - 添加衣物：通过，填写“APK评测临时衣物”后保存成功，提示“保存成功，已加入衣柜”。
 - 删除衣物：通过，新增临时衣物在衣柜中可见并可删除，页面提示“已删除 APK评测临时衣物”；随后检查 `data/wardrobe_sample.json` 无临时衣物残留。
@@ -269,7 +267,7 @@ npm run apk:debug
 ### 非阻塞补充验收项
 
 - 真实实体手机验收未执行；当前已完成 Android 模拟器 1080x2400 / density 420 验收。评测门槛要求 APK 可生成并能打开，已由模拟器安装和启动覆盖；若交付方指定某个真机型号，可另行连接真机复验。
-- 停止后端 API 后刷新前端，已由前端集成测试确认显示“前端预览”而不是白屏；APK 中也已验证后端可连接状态。
+- APK 不启动后端服务也可打开和使用非识图功能；识图功能需要用户输入 ModelHub 配置。
 
 ### 当前结论
 
