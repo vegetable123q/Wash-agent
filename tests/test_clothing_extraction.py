@@ -196,6 +196,22 @@ class ClothingExtractionTests(unittest.TestCase):
         self.assertNotIn("True", source_text)
         self.assertNotIn("123", source_text)
 
+    def test_enrich_product_info_normalizes_image_refs(self) -> None:
+        raw = ClothingInput(
+            name="",
+            image_refs=[" uploads/tag.png ", True, "", 123],
+        )
+
+        try:
+            enriched = enrich_product_info(raw)
+        except TypeError as exc:
+            self.fail(f"malformed image refs should not crash: {exc}")
+
+        self.assertEqual(enriched.image_refs, ["uploads/tag.png"])
+        self.assertIn("uploads/tag.png", enriched.extra["normalized_source_text"])
+        self.assertNotIn("True", enriched.extra["normalized_source_text"])
+        self.assertNotIn("123", enriched.extra["normalized_source_text"])
+
     def test_user_note_is_preserved_without_product_metadata_in_core_profile(self) -> None:
         profile = extract_clothing_info(
             ClothingInput(

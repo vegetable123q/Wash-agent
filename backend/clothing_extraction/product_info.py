@@ -80,6 +80,7 @@ def enrich_product_info(raw: ClothingInput) -> ClothingInput:
         str(raw.user_note or raw.extra.get("user_note") or raw.user_description)
     )
     extra = dict(raw.extra)
+    image_refs = _string_list(raw.image_refs)
     supplemental_parts = _iter_supplemental_sources(extra)
     manual_fields = (
         extra.get("manual_fields") if isinstance(extra.get("manual_fields"), dict) else {}
@@ -92,8 +93,8 @@ def enrich_product_info(raw: ClothingInput) -> ClothingInput:
         source_parts.append(f"吊牌/洗护标签: {tag_text}")
     if user_note:
         source_parts.append(f"用户备注: {user_note}")
-    if raw.image_refs:
-        source_parts.append("图片引用: " + ", ".join(raw.image_refs))
+    if image_refs:
+        source_parts.append("图片引用: " + ", ".join(image_refs))
     source_parts.extend(supplemental_parts)
     if manual_fields:
         source_parts.append(
@@ -126,5 +127,6 @@ def enrich_product_info(raw: ClothingInput) -> ClothingInput:
         tag_text=tag_text,
         user_description=user_note,
         user_note=user_note,
+        image_refs=image_refs,
         extra=extra,
     )
