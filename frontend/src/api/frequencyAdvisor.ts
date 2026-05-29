@@ -11,6 +11,8 @@ const FREQUENCY_THRESHOLDS: Record<string, number> = {
   sport: 1,
   sports: 1,
   "t-shirt": 2,
+  tee: 2,
+  tshirt: 2,
   shirt: 2,
   hoodie: 3,
   sweater: 4,
