@@ -41,14 +41,25 @@ export function saveUserProfile(profile: UserProfile): UserProfile {
 
 function normalizeProfile(value: unknown): UserProfile {
   const profile = typeof value === "object" && value !== null ? (value as Partial<UserProfile>) : {};
+  const latestPickupTime = String(profile.latestPickupTime ?? defaultUserProfile.latestPickupTime).trim();
   return {
     displayName: String(profile.displayName ?? "").trim(),
     dormName: String(profile.dormName ?? "").trim(),
-    latestPickupTime: String(profile.latestPickupTime ?? defaultUserProfile.latestPickupTime).trim(),
+    latestPickupTime: isValidPickupTime(latestPickupTime) ? latestPickupTime : defaultUserProfile.latestPickupTime,
     allowDryer: Boolean(profile.allowDryer),
     budgetYuan: positiveNumberOrNull(profile.budgetYuan),
     maxWaitMinutes: positiveNumberOrNull(profile.maxWaitMinutes),
   };
+}
+
+export function isValidPickupTime(value: string): boolean {
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  if (!match) {
+    return false;
+  }
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
 }
 
 function positiveNumberOrNull(value: unknown): number | null {

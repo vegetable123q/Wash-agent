@@ -47,4 +47,15 @@ describe("userProfile", () => {
       maxWaitMinutes: null,
     });
   });
+
+  it("normalizes invalid stored pickup time to the default", () => {
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        latestPickupTime: "99:99",
+      }),
+    );
+
+    expect(loadUserProfile().latestPickupTime).toBe(defaultUserProfile.latestPickupTime);
+  });
 });

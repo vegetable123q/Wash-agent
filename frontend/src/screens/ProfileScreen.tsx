@@ -8,7 +8,7 @@ import {
 } from "../api/modelHubConfig";
 import { Card, Chip, Page, Section } from "../components/AppChrome";
 import type { CampusTowerOption } from "../api/mobileSummary";
-import type { UserProfile } from "../userProfile";
+import { isValidPickupTime, type UserProfile } from "../userProfile";
 
 type BackendStatus = "loading" | "connected" | "offline";
 
@@ -282,16 +282,6 @@ function modelHubConnectionStatus(backendStatus: BackendStatus, hasSavedConfig: 
 
 function numberInputValue(value: number | null | undefined): string {
   return value == null ? "" : String(value);
-}
-
-function isValidPickupTime(value: string): boolean {
-  const match = /^(\d{2}):(\d{2})$/.exec(value);
-  if (!match) {
-    return false;
-  }
-  const hour = Number(match[1]);
-  const minute = Number(match[2]);
-  return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
 }
 
 function positiveNumberOrNull(value: string): number | null {
