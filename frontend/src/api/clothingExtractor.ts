@@ -178,11 +178,22 @@ function extractCareHints(name: string, material: string, note: string): string[
   const combined = [name, material, note].join(" ").toLowerCase();
   const labels: string[] = [];
   for (const [alias, canonical] of Object.entries(CARE_LABEL_ALIASES)) {
-    if (combined.includes(alias.toLowerCase())) {
+    if (aliasMatches(combined, alias.toLowerCase())) {
       labels.push(canonical);
     }
   }
   return [...new Set(labels)];
+}
+
+function aliasMatches(text: string, alias: string): boolean {
+  if (/^[a-z0-9 _-]+$/i.test(alias)) {
+    return new RegExp(`(^|[^a-z0-9])${escapeRegExp(alias)}([^a-z0-9]|$)`).test(text);
+  }
+  return text.includes(alias);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function splitCareLabels(labels: string[]): { warnings: string[]; recommendations: string[] } {
