@@ -35,7 +35,9 @@ export function loadUserProfile(): UserProfile {
 
 export function saveUserProfile(profile: UserProfile): UserProfile {
   const normalized = normalizeProfile(profile);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+  }
   return normalized;
 }
 

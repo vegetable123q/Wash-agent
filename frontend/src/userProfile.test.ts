@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultUserProfile, loadUserProfile, saveUserProfile } from "./userProfile";
 
 const storageKey = "washmate.userProfile";
@@ -6,6 +6,10 @@ const storageKey = "washmate.userProfile";
 describe("userProfile", () => {
   beforeEach(() => {
     localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("persists explicit laundry budget and wait preferences", () => {
@@ -57,5 +61,20 @@ describe("userProfile", () => {
     );
 
     expect(loadUserProfile().latestPickupTime).toBe(defaultUserProfile.latestPickupTime);
+  });
+
+  it("returns a normalized profile when localStorage is unavailable", () => {
+    vi.stubGlobal("localStorage", undefined);
+
+    const saved = saveUserProfile({
+      ...defaultUserProfile,
+      displayName: " Test User ",
+      latestPickupTime: "99:99",
+    });
+
+    expect(saved).toMatchObject({
+      displayName: "Test User",
+      latestPickupTime: defaultUserProfile.latestPickupTime,
+    });
   });
 });
