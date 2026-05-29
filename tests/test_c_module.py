@@ -173,6 +173,26 @@ class CModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "name"):
                     self.store.list_items()
 
+    def test_store_rejects_invalid_profile_risks(self) -> None:
+        invalid_risks: list[object] = [
+            True,
+            ["shrink"],
+            {"shrink": True},
+            {"shrink": "extreme"},
+            {"": "low"},
+        ]
+        for risks in invalid_risks:
+            with self.subTest(risks=risks):
+                payload = json.loads(self.path.read_text(encoding="utf-8"))
+                payload["items"][0]["profile"]["risks"] = risks
+                self.path.write_text(
+                    json.dumps(payload, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesRegex(ValueError, "risks"):
+                    self.store.list_items()
+
     def test_store_rejects_invalid_wash_record_issues(self) -> None:
         invalid_issues: list[object] = ["pilling", [True], [123]]
         for issues in invalid_issues:
