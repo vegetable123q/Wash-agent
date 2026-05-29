@@ -209,6 +209,13 @@ function conciseReminders(...groups: Array<string[] | undefined>): string[] {
 
 function cleanReminder(note: string): string {
   return note
+    .replace(/\bstandard_washer\b/g, "洗衣机")
+    .replace(/\bshoe_washer\b/g, "洗鞋机")
+    .replace(/\bdryer\b/g, "烘干机")
+    .replace(/程序\s+standard/g, "程序 标准洗")
+    .replace(/程序\s+quick/g, "程序 快洗")
+    .replace(/程序\s+large/g, "程序 大物洗")
+    .replace(/程序\s+low/g, "程序 低温烘干")
     .replace(/，?位置[^，。；]*[，。；]?/g, "")
     .replace(/，?程序\s+[a-z0-9_+-]+[。；]?/gi, "")
     .replace(/\s+/g, " ")

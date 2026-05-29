@@ -297,6 +297,62 @@ describe("ReportScreen", () => {
 
     expect(screen.getByText("预计费用 3.5 元超过预算 3 元。")).toBeInTheDocument();
   });
+
+  it("uses friendly labels for plan global warning reminders", () => {
+    const mobileSummary = {
+      source: "backend",
+      selected_laundry_item_ids: ["tee-1"],
+      dirty_basket: {
+        item_count: 1,
+        load_percent: 30,
+        oldest_days: 1,
+        urgent_count: 0,
+        status_label: "可清洗",
+        recommendation: "今晚处理。",
+        next_action: "查看报告",
+        items: [],
+      },
+      wardrobe: { items: [wardrobeItem("tee-1", "白色棉 T 恤")] },
+      campus_context: {
+        all_machines: [],
+        available_machines: [],
+        queue_estimates: [],
+        weather: {},
+        drying_context: {},
+        pricing_rules: { wash_programs: { standard: { price_yuan: 3.5, duration_minutes: 40 } }, dryer_programs: {} },
+      },
+      plan: {
+        buckets: [
+          {
+            bucket_id: "light-standard",
+            item_ids: ["tee-1"],
+            wash_method: "machine_wash",
+            machine_type: "standard_washer",
+            program: "standard",
+            detergent_ml: 24,
+            use_laundry_bag: false,
+            dry_method: "air_dry",
+            warnings: [],
+          },
+        ],
+        estimated_cost_yuan: 3.5,
+        estimated_duration_minutes: 40,
+        summary: "浅色衣物标准洗。",
+        global_warnings: ["standard_washer 等待时间未知，无法确认是否满足最大等待 10 分钟。"],
+      },
+      report: {
+        title: "本次洗护报告",
+        sections: {},
+        savings_notes: [],
+        risk_notes: [],
+      },
+    } satisfies MobileSummary;
+
+    const { container } = render(<ReportScreen mobileSummary={mobileSummary} />);
+
+    expect(screen.getByText("洗衣机 等待时间未知，无法确认是否满足最大等待 10 分钟。")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("standard_washer");
+  });
 });
 
 function wardrobeItem(itemId: string, name: string): MobileSummary["wardrobe"]["items"][number] {
