@@ -1,10 +1,12 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { clearModelHubConfig } from "./api/modelHubConfig";
 import App from "./App";
 
 describe("App in-APK backend integration", () => {
   afterEach(() => {
     cleanup();
+    clearModelHubConfig();
     localStorage.clear();
     vi.unstubAllGlobals();
   });
@@ -28,7 +30,7 @@ describe("App in-APK backend integration", () => {
     }
   });
 
-  it("keeps ModelHub settings in memory and exposes only the allowed model", async () => {
+  it("saves ModelHub settings locally and exposes only the allowed model", async () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole("button", { name: /我的/ }));
@@ -44,8 +46,8 @@ describe("App in-APK backend integration", () => {
     fireEvent.change(modelSelect, { target: { value: "gemini-3.1-pro-preview" } });
     fireEvent.click(screen.getByRole("button", { name: /应用识图配置/ }));
 
-    expect(await screen.findByText("识图配置仅在本次打开期间生效，apikey 不会保存")).toBeInTheDocument();
-    expect(allLocalStorageValues()).not.toContain("sk-test-key");
+    expect(await screen.findByText("识图配置已保存到本机；只在本设备使用，可随时清除")).toBeInTheDocument();
+    expect(allLocalStorageValues()).toContain("sk-test-key");
   });
 
   it("uses the saved dorm name to request real machine APIs", async () => {
@@ -124,6 +126,26 @@ describe("App in-APK backend integration", () => {
     for (const call of fetchMock.mock.calls) {
       expect(call[0]).toContain("open-meteo");
     }
+  });
+
+  it("handles the browser or phone back key by returning to the parent screen", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({}),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "今晚洗衣" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /衣柜/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "添加第一件衣物" }));
+    expect(await screen.findByRole("heading", { name: "添加衣物" })).toBeInTheDocument();
+
+    window.dispatchEvent(new PopStateEvent("popstate"));
+
+    expect(await screen.findByRole("heading", { name: "我的衣柜" })).toBeInTheDocument();
   });
 });
 

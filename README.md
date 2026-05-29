@@ -1,10 +1,121 @@
-# Wash Agent
+# WashMate Campus
 
-面向校园共享洗衣场景的衣物洗护助手。当前代码按语义目录拆分，衣物信息抽取模块负责把用户上传或输入的衣物信息抽取成后续衣柜、洗衣决策、报告模块可使用的结构化数据。
+面向校园公共洗衣场景的移动端洗护智能体。它把衣物识别、个人衣柜、宿舍洗衣机状态、天气与晾晒条件、洗衣分桶、费用时间估算和报告生成串成一个完整流程：用户只需要维护自己的衣柜和宿舍楼，就能知道今天要不要洗、怎么洗、去哪洗、要花多少钱、多久能取。
 
-## 手机版前端视觉工程
+当前主界面是 `frontend/` 下的 React + TypeScript + Capacitor 移动端应用；`backend/` 是 Python 参考实现和测试 oracle。移动端核心业务已经内置为 TypeScript 服务，普通衣柜、脏衣篮、机器状态、方案和报告流程不需要单独启动本地后端。
 
-移动端实现位于 `frontend/`，使用 Vite + React + TypeScript + Capacitor。当前 APK 不需要单独启动后端服务：衣柜、校园机器、洗衣方案和报告摘要由前端内置 TypeScript 服务生成。只有识图功能需要用户在“我的”页输入 ModelHub 配置；`apikey` 只保存在本次打开期间的 React 内存中，不写入 `localStorage`、源码、构建配置或 APK 持久化存储。当前模型下拉框只允许 `gemini-3.1-pro-preview`。
+## Highlights
+
+- 移动端完整闭环：今日建议、脏衣篮、衣柜、添加衣物、洗衣房、机器详情、方案详情、报告和个人设置。
+- 衣物智能识别：支持手动录入、图片识别、批量识别和文字识别；ModelHub 只在用户主动触发识图时调用。
+- 校园机器上下文：支持 CleverSchool 与海乐生活来源，统一楼名、机器类型、状态、剩余时间和排队估计。
+- 确定性洗衣规划：按材质、颜色、洗护禁忌、床品、手洗/干洗、烘干风险和用户约束拆分批次。
+- 结构化报告：输出洗衣步骤、费用时间、机器环境、风险提醒、节水节电说明，前端无需从自然语言反向解析。
+- 工程化交付：Python unittest、Vitest、Vite build、Capacitor sync、Android APK 构建和 GitHub Actions 发布链路齐全。
+- 安全边界明确：不把 API key、keystore、`.env` 或真实凭据写进源码；缺失数据显式报错或显示状态，不静默猜测。
+
+## Tech Stack
+
+| Layer | Stack | Role |
+| --- | --- | --- |
+| Mobile UI | React 18, TypeScript, Vite | 手机端交互界面与本地状态 |
+| APK shell | Capacitor 7, Android Gradle | Android 打包与 WebView 容器 |
+| In-APK services | TypeScript modules in `frontend/src/api/` | 衣柜、校园上下文、洗衣规划、报告生成 |
+| Reference backend | Python 3.12, dataclasses, unittest | 模块化参考实现与测试 oracle |
+| External services | ModelHub/Gemini v1beta, CleverSchool, Haier, Open-Meteo | 识图、宿舍机器状态、天气 |
+| Tooling | uv, npm, GitHub Actions | 依赖、测试、构建和发布 |
+
+## Product Flow
+
+```mermaid
+flowchart LR
+  User["用户"] --> UI["React / Capacitor 移动端"]
+  UI --> Profile["个人设置\n宿舍楼 / 取衣时间 / 烘干偏好"]
+  UI --> Wardrobe["本地衣柜\n衣物 / 风险 / 洗涤记录"]
+  UI --> Basket["脏衣篮\n本次要洗的衣物"]
+  UI --> Recognition["ModelHub 识图\n用户主动触发"]
+  UI --> Campus["校园上下文\n机器 / 天气 / 排队 / 价格"]
+  Campus --> Planner["洗衣规划\n分桶 / 程序 / 费用 / 时间"]
+  Wardrobe --> Planner
+  Basket --> Planner
+  Profile --> Planner
+  Planner --> Report["可读报告\n步骤 / 风险 / 成本"]
+```
+
+移动端在 APK 内执行主要业务逻辑。只有三类行为会访问外部服务：
+
+- 用户保存宿舍楼后读取校园洗衣机/烘干机状态。
+- 天气模块读取清华附近天气。
+- 用户点击识图或文字识别时，把图片或文本发送到用户配置的 ModelHub endpoint。
+
+## Repository Layout
+
+```text
+Wash-agent/
+  README.md
+  AGENTS.md
+  pyproject.toml
+  app.py                         # legacy Streamlit entry, not primary UI
+  main.py                        # minimal CLI entry
+  backend/
+    shared/models.py             # Python shared dataclasses and enums
+    clothing_extraction/          # ModelHub client, prompt, clothing profile extraction
+    wardrobe/                     # wardrobe CRUD and frequency advice
+    campus/                       # machine APIs, campus context, weather
+    laundry/                      # deterministic laundry planner
+    reports/                      # user-facing report generator
+  frontend/
+    src/
+      App.tsx
+      api/                        # in-APK TypeScript services
+      components/                 # reusable mobile UI shell
+      screens/                    # Today / Wardrobe / Laundry Room / Report / Profile
+      data/                       # packaged product content and demo fixtures
+    android/                      # Capacitor Android project
+    package.json
+    capacitor.config.ts
+  config/
+    api_config.example.json       # Python-side ModelHub config template
+    machine_rules.json            # prices, modes, drying rules, type mapping
+  data/
+    wardrobe_sample.json
+    machines_mock.json
+    pics/
+  docs/
+    structure_design.md
+    c_delivery.md
+    e_demo_script.md
+  tests/
+    test_*                        # Python unit and integration tests
+  .github/workflows/
+    preview.yml
+    release-apk.yml
+```
+
+## Core Modules
+
+| Module | Main files | Responsibility |
+| --- | --- | --- |
+| Mobile orchestration | `frontend/src/api/mobileSummary.ts` | 组合衣柜、天气、机器、频率建议、洗衣方案和报告 |
+| Mobile screens | `frontend/src/screens/` | 手机端页面、表单、状态、空态、错误态 |
+| ModelHub config | `frontend/src/api/modelHubConfig.ts` | 保存/清除本机识图配置，限制模型名 |
+| Recognition | `frontend/src/api/modelHubRecognition.ts` | 图片识别、文字识别、JSON schema 约束输出 |
+| Campus API | `frontend/src/api/campusMachineApi.ts`, `backend/campus/` | CleverSchool/海乐机器状态、楼名归一、排队估计 |
+| Wardrobe | `frontend/src/api/mobileSummary.ts`, `backend/wardrobe/` | 本地衣柜、脏衣篮、穿着/洗涤记录、频率建议 |
+| Planner | `frontend/src/api/laundryPlanner.ts`, `backend/laundry/planner.py` | 洗衣分桶、程序选择、费用时间、全局提醒 |
+| Report | `frontend/src/api/reportGenerator.ts`, `backend/reports/generator.py` | 结构化报告与用户可读说明 |
+| Contracts | `frontend/src/api/types.ts`, `backend/shared/models.py` | TypeScript/Python 数据契约 |
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.12
+- uv
+- Node.js 22 and npm
+- Android APK 构建额外需要 JDK 21、Android SDK 35、Android Build Tools 35.0.0
+
+### Install and Run Mobile Preview
 
 ```powershell
 uv sync
@@ -13,346 +124,156 @@ npm install
 npm run dev
 ```
 
-常用验证：
+打开 Vite 输出的本地地址即可预览。移动端摘要、衣柜、方案、报告和大部分交互都在前端本地服务中运行，不需要另起 HTTP 后端。
+
+### Common Verification
 
 ```powershell
+uv run python -m unittest discover -v
 cd frontend
 npm test
 npm run build
 npm run cap:sync
 ```
 
-生成 debug APK 需要本机安装 JDK 21、Android SDK 35、Android Build Tools 35.0.0，并在 `frontend/android/local.properties` 中配置 `sdk.dir`：
+`npm run cap:sync` 会先执行前端 build，再同步 Capacitor Android 项目。
+
+### Build Debug APK
+
+先确认本机具备：
+
+- JDK 21
+- Android SDK platform `android-35`
+- Android Build Tools `35.0.0`
+- `frontend/android/local.properties` 中配置 `sdk.dir=<your Android SDK path>`
+
+然后执行：
 
 ```powershell
 cd frontend
 npm run apk:debug
 ```
 
-生成文件位于 `frontend/android/app/build/outputs/apk/debug/app-debug.apk`。
+生成文件：
 
-Release APK 由 GitHub Actions 在 `main` 分支 push 后自动构建并发布。发布构建不内置也不保存 ModelHub API key；用户每次打开后在“我的”页输入 `baseUrl`、`apikey` 并选择 `gemini-3.1-pro-preview` 后即可使用识图。其他功能可直接在 APK 中使用。`preview` 分支用于提交和修改预览，只运行测试和前端构建，不发布 APK。
-
-## 衣物核心洗护信息抽取
-
-衣物抽取模块只负责“数据获取与结构化”，不负责衣柜存储、机器状态、洗衣方案或商品推荐。
-
-### 输入
-
-入口数据结构为 `backend.shared.models.ClothingInput`，核心输入包括：
-
-- `name`：衣物名称，可由用户填写，也可来自图片/商品页识别。
-- `tag_text`：吊牌或洗护标签文字。
-- `user_note`：用户备注，例如“明天要穿”“运动后常穿”“怕掉色”。
-- `image_refs`：衣服照片、吊牌照片、商品页截图路径或 URL。
-- `extra["ocr_text"]`：图片 OCR 文字。
-- `extra["product_page_text"]` / `extra["taobao_text"]`：商品页辅助文字。
-- `extra["manual_fields"]`：用户手动修正的核心字段。
-
-`shop_name` 仅作为历史兼容输入保留，不进入核心抽取文本，也不会作为后续流程字段。
-
-### 输出
-
-`extract_clothing_info()` 返回 `ClothingProfile`，核心字段包括：
-
-- `name`
-- `user_note`
-- `material_ratios`
-- `colors`
-- `material_evidence_level`：材质来源等级，取值为 `visible`、`inferred`、`uncertain` 或 `unknown`。
-- `care_symbols`：按常见水洗标维度结构化后的标签，例如水洗方式、水温、漂白、翻转烘干、熨烫、干洗和自然晾干。
-- `care_symbol_evidence`：与 `care_symbols` 一一对应，标注每个洗护标签是图片/吊牌可见、模型推断，还是不确定。
-- `care_warnings`：严格禁忌或强约束，例如不可漂白、不可烘干、不可机洗、只能手洗。
-- `care_recommendations`：建议动作，例如冷水洗、分开洗、装洗衣袋、轻柔程序、自然晾干。
-- `care_forbidden`：兼容字段，等于 `care_warnings` 和 `care_recommendations` 的归一化合并，旧调用方仍可继续读取。
-- `care_evidence_level`：整体洗护信息来源等级。
-- `risks`
-- `confidence`
-- `image_type`：图片类型判断结果，例如 `garment_photo`、`care_label`、`tag_photo`、`product_page`、`mixed`。
-- `agent_trace`：图片输入在单次 VLM 请求内完成的阶段，例如 `image_router -> typed_extractor -> care_inference`。
-- `missing_fields`
-- `user_fill_suggestions`
-- `source_notes`
-- `extraction_status`
-- `extraction_error`
-
-`care_symbols` 使用固定维度，便于后续洗衣方案模块消费：
-
-```json
-{
-  "wash_method": "machine_wash",
-  "wash_temperature": "30c",
-  "bleach": "do_not_bleach",
-  "tumble_dry": "low_heat",
-  "iron": "do_not_iron",
-  "dry_clean": "do_not_dry_clean",
-  "natural_dry": "line_dry"
-}
+```text
+frontend/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-每个 `care_symbols` 标签都会在 `care_symbol_evidence` 中有对应等级：
+## ModelHub and Secrets
 
-```json
-{
-  "wash_temperature": "visible",
-  "tumble_dry": "inferred",
-  "iron": "uncertain"
-}
+### Mobile app recognition config
+
+移动端识图配置在“我的”页面填写：
+
+```text
+ModelHub baseUrl: https://modelhub.ailemac.com/v1beta
+apikey: sk-your-api-key-here
+model_name: gemini-3.1-pro-preview
 ```
 
-含义：
+当前代码会把配置保存到本机 `localStorage`，用于下次打开继续识图；页面提供“清除”入口。识图请求只在用户主动点击图片识别、批量识别或文字识别时发出，二进制图片不会自动上传。
 
-- `visible`：来自吊牌、洗护标、商品页明确可见文字或符号。
-- `inferred`：基于衣物种类、材质、颜色拼接、涂层、填充物等合理推断。
-- `uncertain`：模型只能给粗略建议，建议用户补拍吊牌或手动确认。
+### Python reference config
 
-展示给用户时，建议优先展示 `visible`；`inferred` 和 `uncertain` 应以“建议/推测”口吻呈现。严格禁忌看 `care_warnings`，柔性建议看 `care_recommendations`。
-
-洗护动作现在会拆成两类，避免把“禁忌”和“建议”混在一起：
-
-```json
-{
-  "care_warnings": ["do_not_bleach", "do_not_tumble_dry"],
-  "care_recommendations": ["wash_separately", "use_laundry_bag", "gentle_cycle"],
-  "care_forbidden": [
-    "do_not_bleach",
-    "do_not_tumble_dry",
-    "wash_separately",
-    "use_laundry_bag",
-    "gentle_cycle"
-  ]
-}
-```
-
-推荐新模块优先消费 `care_warnings` 和 `care_recommendations`。`care_forbidden` 仅用于兼容旧流程或快速展示合并后的提醒。B 模块还会做一次确定性一致性校验：如果吊牌可见标签显示“低温烘干”，后续推断里出现的 `do_not_tumble_dry` 会被丢弃，避免推断覆盖可见事实。
-
-如果图片或文字中缺少关键信息，模块会返回 `missing_fields` 和 `user_fill_suggestions`，用于前端提示用户补拍吊牌或手动填写。
-
-如果 LLM 不可用、返回空 JSON 或返回非 JSON，模块不会再使用规则兜底生成材质、颜色或风险。此时核心字段保持空值或 `unknown`，并通过 `extraction_status` / `extraction_error` 标明失败原因，避免把规则猜测误认为大模型结果。
-
-图片输入会合并为一次结构化 Gemini 请求，单次返回 `image_type`、可见事实、保守推断、`agent_trace` 和 `missing_fields`。请求使用 JSON schema 约束输出，减少非 JSON 响应和多轮视觉调用耗时。
-
-### 接入衣柜模块
-
-衣物抽取模块预留了 `build_wardrobe_item()`，可直接把抽取结果包装成衣柜模块的 `WardrobeItem`。
-
-```python
-from backend.clothing_extraction.extractor import build_wardrobe_item, extract_clothing_info
-from backend.shared.models import ClothingInput
-
-raw = ClothingInput(
-    name="蓝色牛仔外套",
-    tag_text="棉 80% 聚酯纤维 20% 不可漂白",
-    user_note="备注：少洗，怕掉色",
-    image_refs=["uploads/tag-photo.png"],
-)
-
-profile = extract_clothing_info(raw)
-wardrobe_item = build_wardrobe_item(profile)
-```
-
-### 校园洗衣机接口
-
-D 模块通过 `backend.campus.machine_api.LaundryMachineClient` 查询清华宿舍洗衣机状态。当前合并 CleverSchool 和海乐生活两个来源：
-
-- `POST https://api.cleverschool.cn/washapi4/device/tower`：获取楼号列表。
-- `POST https://api.cleverschool.cn/washapi4/device/status`：按 `towerKey` 获取某栋楼机器状态。
-- `POST https://yshz-user.haier-ioc.com/position/nearPosition`：按清华附近坐标获取海乐生活点位。
-- `POST https://yshz-user.haier-ioc.com/position/deviceDetailPage`：按海乐点位和设备分类获取设备状态。
-
-示例：
-
-```python
-from backend.campus.context import build_campus_context_from_user_input
-from backend.campus.machine_api import LaundryMachineClient
-
-client = LaundryMachineClient()
-towers = client.list_towers()
-context = build_campus_context_from_user_input(
-    {
-        "tower_name": "南区26号楼东",
-        "weather": {"condition": "cloudy", "humidity": 72},
-        "drying_context": {"has_balcony": True},
-    },
-)
-```
-
-页面层可以传用户输入的 `tower_name`，D 模块会通过合并后的楼号列表解析成内部 `tower_keys`。用户不需要知道 CleverSchool 的 `towerKey` 或海乐的 `positionId`。后端只做精确楼名匹配；前端应使用 `list_towers()` 返回的楼名做下拉菜单。若调用方绕过楼名、直接传外部 id，则必须同时传 `tower_provider` 或 `tower_keys`，否则会显式报错。
-
-同一栋楼可能同时存在两个来源，例如 CleverSchool 提供洗衣机、海乐生活提供烘干机。`list_towers()` 会先统一楼名，例如把 `清华大学南区21号楼` 归并为 `南区21号楼`，并在 `MachineTower.provider_keys` 中记录该楼所有来源。查询 `build_campus_context_from_user_input({"tower_name": "南区21号楼"})` 时会同时请求这些来源，并把洗衣机、洗鞋机、烘干机一起放进 `CampusContext.all_machines`。后端只做精确楼名匹配；前端应使用 `list_towers()` 返回的楼名做下拉菜单。
-
-CleverSchool 状态文本中的“待机”会映射为可用，“工作/运转”会映射为运行中，“脱水/开盖/故障/出错/异常”会映射为不可用异常状态。状态解析只匹配这些明确词，不会把“待维修”这类文本误判为空闲。海乐生活的分类 `00/01/02` 分别映射为洗衣机、洗鞋机、烘干机，状态 `1/2/3` 分别映射为可用、运行中、不可用异常。
-
-`CampusContext.queue_estimates` 按机器类型给出排队/等待摘要：总数、可用数、运行中数、异常数、未知数，以及 `estimated_wait_minutes`。如果该类型已有可用机器，等待时间为 `0`；如果没有可用机器但运行中机器提供剩余时间，则取最短剩余时间；如果接口没有足够信息，则保持 `None`，不猜测。
-
-价格和模式只从 `config/machine_rules.json` 读取；接口缺失字段不会被猜测。机器容量当前不进入 D/E 契约。离线测试可使用 `backend.campus.machine_api.mock_transport_from_file("data/machines_mock.json")` 读取交付 mock 文件。
-
-### 大模型 API 配置
-
-推荐复制示例配置文件后本地修改：
+Python 参考实现使用本地配置文件：
 
 ```powershell
 Copy-Item config/api_config.example.json config/api_config.json
 ```
 
-`config/api_config.json` 不会被提交到 git，适合放自己的 API 地址和密钥：
+`config/api_config.json` 已在 `.gitignore` 中忽略。不要把真实 `apikey`、`.env`、keystore 或签名密码提交到仓库。
 
-```json
-{
-  "baseUrl": "https://modelhub.ailemac.com/v1beta",
-  "apikey": "sk-your-api-key-here",
-  "model_name": "gemini-3.1-pro-preview"
-}
+## Development Commands
+
+| Task | Command |
+| --- | --- |
+| Sync Python env | `uv sync` |
+| Run all Python tests | `uv run python -m unittest discover -v` |
+| Run C module demo | `uv run python scripts/demo_c_module.py` |
+| Install frontend deps | `cd frontend; npm install` |
+| Start Vite dev server | `cd frontend; npm run dev` |
+| Run frontend tests | `cd frontend; npm test` |
+| Build frontend | `cd frontend; npm run build` |
+| Sync Capacitor Android | `cd frontend; npm run cap:sync` |
+| Build debug APK | `cd frontend; npm run apk:debug` |
+
+## CI and Release
+
+`preview` branch and pull requests to `preview` / `main` run:
+
+- `uv run python -m unittest discover -v`
+- `npm ci`
+- `npm test -- --run`
+- `npm run build`
+
+`main` branch push additionally:
+
+- reads release version from `frontend/package.json`
+- updates Android `versionCode` and `versionName`
+- installs JDK 21 and Android SDK 35
+- runs `npm run cap:sync`
+- builds signed release APK
+- uploads `app-release.apk`
+- publishes a GitHub Release
+
+Stable release signing should use GitHub Secrets:
+
+```text
+ANDROID_KEYSTORE_BASE64
+ANDROID_KEYSTORE_PASSWORD
+ANDROID_KEY_ALIAS
+ANDROID_KEY_PASSWORD
 ```
 
-字段说明：
+If these secrets are absent, the workflow creates a CI-only temporary keystore so the APK can still be built. That artifact is installable, but not suitable for long-term update continuity because the signing key is not stable.
 
-- `baseUrl`：ModelHub / Gemini v1beta 根地址，当前固定使用 `https://modelhub.ailemac.com/v1beta`。
-- `apikey`：ModelHub API key。
-- `model_name`：模型名。
+## Data and Configuration Rules
 
-客户端只读取 `config/api_config.json`，不读取环境变量，也不使用其他字段名。缺少 `baseUrl`、`apikey` 或 `model_name` 时会显式报错。
+- `config/machine_rules.json` is the source of truth for prices, modes, durations, provider program labels and drying context.
+- Machine capacity is not part of the current D/E contract and should not be invented in UI or planning logic.
+- Missing price, duration, machine state, weather or ModelHub output should become an explicit error/status, not a guessed fallback.
+- Frontend displays user-facing names and labels; provider ids, `towerKey`, `positionId`, raw `machine_type` keys and rule keys stay inside API/config layers.
+- `frontend/src/api/types.ts` mirrors mobile contracts; `backend/shared/models.py` is the Python shared contract layer.
 
-### 衣柜记忆与洗护频率
+## Testing Scope
 
-衣柜模块负责保存用户衣物、维护穿着次数、洗涤历史和用户备注，并根据当前洗衣约束生成洗护频率建议。
+The project already includes tests for:
 
-相关文件：
+- clothing extraction and ModelHub failure boundaries
+- wardrobe CRUD and frequency advice
+- campus tower merging, machine parsing and queue estimation
+- laundry planning constraints, bucket splitting, pricing and wait warnings
+- report generation
+- full Python integration flow
+- mobile pages, local service integration, ModelHub config persistence/clear, dirty basket, machine detail and report rendering
 
-- `backend/wardrobe/store.py`：衣柜数据读写、增删改查、穿着次数和洗涤历史维护。
-- `backend/wardrobe/frequency_advisor.py`：根据 `WardrobeItem` 和 `LaundryConstraints` 生成 `FrequencyAdvice`。
-- `data/wardrobe_sample.json`：衣柜样例数据。
-- `docs/c_delivery.md`：C 模块交付说明。
-
-基本用法：
-
-```python
-from backend.shared.models import LaundryConstraints, WashMethod, WashRecord
-from backend.wardrobe.store import WardrobeStore
-from backend.wardrobe.frequency_advisor import advise_all_frequencies
-
-store = WardrobeStore("data/wardrobe_sample.json")
-items = store.list_items()
-
-constraints = LaundryConstraints(urgent_item_ids=["wm-white-tee-001"])
-advice = advise_all_frequencies(items, constraints)
-
-store.record_wear("wm-white-tee-001")
-store.add_wash_record(
-    "wm-white-tee-001",
-    WashRecord(washed_at="2026-05-28", method=WashMethod.MACHINE_WASH),
-)
-```
-
-本模块只负责衣柜记忆与洗护频率，不调用 LLM，不读取洗衣机状态，不生成最终洗衣方案或报告。
-
-### 洗衣计划与报告
-
-E 模块负责把已选择的衣柜衣物和校园上下文转换成可执行洗衣方案，并把方案生成可读报告。
-
-相关文件：
-
-- `backend/laundry/planner.py`：分桶、洗衣模式、烘干方式、费用时间和风险提醒。
-- `backend/reports/generator.py`：把 `LaundryPlan` 转换成 `WashReport`。
-- `tests/test_e_module.py`：E 模块真实单元测试。
-- `docs/e_demo_script.md`：E 模块 3-5 分钟演示录屏脚本。
-
-`plan_laundry()` 不读取页面状态、不调用 LLM、不读取机器文件。调用方必须显式传入：
-
-- `LaundryConstraints.selected_item_ids`
-- `CampusContext.available_machines`
-- `CampusContext.pricing_rules["wash_programs"]`
-- `CampusContext.pricing_rules["dryer_programs"]`，当允许并推荐烘干时需要
-
-价格和时长规则示例：
-
-```python
-pricing_rules = {
-    "wash_programs": {
-        "quick": {"price_yuan": 3.0, "duration_minutes": 30},
-        "standard": {"price_yuan": 3.5, "duration_minutes": 40},
-        "large": {"price_yuan": 4.0, "duration_minutes": 50},
-    },
-    "dryer_programs": {
-        "high": {"price_yuan": 4.0, "duration_minutes": 90},
-        "medium": {"price_yuan": 3.0, "duration_minutes": 60},
-        "low": {"price_yuan": 2.0, "duration_minutes": 50},
-    },
-    "shoe_washer_programs": {
-        "two_pairs": {"price_yuan": 4.0, "duration_minutes": 35},
-        "single_pair_standard": {"price_yuan": 3.0, "duration_minutes": 31},
-        "single_pair": {"price_yuan": 2.5, "duration_minutes": 29},
-    },
-    "provider_programs": {
-        "haier": {
-            "wash_programs": {
-                "standard_40c": {"label": "标准+40度", "price_yuan": 4.5, "duration_minutes": 60},
-                "standard_60c_uv": {"label": "标准+60度+紫外", "price_yuan": 5.0, "duration_minutes": 70},
-            },
-            "shoe_washer_programs": {
-                "spin": {"label": "单脱", "price_yuan": 1.0, "duration_minutes": 7},
-                "tub_clean": {"label": "桶清洁", "price_yuan": 0.0, "duration_minutes": 2},
-            },
-        },
-        "cleverschool": {
-            "dryer_programs": {
-                "strong": {"label": "强力烘", "price_yuan": 4.0, "duration_minutes": 90},
-                "standard": {"label": "标准烘", "price_yuan": 3.0, "duration_minutes": 60},
-                "gentle": {"label": "轻柔烘", "price_yuan": 2.0, "duration_minutes": 50},
-                "air": {"label": "晾干烘", "price_yuan": 2.0, "duration_minutes": 50},
-            },
-        },
-    },
-}
-```
-
-缺少所选衣物、可用机器、价格或时长时，模块会显式抛出 `ValueError`，不会编造默认方案。
-
-基本用法：
-
-```python
-from backend.campus.context import build_campus_context
-from backend.campus.machine_api import LaundryMachineClient
-from backend.laundry.planner import plan_laundry
-from backend.reports.generator import generate_report
-from backend.shared.models import LaundryConstraints
-
-campus_context = build_campus_context(
-    LaundryMachineClient("data/machines_mock.json"),
-    {"machine_rules_path": "config/machine_rules.json"},
-)
-
-constraints = LaundryConstraints(
-    selected_item_ids=["wm-white-tee-001", "wm-black-jeans-001"],
-    allow_dryer=False,
-)
-
-plan = plan_laundry(items, constraints, campus_context)
-report = generate_report(plan, items, campus_context)
-```
-
-`plan_laundry()` 会在 `LaundryBucket` 中写入真实执行数据：推荐洗衣机 id/位置、烘干机 id/位置、洗衣液用量、是否使用洗衣袋、本桶费用和本桶机器占用时间。机洗和烘干的每一笔计费会进入 `LaundryPlan.cost_breakdown`，调用方不需要再从文案中解析费用拆分。
-
-`LaundryConstraints` 中的约束会被显式处理：`urgent_item_ids` 必须属于本次 `selected_item_ids`；`allow_mixed_colors=True` 时，只有低掉色风险普通衣物会合并成 `mixed-standard` 批次；高掉色风险、床品、手洗、干洗和不可水洗衣物仍单独处理。`hygiene_sensitive=True` 时，机洗批次会标记使用洗衣袋。
-
-`generate_report()` 会保留移动端直接消费的 `WashReport.sections` 结构，同时输出 `WashReport.action_steps` 和 `WashReport.cost_breakdown`。报告只解释 planner 生成的真实方案，不重算分桶、不重新选择机器、不编造节省金额。报告中会解释每个分桶原因、洗衣液用量、计费批次、机器位置、排队估算、晾晒条件、风险控制和节水节电省钱价值。
-
-校园上下文模块当前支持本地 mock 机器数据和显式规则文件：
-
-- `data/machines_mock.json`：`machines` 列表，每条记录必须包含 `machine_id`、`location`、`machine_type` 和 `status`。
-- `config/machine_rules.json`：必须包含 `pricing_rules["wash_programs"]`，需要烘干时还要包含对应的 `pricing_rules["dryer_programs"]`；洗鞋机价格可通过 `pricing_rules["shoe_washer_programs"]` 提供。
-- `build_campus_context()` 不会猜测规则路径；调用方必须传入 `machine_rules_path`。
-
-### 本地验证
-
-本项目统一使用 `uv` 管理依赖和运行命令，不使用 `requirements.txt`。
+Recommended pre-delivery gate:
 
 ```powershell
-uv run python -m unittest tests.test_clothing_extraction -v
-uv run python -m unittest tests.test_c_module -v
-uv run python -m unittest tests.test_d_module -v
-uv run python -m unittest tests.test_e_module -v
-uv run python -m unittest tests.test_full_integration -v
 uv run python -m unittest discover -v
-uv run python scripts/demo_c_module.py
+cd frontend
+npm test
+npm run build
+npm run cap:sync
 ```
+
+APK delivery additionally requires:
+
+```powershell
+cd frontend
+npm run apk:debug
+```
+
+## Architecture Principles
+
+- Keep page code as orchestration only; do not put prompts, parser details, storage internals or planning rules into screens.
+- Reuse existing contracts and helpers before adding new models or parallel implementations.
+- Pass cross-module data through explicit dataclasses/types, not ad hoc dictionaries.
+- Prefer explicit errors and visible UI states over fallback/default logic.
+- Update `docs/structure_design.md` when module boundaries, public interfaces or main workflow change.
+- Use `uv` for Python dependency and command execution work; do not introduce a separate requirements workflow unless explicitly requested.
+
+## Project Status
+
+The repository is structured as a final course project with a mobile-first product surface and a modular reference backend. The stable user-facing entry is the React/Capacitor app in `frontend/`; `app.py` remains a legacy placeholder and `main.py` is only a minimal CLI stub.

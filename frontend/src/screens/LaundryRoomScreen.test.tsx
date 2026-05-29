@@ -16,6 +16,17 @@ describe("LaundryRoomScreen", () => {
         }}
         mobileSummary={{
           source: "backend",
+          selected_laundry_item_ids: [],
+          dirty_basket: {
+            item_count: 0,
+            load_percent: 0,
+            oldest_days: 0,
+            urgent_count: 0,
+            status_label: "空篮",
+            recommendation: "先选择衣物。",
+            next_action: "去衣柜选择这批要洗的衣物",
+            items: [],
+          },
           campus_status: {
             state: "live",
             dorm_name: "南区21号楼",
@@ -138,5 +149,6 @@ describe("LaundryRoomScreen", () => {
     expect(screen.queryByText("shoe_washer")).not.toBeInTheDocument();
     expect(screen.queryByText("large_washer")).not.toBeInTheDocument();
     expect(screen.queryByText("大件机")).not.toBeInTheDocument();
+    expect(document.querySelectorAll(".machine-card.machine-card-equal")).toHaveLength(3);
   });
 });

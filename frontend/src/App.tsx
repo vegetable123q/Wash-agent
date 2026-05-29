@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   clearModelHubConfig,
   loadModelHubConfig,
   saveModelHubConfig,
   type ModelHubConfig,
 } from "./api/modelHubConfig";
-import { deleteWardrobeItem, fetchMobileSummary, type BackendMachine, type MobileSummary, type WardrobeSummaryItem } from "./api/mobileSummary";
+import { deleteWardrobeItem, fetchMobileSummary, setLaundrySelection, type BackendMachine, type MobileSummary, type WardrobeSummaryItem } from "./api/mobileSummary";
 import { BottomNav } from "./components/AppChrome";
 import { machines, wardrobeItems, type MachineView, type ScreenId, type TabId, type WardrobeItemView } from "./data/washMateContent";
 import { AddClothingScreen } from "./screens/AddClothingScreen";
 import { ClothingDetailScreen } from "./screens/ClothingDetailScreen";
+import { DirtyBasketScreen } from "./screens/DirtyBasketScreen";
 import { LaundryRoomScreen } from "./screens/LaundryRoomScreen";
 import { MachineDetailScreen } from "./screens/MachineDetailScreen";
 import { PlanDetailScreen } from "./screens/PlanDetailScreen";
@@ -28,13 +29,19 @@ const parentTab: Record<ScreenId, TabId> = {
   report: "report",
   profile: "profile",
   planDetail: "today",
+  dirtyBasket: "today",
   addClothing: "wardrobe",
   clothingDetail: "wardrobe",
   machineDetail: "laundryRoom",
 };
 
+function isScreenId(value: unknown): value is ScreenId {
+  return typeof value === "string" && value in parentTab;
+}
+
 export default function App() {
   const [screen, setScreen] = useState<ScreenId>("today");
+  const screenRef = useRef<ScreenId>("today");
   const [mobileSummary, setMobileSummary] = useState<MobileSummary | null>(null);
   const [backendStatus, setBackendStatus] = useState<BackendStatus>("loading");
   const [userProfile, setUserProfile] = useState<UserProfile>(() => loadUserProfile());
@@ -43,9 +50,37 @@ export default function App() {
   const [selectedMachineId, setSelectedMachineId] = useState("");
   const activeTab = parentTab[screen];
 
-  const goBack = () => setScreen(parentTab[screen]);
-  const navigate = (target: ScreenId) => setScreen(target);
-  const navigateTab = (tab: TabId) => setScreen(tab);
+  const replaceHistoryScreen = (target: ScreenId) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.history.replaceState({ washmate: true, screen: target }, "");
+  };
+
+  const pushHistoryScreen = (target: ScreenId) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.history.pushState({ washmate: true, screen: target }, "");
+  };
+
+  const setScreenWithHistory = (target: ScreenId, historyMode: "push" | "replace" = "push") => {
+    const current = screenRef.current;
+    screenRef.current = target;
+    setScreen(target);
+    if (target === current) {
+      return;
+    }
+    if (historyMode === "replace") {
+      replaceHistoryScreen(target);
+    } else {
+      pushHistoryScreen(target);
+    }
+  };
+
+  const goBack = () => setScreenWithHistory(parentTab[screenRef.current], "replace");
+  const navigate = (target: ScreenId) => setScreenWithHistory(target);
+  const navigateTab = (tab: TabId) => setScreenWithHistory(tab);
   const handleProfileSave = (profile: UserProfile) => {
     setUserProfile(saveUserProfile(profile));
   };
@@ -59,11 +94,11 @@ export default function App() {
   };
   const viewClothingDetail = (itemId: string) => {
     setSelectedClothingId(itemId);
-    setScreen("clothingDetail");
+    setScreenWithHistory("clothingDetail");
   };
   const viewMachineDetail = (machineId: string) => {
     setSelectedMachineId(machineId);
-    setScreen("machineDetail");
+    setScreenWithHistory("machineDetail");
   };
 
   const refreshMobileSummary = async () => {
@@ -85,6 +120,37 @@ export default function App() {
     }
     await refreshMobileSummary();
   };
+
+  const handleToggleLaundrySelection = async (itemId: string) => {
+    const selected = new Set(mobileSummary?.selected_laundry_item_ids ?? []);
+    if (selected.has(itemId)) {
+      selected.delete(itemId);
+    } else {
+      selected.add(itemId);
+    }
+    await setLaundrySelection([...selected]);
+    await refreshMobileSummary();
+  };
+
+  useEffect(() => {
+    screenRef.current = screen;
+  }, [screen]);
+
+  useEffect(() => {
+    replaceHistoryScreen(screenRef.current);
+    const handlePopState = (event: PopStateEvent) => {
+      const stateScreen = event.state?.washmate && isScreenId(event.state.screen) ? event.state.screen : null;
+      const target = stateScreen ?? parentTab[screenRef.current];
+      screenRef.current = target;
+      setScreen(target);
+      if (!stateScreen) {
+        replaceHistoryScreen(target);
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -128,6 +194,15 @@ export default function App() {
         );
       case "planDetail":
         return <PlanDetailScreen onBack={goBack} mobileSummary={mobileSummary} modelHubConfig={modelHubConfig} />;
+      case "dirtyBasket":
+        return (
+          <DirtyBasketScreen
+            mobileSummary={mobileSummary}
+            onBack={goBack}
+            onNavigate={navigate}
+            onToggleItem={handleToggleLaundrySelection}
+          />
+        );
       case "wardrobe":
         return (
           <WardrobeScreen
@@ -140,7 +215,7 @@ export default function App() {
       case "addClothing":
         return <AddClothingScreen modelHubConfig={modelHubConfig} onBack={goBack} onSaved={refreshMobileSummary} />;
       case "clothingDetail":
-        return <ClothingDetailScreen onBack={goBack} backendItem={selectedBackendItem} staticItem={selectedStaticItem} modelHubConfig={modelHubConfig} onSelectionChange={refreshMobileSummary} />;
+        return <ClothingDetailScreen onBack={goBack} backendItem={selectedBackendItem} staticItem={selectedStaticItem} modelHubConfig={modelHubConfig} />;
       case "laundryRoom":
         return (
           <LaundryRoomScreen

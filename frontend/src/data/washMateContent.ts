@@ -3,6 +3,7 @@ export type TabId = "today" | "wardrobe" | "laundryRoom" | "report" | "profile";
 export type ScreenId =
   | TabId
   | "planDetail"
+  | "dirtyBasket"
   | "addClothing"
   | "clothingDetail"
   | "machineDetail";

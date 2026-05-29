@@ -8,6 +8,8 @@ export type WashMethod = "hand_wash" | "machine_wash" | "dry_clean" | "do_not_wa
 export type DryMethod = "air_dry" | "low_heat_dryer" | "normal_dryer" | "do_not_dry" | "unknown";
 export type MachineType = "standard_washer" | "shoe_washer" | "dryer" | "unknown";
 export type MachineStatus = "available" | "running" | "out_of_service" | "unknown";
+export type WardrobeCategory = "上衣" | "裤装" | "裙装" | "外套" | "内衣袜子" | "床品" | "鞋包配饰" | "其他";
+export type DirtyBasketAddedAtSource = "known" | "estimated";
 
 /** Normalized machine status used by the planner. */
 export interface MachineInfo {
@@ -175,10 +177,33 @@ export interface CampusContextStatus {
   updated_at: string;
 }
 
+/** One wardrobe item currently sitting in the dirty basket. */
+export interface DirtyBasketItem {
+  item_id: string;
+  name: string;
+  added_at: string;
+  added_at_source: DirtyBasketAddedAtSource;
+  days_in_basket: number;
+  warning_label: string;
+}
+
+/** Practical dirty-basket summary derived from the current dirty-basket records. */
+export interface DirtyBasketSummary {
+  item_count: number;
+  load_percent: number;
+  oldest_days: number;
+  urgent_count: number;
+  status_label: string;
+  recommendation: string;
+  next_action: string;
+  items: DirtyBasketItem[];
+}
+
 /** Wardrobe item as stored in localStorage and displayed on screens. */
 export interface WardrobeSummaryItem {
   item_id: string;
   name: string;
+  category?: WardrobeCategory;
   user_note?: string;
   user_notes?: string[];
   wear_count_since_wash: number;
@@ -186,6 +211,7 @@ export interface WardrobeSummaryItem {
   material_ratios: Record<string, number>;
   colors: string[];
   risks: Record<string, string>;
+  photo_data_url?: string;
 }
 
 /** Raw wardrobe input from the add-clothing form. */
@@ -195,6 +221,8 @@ export interface WardrobeInput {
   colors: string;
   note: string;
   image_filename: string;
+  category?: WardrobeCategory;
+  photo_data_url?: string;
 }
 
 /** Machine data in the shape screens consume. */
@@ -223,6 +251,8 @@ export interface BackendQueueEstimate {
 /** The complete summary served to all mobile screens. */
 export interface MobileSummary {
   source: "backend";
+  selected_laundry_item_ids: string[];
+  dirty_basket: DirtyBasketSummary;
   weather?: WeatherSnapshot;
   campus_towers?: CampusTowerOption[];
   campus_status?: CampusContextStatus;

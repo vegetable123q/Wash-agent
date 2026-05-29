@@ -13,15 +13,41 @@ export const emptyModelHubConfig: ModelHubConfig = {
   model_name: supportedModelNames[0],
 };
 
+const STORAGE_KEY = "washmate.modelHubConfig";
+let inMemoryModelHubConfig: ModelHubConfig | null = null;
+
 export function loadModelHubConfig(): ModelHubConfig {
-  return emptyModelHubConfig;
+  if (inMemoryModelHubConfig) {
+    return inMemoryModelHubConfig;
+  }
+  if (typeof localStorage === "undefined") {
+    return emptyModelHubConfig;
+  }
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) {
+    return emptyModelHubConfig;
+  }
+  try {
+    return normalizeModelHubConfig(JSON.parse(raw));
+  } catch {
+    return emptyModelHubConfig;
+  }
 }
 
 export function saveModelHubConfig(config: ModelHubConfig): ModelHubConfig {
-  return normalizeModelHubConfig(config);
+  const normalized = normalizeModelHubConfig(config);
+  inMemoryModelHubConfig = normalized;
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+  }
+  return normalized;
 }
 
 export function clearModelHubConfig(): ModelHubConfig {
+  inMemoryModelHubConfig = null;
+  if (typeof localStorage !== "undefined") {
+    localStorage.removeItem(STORAGE_KEY);
+  }
   return emptyModelHubConfig;
 }
 

@@ -93,7 +93,7 @@ export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate, onVi
           {hasBackend ? backendMachines.map((machine) => (
             <Card
               key={machine.machine_id}
-              className="machine-card"
+              className="machine-card machine-card-equal"
               accent={toneForMachineStatus(machine.status)}
               onClick={() => (onViewMachine ? onViewMachine(machine.machine_id) : onNavigate("machineDetail"))}
             >

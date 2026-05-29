@@ -10,7 +10,7 @@
 import { buildCampusContextForDorm } from "./campusMachineApi";
 import { listCampusTowerOptions } from "./campusTowerDirectory";
 import { buildProfileFromInput, storedToPlanItem, type StoredWardrobeItem } from "./clothingExtractor";
-import { adviseAllFrequencies, recommendedItemIds } from "./frequencyAdvisor";
+import { adviseAllFrequencies } from "./frequencyAdvisor";
 import { planLaundry } from "./laundryPlanner";
 import { DRYING_CONTEXT, PRICING_RULES } from "./pricingRules";
 import { generateReport } from "./reportGenerator";
@@ -20,62 +20,37 @@ import type {
   CampusContext,
   CampusContextStatus,
   CampusTowerOption,
+  DirtyBasketAddedAtSource,
+  DirtyBasketItem,
+  DirtyBasketSummary,
   LaundryConstraints,
   LaundryPlan,
   MachineInfo,
   MobileSummary,
   WardrobeInput,
+  WardrobeCategory,
   WardrobeSummaryItem,
   WashReport,
   WeatherSnapshot,
 } from "./types";
-import { wardrobeItems } from "../data/washMateContent";
 import { fetchTsinghuaWeather } from "./weatherService";
 import type { UserProfile } from "../userProfile";
 
 // ─── public types re-exported for screens ───────────────────────────────
 
-export type { BackendMachine, BackendQueueEstimate, CampusTowerOption, MobileSummary, WardrobeInput, WardrobeSummaryItem };
+export type { BackendMachine, BackendQueueEstimate, CampusTowerOption, MobileSummary, WardrobeCategory, WardrobeInput, WardrobeSummaryItem };
 
 // ─── wardrobe CRUD ──────────────────────────────────────────────────────
 
 const LOCAL_WARDROBE_STORAGE_KEY = "washmate.localWardrobe";
-const MANUAL_SELECTED_KEY = "washmate.manualSelected";
+const LOCAL_LAUNDRY_SELECTION_STORAGE_KEY = "washmate.selectedLaundryItemIds";
+const DAY_MS = 24 * 60 * 60 * 1000;
+let wardrobeItemIdCounter = 0;
 
-// ─── manual item selection ─────────────────────────────────────────────
-
-function readManualSelectedIds(): string[] {
-  if (typeof localStorage === "undefined") return [];
-  const raw = localStorage.getItem(MANUAL_SELECTED_KEY);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((id: unknown) => typeof id === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeManualSelectedIds(ids: string[]): void {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(MANUAL_SELECTED_KEY, JSON.stringify(ids));
-}
-
-export function isManuallySelected(itemId: string): boolean {
-  return readManualSelectedIds().includes(itemId);
-}
-
-export function toggleManualSelection(itemId: string): boolean {
-  const ids = readManualSelectedIds();
-  const index = ids.indexOf(itemId);
-  if (index >= 0) {
-    ids.splice(index, 1);
-    writeManualSelectedIds(ids);
-    return false;
-  }
-  ids.push(itemId);
-  writeManualSelectedIds(ids);
-  return true;
+interface DirtyBasketRecord {
+  item_id: string;
+  added_at: string;
+  added_at_source: DirtyBasketAddedAtSource;
 }
 
 export async function fetchMobileSummary(profile?: Pick<UserProfile, "dormName" | "allowDryer">): Promise<MobileSummary> {
@@ -85,9 +60,11 @@ export async function fetchMobileSummary(profile?: Pick<UserProfile, "dormName" 
 export async function createWardrobeItem(input: WardrobeInput): Promise<{ status: string; item: WardrobeSummaryItem }> {
   const name = input.name.trim();
   if (!name) throw new Error("name is required");
+  const items = readLocalWardrobeItems();
+  const itemId = nextWardrobeItemId(items.map((item) => item.item_id));
 
   const profile = buildProfileFromInput({
-    item_id: `wm-user-${Date.now().toString(36)}`,
+    item_id: itemId,
     name,
     material_text: input.material.trim(),
     colors_text: input.colors.trim(),
@@ -97,6 +74,7 @@ export async function createWardrobeItem(input: WardrobeInput): Promise<{ status
   const item: WardrobeSummaryItem = {
     item_id: profile.item_id,
     name: profile.name,
+    category: normalizeWardrobeCategory(input.category),
     user_note: profile.user_note,
     user_notes: [input.note.trim(), input.image_filename.trim()].filter(Boolean),
     wear_count_since_wash: 0,
@@ -106,10 +84,10 @@ export async function createWardrobeItem(input: WardrobeInput): Promise<{ status
     risks: Object.fromEntries(
       Object.entries(profile.risks).map(([key, level]) => [key, level]),
     ),
+    photo_data_url: validPhotoDataUrl(input.photo_data_url) ? input.photo_data_url : undefined,
   };
 
-  const items = [...readLocalWardrobeItems(), item];
-  writeLocalWardrobeItems(items);
+  writeLocalWardrobeItems([...items, item]);
   return { status: "created", item };
 }
 
@@ -120,7 +98,22 @@ export async function deleteWardrobeItem(itemId: string): Promise<{ status: stri
   const nextItems = items.filter((item) => item.item_id !== normalizedItemId);
   if (nextItems.length === items.length) throw new Error(`Unknown wardrobe item: ${normalizedItemId}`);
   writeLocalWardrobeItems(nextItems);
+  writeDirtyBasketRecords(readDirtyBasketRecords(nextItems));
   return { status: "deleted", item_id: normalizedItemId };
+}
+
+export async function setLaundrySelection(itemIds: string[]): Promise<{ status: string; selected_item_ids: string[] }> {
+  const wardrobeItems = readLocalWardrobeItems();
+  const validIds = new Set(wardrobeItems.map((item) => item.item_id));
+  const existingRecords = new Map(readDirtyBasketRecords(wardrobeItems).map((record) => [record.item_id, record]));
+  const selected = [...new Set(itemIds.map((id) => id.trim()).filter(Boolean))]
+    .filter((id) => validIds.has(id));
+  writeDirtyBasketRecords(selected.map((itemId) => existingRecords.get(itemId) ?? {
+    item_id: itemId,
+    added_at: new Date().toISOString(),
+    added_at_source: "known",
+  }));
+  return { status: "updated", selected_item_ids: selected };
 }
 
 // ─── integrated summary builder ─────────────────────────────────────────
@@ -167,10 +160,16 @@ async function buildIntegratedMobileSummary(profile?: Pick<UserProfile, "dormNam
 
   // Convert stored items to planner-compatible items
   const planItems = storedItems.map(storedToPlanItem);
+  const dirtyBasketRecords = readDirtyBasketRecords(storedItems);
+  if (dirtyBasketRecords.length > 0) {
+    writeDirtyBasketRecords(dirtyBasketRecords);
+  }
+  const selectedLaundryItemIds = dirtyBasketRecords.map((record) => record.item_id);
+  const selectedItems = storedItems.filter((item) => selectedLaundryItemIds.includes(item.item_id));
 
-  // Build constraints — auto-select items recommended for washing
+  // Build constraints from explicit user selection for the current laundry batch.
   const constraints: LaundryConstraints = {
-    selected_item_ids: [],
+    selected_item_ids: selectedLaundryItemIds,
     urgent_item_ids: [],
     allow_mixed_colors: false,
     allow_dryer: Boolean(profile?.allowDryer),
@@ -181,32 +180,23 @@ async function buildIntegratedMobileSummary(profile?: Pick<UserProfile, "dormNam
 
   // Get frequency advice for all items
   const frequencyAdvice = adviseAllFrequencies(planItems, constraints);
-  const recommendedIds = recommendedItemIds(planItems, constraints, 45);
-
-  // Merge manual user selections into the plan
-  const manualIds = readManualSelectedIds().filter((id) => planItems.some((p) => p.profile.item_id === id));
-  const selectedIds = [...new Set([...recommendedIds, ...manualIds])];
-  constraints.selected_item_ids = selectedIds;
-  constraints.urgent_item_ids = manualIds;
-
-  // Plan laundry for recommended items
+  // Plan laundry only for items explicitly selected for this batch.
   let plan: LaundryPlan;
   let report: WashReport;
 
-  if (recommendedIds.length === 0) {
-    // No items recommended for washing — produce empty plan
+  if (selectedLaundryItemIds.length === 0) {
     plan = {
       buckets: [],
-      estimated_cost_yuan: 0,
-      estimated_duration_minutes: 0,
-      summary: "当前没有需要优先清洗的衣物。",
+      estimated_cost_yuan: null,
+      estimated_duration_minutes: null,
+      summary: "请选择本次要清洗的衣物后生成校园洗衣方案。",
       global_warnings: [],
     };
     report = {
       title: "本次校园洗衣方案",
       sections: {
-        "洗衣步骤": "当前衣柜中没有达到清洗阈值的衣物，可暂缓洗衣。",
-        "费用和时间": "预计费用 0 元。",
+        "洗衣步骤": "请选择本次要清洗的衣物后生成校园洗衣方案。",
+        "费用和时间": "费用待确认。",
         "机器环境": `当前可用机器记录 ${campusContext.available_machines.length} 台。`,
         "风险提醒": "本次没有额外风险提醒。",
       },
@@ -216,7 +206,7 @@ async function buildIntegratedMobileSummary(profile?: Pick<UserProfile, "dormNam
   } else {
     try {
       const selectedPlanItems = planItems.filter((item) =>
-        recommendedIds.includes(item.profile.item_id),
+        selectedLaundryItemIds.includes(item.profile.item_id),
       );
       plan = planLaundry(selectedPlanItems, constraints, campusContext);
       report = generateReport(plan, selectedPlanItems, campusContext);
@@ -249,6 +239,8 @@ async function buildIntegratedMobileSummary(profile?: Pick<UserProfile, "dormNam
 
   return {
     source: "backend",
+    selected_laundry_item_ids: selectedLaundryItemIds,
+    dirty_basket: buildDirtyBasketSummary(selectedItems, dirtyBasketRecords),
     weather,
     campus_towers: listCampusTowerOptions(),
     campus_status: campusStatus,
@@ -260,7 +252,11 @@ async function buildIntegratedMobileSummary(profile?: Pick<UserProfile, "dormNam
       queue_estimates: campusContext.queue_estimates.map(toBackendQueueEstimate),
       weather: campusContext.weather,
       drying_context: campusContext.drying_context,
-      pricing_rules: { ...campusContext.pricing_rules, source: "integrated" },
+      pricing_rules: {
+        wash_programs: campusContext.pricing_rules.wash_programs,
+        dryer_programs: campusContext.pricing_rules.dryer_programs,
+        source: "integrated",
+      },
     },
     plan: {
       buckets: plan.buckets.map((b) => ({
@@ -295,17 +291,24 @@ function emptyCampusContext(weather: WeatherSnapshot): CampusContext {
 }
 
 function campusPricingRules(): CampusContext["pricing_rules"] {
-  return PRICING_RULES;
+  return {
+    wash_programs: PRICING_RULES.wash_programs,
+    dryer_programs: PRICING_RULES.dryer_programs,
+  };
 }
 
 // ─── local storage ──────────────────────────────────────────────────────
 
 function readLocalWardrobeItems(): WardrobeSummaryItem[] {
   const saved = typeof localStorage === "undefined" ? null : localStorage.getItem(LOCAL_WARDROBE_STORAGE_KEY);
-  if (!saved) return initialWardrobeItems();
+  if (!saved) return [];
   const parsed = JSON.parse(saved) as WardrobeSummaryItem[];
   if (!Array.isArray(parsed)) throw new Error("Invalid local wardrobe data");
-  return parsed;
+  const repaired = repairDuplicateWardrobeItemIds(parsed);
+  if (repaired.changed) {
+    writeLocalWardrobeItems(repaired.items);
+  }
+  return repaired.items;
 }
 
 function writeLocalWardrobeItems(items: WardrobeSummaryItem[]): void {
@@ -313,37 +316,225 @@ function writeLocalWardrobeItems(items: WardrobeSummaryItem[]): void {
   localStorage.setItem(LOCAL_WARDROBE_STORAGE_KEY, JSON.stringify(items));
 }
 
-function initialWardrobeItems(): WardrobeSummaryItem[] {
-  return wardrobeItems.slice(0, 4).map((item) => ({
-    item_id: item.id,
-    name: item.name,
-    user_note: item.description,
-    user_notes: [item.description],
-    wear_count_since_wash: item.wearCount,
-    wash_count: item.washCount,
-    material_ratios: materialRatiosFromStatic(item.material),
-    colors: colorsFromStatic(item),
-    risks: risksFromStatic(item.riskLevel),
-  }));
+function nextWardrobeItemId(existingIds: Iterable<string>): string {
+  const existing = new Set(existingIds);
+  let candidate = "";
+  do {
+    wardrobeItemIdCounter += 1;
+    candidate = `wm-user-${Date.now().toString(36)}-${wardrobeItemIdCounter.toString(36)}`;
+  } while (existing.has(candidate));
+  return candidate;
 }
 
-function materialRatiosFromStatic(value: string): Record<string, number> {
-  const percentMatch = value.match(/^(.+?)\s*(\d+)%$/);
-  if (percentMatch) return { [percentMatch[1].trim().toLowerCase()]: Number(percentMatch[2]) / 100 };
-  return value ? { [value.toLowerCase()]: 1 } : {};
+function repairDuplicateWardrobeItemIds(items: WardrobeSummaryItem[]): { items: WardrobeSummaryItem[]; changed: boolean } {
+  const seen = new Set<string>();
+  let changed = false;
+  const repairedItems = items.map((item) => {
+    const itemId = String(item.item_id ?? "").trim();
+    if (!itemId || seen.has(itemId)) {
+      const nextId = nextWardrobeItemId(seen);
+      seen.add(nextId);
+      changed = true;
+      return { ...item, item_id: nextId };
+    }
+    seen.add(itemId);
+    return item;
+  });
+  return { items: repairedItems, changed };
 }
 
-function colorsFromStatic(item: { name: string }): string[] {
-  if (item.name.includes("白")) return ["white"];
-  if (item.name.includes("黑")) return ["black"];
-  if (item.name.includes("灰")) return ["gray"];
-  return [];
+function normalizeWardrobeCategory(value: unknown): WardrobeCategory | undefined {
+  const category = typeof value === "string" ? value.trim() : "";
+  return wardrobeCategories().includes(category as WardrobeCategory) ? (category as WardrobeCategory) : undefined;
 }
 
-function risksFromStatic(level: string): Record<string, string> {
-  if (level === "高") return { shrink: "high", color_bleed: "high" };
-  if (level === "中") return { general: "medium" };
-  return {};
+function wardrobeCategories(): WardrobeCategory[] {
+  return ["上衣", "裤装", "裙装", "外套", "内衣袜子", "床品", "鞋包配饰", "其他"];
+}
+
+function validPhotoDataUrl(value: unknown): value is string {
+  return typeof value === "string" && /^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(value);
+}
+
+function readDirtyBasketRecords(items: WardrobeSummaryItem[]): DirtyBasketRecord[] {
+  if (typeof localStorage === "undefined") return [];
+  const saved = localStorage.getItem(LOCAL_LAUNDRY_SELECTION_STORAGE_KEY);
+  if (!saved) return [];
+  const parsed = JSON.parse(saved) as unknown;
+  if (!Array.isArray(parsed)) throw new Error("Invalid selected laundry item data");
+  const validIds = new Set(items.map((item) => item.item_id));
+  const seen = new Set<string>();
+  const records: DirtyBasketRecord[] = [];
+
+  for (const entry of parsed) {
+    const record = dirtyBasketRecordFromStorage(entry);
+    if (!record || !validIds.has(record.item_id) || seen.has(record.item_id)) {
+      continue;
+    }
+    seen.add(record.item_id);
+    records.push(record);
+  }
+
+  return records;
+}
+
+function dirtyBasketRecordFromStorage(value: unknown): DirtyBasketRecord | null {
+  if (typeof value === "string") {
+    const itemId = value.trim();
+    return itemId ? { item_id: itemId, added_at: new Date().toISOString(), added_at_source: "estimated" } : null;
+  }
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const raw = value as Partial<DirtyBasketRecord>;
+  const itemId = String(raw.item_id ?? "").trim();
+  if (!itemId) {
+    return null;
+  }
+  const hasValidAddedAt = validIsoDate(raw.added_at);
+  const addedAt = hasValidAddedAt ? String(raw.added_at) : new Date().toISOString();
+  const addedAtSource =
+    raw.added_at_source === "estimated" || !hasValidAddedAt ? "estimated" : "known";
+  return { item_id: itemId, added_at: addedAt, added_at_source: addedAtSource };
+}
+
+function validIsoDate(value: unknown): boolean {
+  return typeof value === "string" && !Number.isNaN(new Date(value).getTime());
+}
+
+function writeDirtyBasketRecords(records: DirtyBasketRecord[]): void {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(LOCAL_LAUNDRY_SELECTION_STORAGE_KEY, JSON.stringify(records));
+}
+
+function buildDirtyBasketSummary(
+  selectedItems: WardrobeSummaryItem[],
+  records: DirtyBasketRecord[],
+): DirtyBasketSummary {
+  const itemCount = selectedItems.length;
+  const loadPercent = Math.min(100, itemCount * 30);
+  const itemMap = new Map(selectedItems.map((item) => [item.item_id, item]));
+  const basketItems: DirtyBasketItem[] = records
+    .map((record) => {
+      const item = itemMap.get(record.item_id);
+      if (!item) return null;
+      const daysInBasket = daysSince(record.added_at);
+      return {
+        item_id: item.item_id,
+        name: item.name,
+        added_at: record.added_at,
+        added_at_source: record.added_at_source,
+        days_in_basket: daysInBasket,
+        warning_label: record.added_at_source === "estimated" ? "加入时间待确认" : dirtyBasketWarningLabel(item, daysInBasket),
+      };
+    })
+    .filter((item): item is DirtyBasketItem => item !== null);
+  const oldestDays = Math.max(0, ...basketItems.map((item) => item.days_in_basket));
+  const urgentCount = selectedItems.filter(isUrgentItem).length;
+  const hasUrgentItem = selectedItems.some((item) =>
+    [item.name, item.user_note, ...(item.user_notes ?? [])].join(" ").includes("明天要穿"),
+  );
+
+  if (itemCount === 0) {
+    return {
+      item_count: 0,
+      load_percent: 0,
+      oldest_days: 0,
+      urgent_count: 0,
+      status_label: "空篮",
+      recommendation: "先把脏衣服加入脏衣篮，再生成本次洗衣方案。",
+      next_action: "去衣柜选择这批要洗的衣物",
+      items: [],
+    };
+  }
+
+  if (oldestDays >= 3) {
+    return {
+      item_count: itemCount,
+      load_percent: loadPercent,
+      oldest_days: oldestDays,
+      urgent_count: urgentCount,
+      status_label: "久放需洗",
+      recommendation: `有衣物已放 ${oldestDays} 天，建议今天处理，运动衣、贴身衣物或潮湿衣物不要继续攒。`,
+      next_action: "查看本次方案",
+      items: basketItems,
+    };
+  }
+
+  if (hasUrgentItem) {
+    return {
+      item_count: itemCount,
+      load_percent: loadPercent,
+      oldest_days: oldestDays,
+      urgent_count: urgentCount,
+      status_label: "有急用衣物",
+      recommendation: "这批里有明天要穿的衣物，建议今天洗，不必继续等满桶。",
+      next_action: "查看本次方案",
+      items: basketItems,
+    };
+  }
+
+  if (loadPercent >= 80) {
+    return {
+      item_count: itemCount,
+      load_percent: loadPercent,
+      oldest_days: oldestDays,
+      urgent_count: urgentCount,
+      status_label: "基本够一桶",
+      recommendation: "这批脏衣已经接近一桶，可以直接生成方案。",
+      next_action: "查看本次方案",
+      items: basketItems,
+    };
+  }
+
+  return {
+    item_count: itemCount,
+    load_percent: loadPercent,
+    oldest_days: oldestDays,
+    urgent_count: urgentCount,
+    status_label: "还没满桶",
+    recommendation: "普通衣物可继续攒；运动衣、贴身衣物或潮湿衣物建议别久放。",
+    next_action: "继续攒或先洗急用衣物",
+    items: basketItems,
+  };
+}
+
+function daysSince(value: string): number {
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) {
+    return 0;
+  }
+  return Math.max(0, Math.floor((Date.now() - timestamp) / DAY_MS));
+}
+
+function dirtyBasketWarningLabel(item: WardrobeSummaryItem, daysInBasket: number): string {
+  if (isUrgentItem(item)) {
+    return "急用";
+  }
+  if (daysInBasket >= 2 && isHygieneSensitiveItem(item)) {
+    return "久放易有味";
+  }
+  if (Object.values(item.risks).includes("high")) {
+    return "分开洗";
+  }
+  if (daysInBasket > 0) {
+    return `已放 ${daysInBasket} 天`;
+  }
+  return "刚加入";
+}
+
+function isUrgentItem(item: WardrobeSummaryItem): boolean {
+  const text = itemSearchText(item);
+  return text.includes("明天要穿") || text.includes("急");
+}
+
+function isHygieneSensitiveItem(item: WardrobeSummaryItem): boolean {
+  const text = itemSearchText(item);
+  return ["运动", "速干", "内衣", "贴身", "袜", "出汗", "潮湿", "湿"].some((term) => text.includes(term));
+}
+
+function itemSearchText(item: WardrobeSummaryItem): string {
+  return [item.name, item.user_note, ...(item.user_notes ?? [])].join(" ").toLowerCase();
 }
 
 // ─── type converters ────────────────────────────────────────────────────

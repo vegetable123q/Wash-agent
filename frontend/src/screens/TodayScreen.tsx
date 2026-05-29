@@ -63,14 +63,20 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
       }
     : backendPlanSummary;
 
+  const hasExecutablePlan = connected && mobileSummary.plan.buckets.length > 0;
+
   // Dynamic recommended start time
   const recommendedTime = useMemo(
-    () => computeRecommendedStartTime(
-      mobileSummary?.plan.estimated_duration_minutes ?? null,
-      userProfile?.latestPickupTime ?? null,
-    ),
-    [mobileSummary?.plan.estimated_duration_minutes, userProfile?.latestPickupTime],
+    () => hasExecutablePlan
+      ? computeRecommendedStartTime(
+          mobileSummary.plan.estimated_duration_minutes ?? null,
+          userProfile?.latestPickupTime ?? null,
+        )
+      : "暂无",
+    [hasExecutablePlan, mobileSummary?.plan.estimated_duration_minutes, userProfile?.latestPickupTime],
   );
+  const recommendedHeadline = hasExecutablePlan ? "按方案清洗" : "暂无待洗";
+  const recommendedTimeLabel = hasExecutablePlan ? `建议开始 ${recommendedTime}` : "暂无建议时间";
 
   const recommendedLabel = useMemo(() => {
     if (!mobileSummary?.plan.buckets.length) return "暂无待洗衣物";
@@ -97,8 +103,27 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
 
   // Dynamic clothing items from plan when connected
   const todayItems = useMemo(() => {
-    if (!connected || !mobileSummary?.plan.buckets.length) return todaySummary.items;
+    if (!connected) return todaySummary.items;
     const nameMap = new Map(mobileSummary.wardrobe.items.map((i) => [i.item_id, i.name]));
+    if (!mobileSummary.plan.buckets.length) {
+      const selectedIds = mobileSummary.selected_laundry_item_ids ?? [];
+      if (!selectedIds.length) {
+        return [{
+          id: "empty-selection",
+          label: "暂无已选衣物",
+          description: "先打开脏衣篮，挑出这次要洗的衣物。",
+          tone: "blue" as const,
+          badge: { label: "未选择", tone: "orange" as const },
+        }];
+      }
+      return selectedIds.map((id) => ({
+        id,
+        label: nameMap.get(id) || id,
+        description: "已加入本次清洗，等待生成分桶方案。",
+        tone: "blue" as const,
+        badge: { label: "已选择", tone: "teal" as const },
+      }));
+    }
     return mobileSummary.plan.buckets.map((b) => {
       const names = b.item_ids.map((id) => nameMap.get(id) || id);
       return {
@@ -116,7 +141,16 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
 
   // Dynamic bucket preview from plan when connected
   const todayBuckets = useMemo(() => {
-    if (!connected || !mobileSummary?.plan.buckets.length) return bucketPlans;
+    if (!connected) return bucketPlans;
+    if (!mobileSummary?.plan.buckets.length) {
+      return [{
+        id: "empty-bucket",
+        title: "暂无分桶",
+        machine: "未生成",
+        detail: "选择本次清洗衣物后再生成分桶。",
+        accent: "blue" as const,
+      }];
+    }
     const nameMap = new Map(mobileSummary.wardrobe.items.map((i) => [i.item_id, i.name]));
     return mobileSummary.plan.buckets.map((b) => {
       const names = b.item_ids.map((id) => nameMap.get(id) || id);
@@ -161,11 +195,14 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
       <PrimaryPanel>
         <div className="panel-kicker">
           <CloudRain size={17} />
-          <span>建议执行时间</span>
+          <span>洗衣建议</span>
         </div>
         <div className="hero-number-row">
           <div>
-            <strong className="hero-number">{recommendedTime}</strong>
+            <strong className="hero-number">{recommendedHeadline}</strong>
+            <div className="hero-advice-meta">
+              <span>{recommendedTimeLabel}</span>
+            </div>
             <p>{recommendedLabel}</p>
           </div>
           <div className="panel-metrics">
@@ -225,6 +262,43 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
           <p>{llmAdvice ?? planSummary.note}</p>
         </Card>
       </Section>
+
+      {connected && mobileSummary?.dirty_basket ? (
+        <Section
+          title="脏衣篮判断"
+          action={
+            <Chip tone={mobileSummary.dirty_basket.item_count ? "teal" : "amber"}>
+              {mobileSummary.dirty_basket.status_label}
+            </Chip>
+          }
+        >
+          <Card accent="teal" className="dirty-basket-card">
+            <div className="dirty-basket-head">
+              <div>
+                <h3>{mobileSummary.dirty_basket.item_count} 件在盆里</h3>
+                <p>
+                  {mobileSummary.dirty_basket.item_count
+                    ? mobileSummary.dirty_basket.recommendation
+                    : "点进脏衣篮选择这批要洗的衣物。"}
+                </p>
+              </div>
+              <strong>约 {mobileSummary.dirty_basket.load_percent}% 桶</strong>
+            </div>
+            <div className="dirty-basket-metrics">
+              <span>{mobileSummary.dirty_basket.item_count} 件脏衣</span>
+              <span>最久 {mobileSummary.dirty_basket.oldest_days} 天</span>
+              <span>{mobileSummary.dirty_basket.urgent_count} 件急用</span>
+            </div>
+            <div className="progress-bar dirty-basket-progress" aria-label="脏衣篮容量">
+              <span style={{ width: `${mobileSummary.dirty_basket.load_percent}%` }} />
+            </div>
+            <button type="button" className="secondary-button" onClick={() => onNavigate("dirtyBasket")}>
+              管理脏衣篮
+              <ArrowRight size={16} />
+            </button>
+          </Card>
+        </Section>
+      ) : null}
 
       <Section title="本次衣物">
         <Card>

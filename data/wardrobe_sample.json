@@ -8,7 +8,10 @@
         "material_ratios": {
           "cotton": 1.0
         },
-        "colors": ["white", "light"],
+        "colors": [
+          "white",
+          "light"
+        ],
         "care_forbidden": [],
         "risks": {
           "shrink": "low",
@@ -26,7 +29,9 @@
           "issues": []
         }
       ],
-      "user_notes": ["常穿基础款"]
+      "user_notes": [
+        "常穿基础款"
+      ]
     },
     {
       "profile": {
@@ -36,8 +41,13 @@
         "material_ratios": {
           "denim": 1.0
         },
-        "colors": ["black", "dark"],
-        "care_forbidden": ["wash_separately"],
+        "colors": [
+          "black",
+          "dark"
+        ],
+        "care_forbidden": [
+          "wash_separately"
+        ],
         "risks": {
           "color_bleed": "high",
           "shrink": "medium"
@@ -47,7 +57,9 @@
       "wear_count_since_wash": 3,
       "preferred_method": "machine_wash",
       "wash_history": [],
-      "user_notes": ["新深色衣物，前几次单独洗"]
+      "user_notes": [
+        "新深色衣物，前几次单独洗"
+      ]
     },
     {
       "profile": {
@@ -58,8 +70,14 @@
           "wool": 0.9,
           "nylon": 0.1
         },
-        "colors": ["gray", "light"],
-        "care_forbidden": ["hand_wash_only", "do_not_tumble_dry"],
+        "colors": [
+          "gray",
+          "light"
+        ],
+        "care_forbidden": [
+          "hand_wash_only",
+          "do_not_tumble_dry"
+        ],
         "risks": {
           "shrink": "high",
           "deform": "high",
@@ -74,10 +92,14 @@
           "washed_at": "2026-05-10",
           "method": "hand_wash",
           "notes": "平铺晾干",
-          "issues": ["pilling"]
+          "issues": [
+            "pilling"
+          ]
         }
       ],
-      "user_notes": ["上次有轻微起球"]
+      "user_notes": [
+        "上次有轻微起球"
+      ]
     },
     {
       "profile": {
@@ -88,7 +110,10 @@
           "polyester": 0.92,
           "spandex": 0.08
         },
-        "colors": ["black", "dark"],
+        "colors": [
+          "black",
+          "dark"
+        ],
         "care_forbidden": [],
         "risks": {
           "odor": "medium"
@@ -98,7 +123,9 @@
       "wear_count_since_wash": 1,
       "preferred_method": "machine_wash",
       "wash_history": [],
-      "user_notes": ["运动后及时洗"]
+      "user_notes": [
+        "运动后及时洗"
+      ]
     },
     {
       "profile": {
@@ -108,7 +135,10 @@
         "material_ratios": {
           "cotton": 1.0
         },
-        "colors": ["white", "light"],
+        "colors": [
+          "white",
+          "light"
+        ],
         "care_forbidden": [],
         "risks": {
           "shrink": "low"
@@ -119,7 +149,55 @@
       "preferred_method": "machine_wash",
       "wash_history": [],
       "user_notes": []
+    },
+    {
+      "profile": {
+        "item_id": "wm-user-675f950c",
+        "name": "优衣库灰色连帽卫衣",
+        "user_note": "之前高温烘干后有点缩水，今晚想穿干净的。",
+        "material_ratios": {
+          "棉混纺": 1.0
+        },
+        "colors": [
+          "深色"
+        ],
+        "care_forbidden": [],
+        "care_warnings": [
+          "用户备注提到缩水史"
+        ],
+        "care_recommendations": [],
+        "risks": {
+          "shrinkage": "medium"
+        },
+        "confidence": 0.72,
+        "source_notes": [
+          "user uploaded file: 9.png"
+        ],
+        "missing_fields": [],
+        "user_fill_suggestions": {},
+        "image_type": "",
+        "care_symbols": {},
+        "care_symbol_evidence": {},
+        "material_evidence_level": "unknown",
+        "care_evidence_level": "unknown",
+        "recommended_wash": "",
+        "field_sources": {
+          "name": "user",
+          "material": "user",
+          "colors": "user",
+          "note": "user"
+        },
+        "agent_trace": [],
+        "extraction_status": "user_input",
+        "extraction_error": ""
+      },
+      "wear_count_since_wash": 0,
+      "preferred_method": "machine_wash",
+      "wash_history": [],
+      "user_notes": [
+        "之前高温烘干后有点缩水，今晚想穿干净的。",
+        "9.png"
+      ]
     }
   ]
 }
-

@@ -36,9 +36,201 @@ describe("AddClothingScreen", () => {
   it("requires ModelHub settings before image recognition", () => {
     render(<AddClothingScreen modelHubConfig={{ ...modelHubConfig, apikey: "" }} onBack={() => undefined} />);
 
-    expect(screen.getByRole("button", { name: "图片记录" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "单件录入" })).toBeInTheDocument();
     expect(screen.getByText("识图需要先在“我的”页面输入 ModelHub baseUrl 和 apikey")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /拍照识别/ })).toBeDisabled();
+  });
+
+  it("extracts a long text description through ModelHub without showing image upload in text mode", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify({
+                    is_clothing: true,
+                    name: "灰色连帽卫衣",
+                    material_ratios: { cotton: 0.7, polyester: 0.3 },
+                    colors: ["gray"],
+                    recommended_wash: "冷水机洗，避免高温烘干",
+                  }),
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AddClothingScreen modelHubConfig={modelHubConfig} onBack={() => undefined} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "文字输入" }));
+    expect(screen.queryByLabelText("上传衣物图片")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("衣物描述"), {
+      target: { value: "这件灰色连帽卫衣大概是棉混纺，之前高温烘干以后有点缩水，今晚想穿。" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /智能提取文字/ }));
+
+    expect(await screen.findByDisplayValue("灰色连帽卫衣")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("cotton 70%, polyester 30%")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("gray")).toBeInTheDocument();
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(JSON.stringify(body)).not.toContain("inline_data");
+  });
+
+  it("recognizes multiple selected images and saves them together", async () => {
+    const onSaved = vi.fn();
+    const onBack = vi.fn();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: JSON.stringify({
+                      is_clothing: true,
+                      name: "白色棉 T 恤",
+                      material_ratios: { cotton: 1 },
+                      colors: ["white"],
+                    }),
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text: JSON.stringify({
+                      is_clothing: true,
+                      name: "黑色运动短裤",
+                      material_ratios: { polyester: 1 },
+                      colors: ["black"],
+                    }),
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = render(<AddClothingScreen modelHubConfig={modelHubConfig} onBack={onBack} onSaved={onSaved} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "批量录入" }));
+    const files = [
+      new File(["tee"], "tee.png", { type: "image/png" }),
+      new File(["shorts"], "shorts.png", { type: "image/png" }),
+    ];
+    fireEvent.change(screen.getByLabelText("批量上传衣物图片"), { target: { files } });
+    fireEvent.click(screen.getByRole("button", { name: /批量识别/ }));
+
+    expect(await screen.findByText("已识别 2 件衣物，可统一保存。")).toBeInTheDocument();
+    expect(screen.getByText("白色棉 T 恤")).toBeInTheDocument();
+    expect(screen.getByText("黑色运动短裤")).toBeInTheDocument();
+    const saveButton = screen.getByRole("button", { name: /统一保存 2 件衣物/ });
+    fireEvent.click(saveButton);
+
+    const savedMessage = await screen.findByText("已统一保存 2 件衣物");
+    expect(savedMessage).toBeInTheDocument();
+    const statusElements = Array.from(container.querySelectorAll("button,p"));
+    expect(statusElements.indexOf(savedMessage)).toBeGreaterThan(statusElements.indexOf(saveButton));
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows batch recognition progress with rotating tips while images are being recognized", async () => {
+    let resolveFirst: (value: { ok: boolean; json: () => Promise<object> }) => void = () => undefined;
+    let resolveSecond: (value: { ok: boolean; json: () => Promise<object> }) => void = () => undefined;
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ ok: boolean; json: () => Promise<object> }>((resolve) => {
+            resolveFirst = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ ok: boolean; json: () => Promise<object> }>((resolve) => {
+            resolveSecond = resolve;
+          }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AddClothingScreen modelHubConfig={modelHubConfig} onBack={() => undefined} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "批量录入" }));
+    const files = [
+      new File(["tee"], "tee.png", { type: "image/png" }),
+      new File(["shorts"], "shorts.png", { type: "image/png" }),
+    ];
+    fireEvent.change(screen.getByLabelText("批量上传衣物图片"), { target: { files } });
+    fireEvent.click(screen.getByRole("button", { name: /批量识别/ }));
+
+    expect(await screen.findByRole("dialog", { name: "批量识别进度" })).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "批量识别进度" })).toHaveAttribute("aria-valuenow", "0");
+    expect(screen.getByText("正在识别 1 / 2")).toBeInTheDocument();
+    expect(screen.getByText("先识别衣物本身，再把吊牌/洗标补成备注。")).toBeInTheDocument();
+
+    resolveFirst({
+      ok: true,
+      json: async () => ({
+        candidates: [{ content: { parts: [{ text: JSON.stringify({ name: "白色棉 T 恤" }) }] } }],
+      }),
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole("progressbar", { name: "批量识别进度" })).toHaveAttribute("aria-valuenow", "50"),
+    );
+    expect(screen.getByText("正在识别 2 / 2")).toBeInTheDocument();
+    expect(screen.getByText("颜色和材质会影响分桶，深浅色先分开更稳。")).toBeInTheDocument();
+
+    resolveSecond({
+      ok: true,
+      json: async () => ({
+        candidates: [{ content: { parts: [{ text: JSON.stringify({ name: "黑色运动短裤" }) }] } }],
+      }),
+    });
+
+    expect(await screen.findByText("已识别 2 件衣物，可统一保存。")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "批量识别进度" })).not.toBeInTheDocument();
+  });
+
+  it("shows a clear reminder when the selected image has no clothing", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: JSON.stringify({ is_clothing: false }) }] } }],
+        }),
+      }),
+    );
+
+    render(<AddClothingScreen modelHubConfig={modelHubConfig} onBack={() => undefined} />);
+
+    const file = new File(["desk"], "desk.png", { type: "image/png" });
+    fireEvent.change(screen.getByLabelText("上传衣物图片"), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: /拍照识别/ }));
+
+    expect(await screen.findByText(/没有识别到衣物/)).toBeInTheDocument();
   });
 
   it("keeps recognition disabled while a slow ModelHub request is in flight", async () => {
@@ -67,7 +259,7 @@ describe("AddClothingScreen", () => {
         candidates: [{ content: { parts: [{ text: JSON.stringify({ name: "蓝色衬衫" }) }] } }],
       }),
     });
-    expect(await screen.findByText("识图完成，已填入可编辑字段")).toBeInTheDocument();
+    expect(await screen.findByText("识别完成，已填入可编辑字段")).toBeInTheDocument();
   });
 
   it("recognizes a selected image through ModelHub and fills the form", async () => {

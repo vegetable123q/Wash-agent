@@ -7,6 +7,17 @@ describe("PlanDetailScreen", () => {
   it("renders machine types as user-facing labels", () => {
     const mobileSummary = {
       source: "backend",
+      selected_laundry_item_ids: [],
+      dirty_basket: {
+        item_count: 0,
+        load_percent: 0,
+        oldest_days: 0,
+        urgent_count: 0,
+        status_label: "空篮",
+        recommendation: "请选择脏衣篮衣物。",
+        next_action: "去脏衣篮",
+        items: [],
+      },
       wardrobe: { items: [] },
       campus_context: {
         all_machines: [],

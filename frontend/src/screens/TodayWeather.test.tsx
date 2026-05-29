@@ -7,6 +7,17 @@ describe("TodayScreen weather integration", () => {
   it("shows live weather values when the backend provides them", () => {
     const mobileSummary = {
       source: "backend",
+      selected_laundry_item_ids: [],
+      dirty_basket: {
+        item_count: 0,
+        load_percent: 0,
+        oldest_days: 0,
+        urgent_count: 0,
+        status_label: "空篮",
+        recommendation: "先选择衣物。",
+        next_action: "去衣柜选择这批要洗的衣物",
+        items: [],
+      },
       wardrobe: { items: [] },
       campus_context: {
         all_machines: [],

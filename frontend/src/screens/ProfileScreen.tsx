@@ -53,7 +53,7 @@ export function ProfileScreen({
 
   const handleApiSubmit = (event: FormEvent) => {
     event.preventDefault();
-    onSaveModelHubConfig(modelHubDraft);
+    setModelHubDraft(onSaveModelHubConfig(modelHubDraft));
     setModelHubSaved(true);
   };
 
@@ -200,7 +200,7 @@ export function ProfileScreen({
         </Section>
 
         {modelHubSaved && hasModelDraft ? (
-          <p className="form-status form-status-ok">识图配置仅在本次打开期间生效，apikey 不会保存</p>
+          <p className="form-status form-status-ok">识图配置已保存到本机；只在本设备使用，可随时清除</p>
         ) : null}
 
         <div className="button-row">

@@ -22,7 +22,7 @@ export function TopBar({ title, onBack, action }: TopBarProps) {
   return (
     <div className="top-bar">
       {onBack ? (
-        <button className="icon-button" type="button" onClick={onBack} aria-label="返回">
+        <button className="icon-button floating-back-button" type="button" onClick={onBack} aria-label="返回">
           <ArrowLeft size={20} />
         </button>
       ) : (

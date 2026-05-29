@@ -1,8 +1,9 @@
 import { Plus, Trash2 } from "lucide-react";
 import type { MobileSummary } from "../api/mobileSummary";
+import type { WardrobeCategory } from "../api/types";
 import { Card, Chip, IconAction, MetricCard, Page, Section } from "../components/AppChrome";
 import { ClothingArt } from "../components/ClothingArt";
-import { type ClothingArtKind, type ScreenId, type Tone, wardrobeItems } from "../data/washMateContent";
+import { type ClothingArtKind, type ScreenId, type Tone } from "../data/washMateContent";
 import { useState } from "react";
 
 interface WardrobeScreenProps {
@@ -12,34 +13,34 @@ interface WardrobeScreenProps {
   onDeleteItem?: (itemId: string) => Promise<void>;
 }
 
+interface WardrobeCardModel {
+  id: string;
+  name: string;
+  description: string;
+  art: ClothingArtKind;
+  tag: { label: string; tone: Tone };
+  category: WardrobeCategory;
+  photoDataUrl: string;
+}
+
 export function WardrobeScreen({ mobileSummary, onNavigate, onViewItem, onDeleteItem }: WardrobeScreenProps) {
   const [deletingId, setDeletingId] = useState("");
   const [deleteMessage, setDeleteMessage] = useState("");
   const [deleteError, setDeleteError] = useState("");
   const backendItems = mobileSummary?.wardrobe.items ?? [];
-  const isBackendSnapshot = Boolean(mobileSummary);
-  const isEmptyBackendWardrobe = isBackendSnapshot && backendItems.length === 0;
-  const cards =
-    backendItems.length > 0
-      ? backendItems.map((item) => ({
-          id: item.item_id,
-          name: item.name,
-          description: item.user_note || item.user_notes?.[0] || `${item.wash_count} 次洗涤记录`,
-          art: artForName(item.name),
-          tag: tagForItem(item),
-          canDelete: true,
-        }))
-      : wardrobeItems.slice(0, 4).map((item) => ({
-          id: item.id,
-          name: item.name,
-          description: item.description,
-          art: item.art,
-          tag: item.tags[0],
-          canDelete: false,
-        }));
-  const itemCount = isBackendSnapshot ? String(backendItems.length) : String(cards.length);
-  const selectedPlanIds = mobileSummary?.plan.buckets.flatMap((b) => b.item_ids) ?? [];
-  const suggestedCount = isBackendSnapshot ? String(new Set(selectedPlanIds).size) : "4";
+  const isEmptyWardrobe = backendItems.length === 0;
+  const cards: WardrobeCardModel[] = backendItems.map((item) => ({
+    id: item.item_id,
+    name: item.name,
+    description: item.user_note || item.user_notes?.[0] || `${item.wash_count} 次洗涤记录`,
+    art: artForName(item.name),
+    tag: tagForItem(item),
+    category: categoryForItem(item),
+    photoDataUrl: item.photo_data_url ?? "",
+  }));
+  const categoryGroups = groupWardrobeCards(cards);
+  const itemCount = String(backendItems.length);
+  const categoryCount = String(categoryGroups.length);
 
   // Build real priority list from frequency advice
   const priorityItems = buildPriorityItems(mobileSummary);
@@ -57,13 +58,13 @@ export function WardrobeScreen({ mobileSummary, onNavigate, onViewItem, onDelete
 
       <div className="two-grid">
         <MetricCard value={itemCount} label="件已保存衣物" />
-        <MetricCard value={suggestedCount} label="件建议本次处理" />
+        <MetricCard value={categoryCount} label="类衣物分类" />
       </div>
 
-      <Section title="衣物卡片" action={<Chip tone="teal">本次可选</Chip>}>
+      <Section title="衣物分类" action={<Chip tone="teal">{categoryGroups.length} 类</Chip>}>
         {deleteMessage ? <p className="form-status form-status-ok">{deleteMessage}</p> : null}
         {deleteError ? <p className="form-status form-status-error">{deleteError}</p> : null}
-        {isEmptyBackendWardrobe ? (
+        {isEmptyWardrobe ? (
           <Card accent="blue" className="empty-state-card">
             <div>
               <h3>还没有衣物记录</h3>
@@ -74,59 +75,71 @@ export function WardrobeScreen({ mobileSummary, onNavigate, onViewItem, onDelete
             </button>
           </Card>
         ) : (
-          <div className="wardrobe-grid">
-            {cards.slice(0, 6).map((item) => (
-              <Card key={item.id} className="wardrobe-card">
-                <div className="wardrobe-art-row">
-                  <ClothingArt kind={item.art} />
-                  <Chip tone={item.tag.tone}>{item.tag.label}</Chip>
+          <div className="wardrobe-category-stack">
+            {categoryGroups.map((group) => (
+              <section key={group.title} className="wardrobe-category">
+                <div className="wardrobe-category-head">
+                  <h2>{group.title}</h2>
+                  <span>{group.items.length} 件</span>
                 </div>
-                <div>
-                  <h3>{item.name}</h3>
-                  <p>{item.description}</p>
+                <div className="wardrobe-grid">
+                  {group.items.map((item) => (
+                    <Card key={item.id} className="wardrobe-card">
+                      <div className="wardrobe-art-row">
+                        {item.photoDataUrl ? (
+                          <img className="wardrobe-photo" src={item.photoDataUrl} alt={`${item.name} 照片`} />
+                        ) : (
+                          <ClothingArt kind={item.art} />
+                        )}
+                        <Chip tone={item.tag.tone}>{item.tag.label}</Chip>
+                      </div>
+                      <div>
+                        <h3>{item.name}</h3>
+                        <p>{item.description}</p>
+                      </div>
+                      <div className="wardrobe-card-actions inventory-actions">
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => (onViewItem ? onViewItem(item.id) : onNavigate("clothingDetail"))}
+                        >
+                          查看详情
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-button danger-icon-button"
+                          aria-label={`删除 ${item.name}`}
+                          disabled={deletingId === item.id}
+                          onClick={async () => {
+                            if (!onDeleteItem) {
+                              return;
+                            }
+                            setDeletingId(item.id);
+                            setDeleteMessage("");
+                            setDeleteError("");
+                            try {
+                              await onDeleteItem(item.id);
+                              setDeleteMessage(`已删除 ${item.name}`);
+                            } catch (error) {
+                              setDeleteError(error instanceof Error ? error.message : "删除失败");
+                            } finally {
+                              setDeletingId("");
+                            }
+                          }}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </Card>
+                  ))}
                 </div>
-                <div className="wardrobe-card-actions">
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => (onViewItem ? onViewItem(item.id) : onNavigate("clothingDetail"))}
-                  >
-                    查看详情
-                  </button>
-                  {item.canDelete ? (
-                    <button
-                      type="button"
-                      className="icon-button danger-icon-button"
-                      aria-label={`删除 ${item.name}`}
-                      disabled={deletingId === item.id}
-                      onClick={async () => {
-                        if (!onDeleteItem) {
-                          return;
-                        }
-                        setDeletingId(item.id);
-                        setDeleteMessage("");
-                        setDeleteError("");
-                        try {
-                          await onDeleteItem(item.id);
-                          setDeleteMessage(`已删除 ${item.name}`);
-                        } catch (error) {
-                          setDeleteError(error instanceof Error ? error.message : "删除失败");
-                        } finally {
-                          setDeletingId("");
-                        }
-                      }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  ) : null}
-                </div>
-              </Card>
+              </section>
             ))}
           </div>
         )}
       </Section>
 
-      {!isEmptyBackendWardrobe && priorityItems.length > 0 ? (
+      {!isEmptyWardrobe && priorityItems.length > 0 ? (
         <Section title="优先级">
           <div className="list-stack">
             {priorityItems.map((p) => (
@@ -154,8 +167,7 @@ function buildPriorityItems(summary: MobileSummary | null | undefined) {
   const advice = summary?.frequency_advice;
   const wardrobeItems = summary?.wardrobe.items ?? [];
   if (!advice || !advice.length) {
-    // Static fallback
-    return [{ itemId: "static", title: "运动 T 恤建议本次清洗", description: "运动后穿着，明天早课可能要穿。", badge: "急", tone: "orange" as const }];
+    return [];
   }
 
   const nameMap = new Map(wardrobeItems.map((i) => [i.item_id, i.name]));
@@ -169,6 +181,27 @@ function buildPriorityItems(summary: MobileSummary | null | undefined) {
       badge: a.priority_score >= 75 ? "急" : a.priority_score >= 45 ? "建议" : "可选",
       tone: (a.priority_score >= 75 ? "orange" : "teal") as Tone,
     }));
+}
+
+function groupWardrobeCards(cards: WardrobeCardModel[]) {
+  const order: WardrobeCategory[] = ["上衣", "裤装", "裙装", "外套", "内衣袜子", "床品", "鞋包配饰", "其他"];
+  return order
+    .map((title) => ({
+      title,
+      items: cards.filter((card) => card.category === title),
+    }))
+    .filter((group) => group.items.length > 0);
+}
+
+function categoryForItem(item: MobileSummary["wardrobe"]["items"][number]): WardrobeCategory {
+  if (isWardrobeCategory(item.category)) {
+    return item.category;
+  }
+  return "其他";
+}
+
+function isWardrobeCategory(value: unknown): value is WardrobeCategory {
+  return typeof value === "string" && ["上衣", "裤装", "裙装", "外套", "内衣袜子", "床品", "鞋包配饰", "其他"].includes(value);
 }
 
 function artForName(name: string): ClothingArtKind {

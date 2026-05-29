@@ -18,6 +18,7 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
     ? Object.entries(backendReport.sections).map(([title, copy]) => ({ title, copy }))
     : reportSections.map((s) => ({ ...s, copy: "配置宿舍楼后自动生成" }));
   const hasPlan = Boolean(mobileSummary?.plan.buckets.length);
+  const hasBackendSummary = Boolean(mobileSummary);
   const pricingRules = mobileSummary?.campus_context.pricing_rules;
 
   const breakdown = hasPlan && mobileSummary?.plan && pricingRules
@@ -35,13 +36,20 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
           }
           return items;
         })
-    : report.breakdown;
+    : hasBackendSummary
+      ? [["暂无费用", "¥0"]]
+      : report.breakdown;
 
-  // Show savings notes from the backend report, or static fallback
   const savingsNotes = backendReport?.savings_notes.length
     ? backendReport.savings_notes
-    : [report.valueCopy];
-  const avoided = backendReport?.risk_notes.length ? backendReport.risk_notes.slice(0, 4) : report.avoided;
+    : hasBackendSummary
+      ? ["选择本次要清洗的衣物后生成节水节电建议。"]
+      : [report.valueCopy];
+  const avoided = backendReport?.risk_notes.length
+    ? backendReport.risk_notes.slice(0, 4)
+    : hasBackendSummary
+      ? ["选择衣物后生成风险提醒。"]
+      : report.avoided;
 
   return (
     <Page>
@@ -51,6 +59,7 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
           <h1>{backendReport?.title ?? "本次报告"}</h1>
           <p>把洗护决策转成费用、时间和风险结果</p>
         </div>
+        <Chip tone={hasPlan ? "teal" : "orange"}>{hasPlan ? "后端报告" : "待选择"}</Chip>
       </header>
 
       <PrimaryPanel className="report-panel">

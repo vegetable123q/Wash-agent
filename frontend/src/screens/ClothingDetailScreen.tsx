@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import type { ModelHubConfig } from "../api/modelHubConfig";
 import { fallbackRiskDescription, generateRiskDescription, riskKeyLabel } from "../api/llmSummary";
 import type { WardrobeSummaryItem } from "../api/mobileSummary";
-import { isManuallySelected, toggleManualSelection } from "../api/mobileSummary";
 import { Card, Chip, MetricCard, Page, Section, TopBar } from "../components/AppChrome";
 import { ClothingArt } from "../components/ClothingArt";
 import { type WardrobeItemView } from "../data/washMateContent";
@@ -13,10 +12,9 @@ interface ClothingDetailScreenProps {
   backendItem?: WardrobeSummaryItem | null;
   staticItem?: WardrobeItemView | null;
   modelHubConfig?: ModelHubConfig;
-  onSelectionChange?: () => void | Promise<void>;
 }
 
-export function ClothingDetailScreen({ onBack, backendItem, staticItem, modelHubConfig, onSelectionChange }: ClothingDetailScreenProps) {
+export function ClothingDetailScreen({ onBack, backendItem, staticItem, modelHubConfig }: ClothingDetailScreenProps) {
   // LLM-enhanced risk description (backend items only)
   const [llmRiskText, setLlmRiskText] = useState<string | null>(null);
 
@@ -114,20 +112,6 @@ export function ClothingDetailScreen({ onBack, backendItem, staticItem, modelHub
           </div>
         </Card>
       </Section>
-
-      <button
-        className="primary-button"
-        type="button"
-        onClick={async () => {
-          const id = backendItem?.item_id ?? staticItem?.id;
-          if (id) {
-            toggleManualSelection(id);
-            await onSelectionChange?.();
-          }
-        }}
-      >
-        {backendItem && isManuallySelected(backendItem.item_id) ? "移出本次洗衣" : "加入本次洗衣"}
-      </button>
     </Page>
   );
 }

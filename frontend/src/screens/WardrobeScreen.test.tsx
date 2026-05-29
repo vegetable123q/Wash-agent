@@ -1,10 +1,21 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import { WardrobeScreen } from "./WardrobeScreen";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MobileSummary } from "../api/mobileSummary";
+import { WardrobeScreen } from "./WardrobeScreen";
 
 const emptySummary = {
   source: "backend",
+  selected_laundry_item_ids: [],
+  dirty_basket: {
+    item_count: 0,
+    load_percent: 0,
+    oldest_days: 0,
+    urgent_count: 0,
+    status_label: "空篮",
+    recommendation: "先把脏衣服加入脏衣篮，再生成本次洗衣方案。",
+    next_action: "去衣柜选择这批要洗的衣物",
+    items: [],
+  },
   wardrobe: { items: [] },
   campus_context: {
     all_machines: [],
@@ -29,7 +40,91 @@ const emptySummary = {
   },
 } satisfies MobileSummary;
 
+const selectableSummary: MobileSummary = {
+  ...emptySummary,
+  selected_laundry_item_ids: ["tee-1"],
+  dirty_basket: {
+    item_count: 1,
+    load_percent: 30,
+    oldest_days: 0,
+    urgent_count: 0,
+    status_label: "还没满桶",
+    recommendation: "普通衣物可继续攒；运动衣、贴身衣物或潮湿衣物建议别久放。",
+    next_action: "继续攒或先洗急用衣物",
+    items: [],
+  },
+  wardrobe: {
+    items: [
+      {
+        item_id: "tee-1",
+        name: "白色棉 T 恤",
+        user_note: "明天要穿",
+        user_notes: ["明天要穿"],
+        wear_count_since_wash: 2,
+        wash_count: 0,
+        material_ratios: { cotton: 1 },
+        colors: ["white"],
+        risks: {},
+        category: "上衣",
+      },
+      {
+        item_id: "hoodie-1",
+        name: "灰色连帽卫衣",
+        user_note: "周末穿",
+        user_notes: ["周末穿"],
+        wear_count_since_wash: 1,
+        wash_count: 0,
+        material_ratios: { cotton: 0.8, polyester: 0.2 },
+        colors: ["gray"],
+        risks: {},
+        category: "上衣",
+      },
+      {
+        item_id: "jeans-1",
+        name: "深色牛仔裤",
+        user_note: "耐穿",
+        user_notes: ["耐穿"],
+        wear_count_since_wash: 3,
+        wash_count: 2,
+        material_ratios: { cotton: 0.98, elastane: 0.02 },
+        colors: ["dark blue"],
+        risks: { color_bleed: "medium" },
+        category: "裤装",
+      },
+      {
+        item_id: "bedding-1",
+        name: "宿舍床单",
+        user_note: "每周换洗",
+        user_notes: ["每周换洗"],
+        wear_count_since_wash: 0,
+        wash_count: 1,
+        material_ratios: { cotton: 1 },
+        colors: ["blue"],
+        risks: {},
+        category: "床品",
+      },
+      {
+        item_id: "coat-1",
+        name: "黑色羽绒服",
+        user_note: "冬天穿",
+        user_notes: ["冬天穿"],
+        wear_count_since_wash: 1,
+        wash_count: 0,
+        material_ratios: { polyester: 1 },
+        colors: ["black"],
+        risks: {},
+        category: "外套",
+        photo_data_url: "data:image/png;base64,Y29hdA==",
+      },
+    ],
+  },
+};
+
 describe("WardrobeScreen", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   it("shows an empty state when the connected backend has no wardrobe items", () => {
     const onNavigate = vi.fn();
 
@@ -41,5 +136,28 @@ describe("WardrobeScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "添加第一件衣物" }));
     expect(onNavigate).toHaveBeenCalledWith("addClothing");
+  });
+
+  it("shows saved clothes as categorized inventory without dirty-basket controls", () => {
+    render(<WardrobeScreen mobileSummary={selectableSummary} onNavigate={() => undefined} />);
+
+    expect(screen.queryByRole("heading", { name: "脏衣篮" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByText("加入本次")).not.toBeInTheDocument();
+    expect(screen.queryByText("本次清洗")).not.toBeInTheDocument();
+
+    expect(screen.getByRole("heading", { name: "上衣" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "裤装" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "床品" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "外套" })).toBeInTheDocument();
+    expect(screen.getByText("白色棉 T 恤")).toBeInTheDocument();
+    expect(screen.getByText("灰色连帽卫衣")).toBeInTheDocument();
+    expect(screen.getByText("深色牛仔裤")).toBeInTheDocument();
+    expect(screen.getByText("宿舍床单")).toBeInTheDocument();
+    expect(screen.getByText("黑色羽绒服")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "黑色羽绒服 照片" })).toHaveAttribute(
+      "src",
+      "data:image/png;base64,Y29hdA==",
+    );
   });
 });

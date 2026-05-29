@@ -27,6 +27,7 @@ interface ExclusionItem {
 
 export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: PlanDetailScreenProps) {
   const backendBuckets = mobileSummary?.plan.buckets ?? [];
+  const hasBackendSummary = Boolean(mobileSummary);
   const hasBackendBuckets = backendBuckets.length > 0;
   const nameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -42,16 +43,28 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
         id: bucket.bucket_id,
         title: `${methodLabel(bucket.wash_method)} · ${programLabel(bucket.program || bucketLabel(bucket.bucket_id))}`,
         machine: machineTypeLabel(bucket.machine_type),
-        detail: `${bucket.item_ids.map((id) => nameMap.get(id) || id).join("、") || "未列出衣物"} · ${dryMethodLabel(bucket.dry_method)}`,
+        detail: `${bucket.item_ids.map((id) => nameMap.get(id) || id).join("、") || "未列出衣物"} · ${dryLabel(bucket.dry_method)}`,
         tags: bucket.warnings.length
           ? bucket.warnings.map((warning) => ({ label: warning, tone: "orange" as const }))
           : [{ label: "后端批次", tone: "teal" as const }],
         accent: bucket.wash_method === "hand_wash" || bucket.wash_method === "dry_clean" ? ("orange" as const) : ("purple" as const),
       }))
-    : bucketPlans;
+    : hasBackendSummary
+      ? [{
+          id: "empty-plan",
+          title: "暂无本次分桶",
+          machine: "待选择",
+          detail: "请先在衣柜勾选这批要清洗的衣物。",
+          tags: [{ label: "未选择衣物", tone: "orange" as const }],
+          accent: "purple" as const,
+        }]
+      : bucketPlans;
 
   const preparationSteps: PreparationStep[] = useMemo(() => {
-    if (!hasBackendBuckets) return defaultPreparationSteps();
+    if (!hasBackendSummary) return defaultPreparationSteps();
+    if (!hasBackendBuckets) {
+      return [{ icon: "blue", title: "先选择衣物", description: "回到衣柜勾选本次要清洗的衣物后，再查看分桶、费用和时长。" }];
+    }
     const steps: PreparationStep[] = [];
 
     const detergentBuckets = backendBuckets.filter((b) => b.detergent_ml != null);
@@ -90,10 +103,11 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
     }
 
     return steps.length > 0 ? steps : defaultPreparationSteps();
-  }, [backendBuckets, hasBackendBuckets]);
+  }, [backendBuckets, hasBackendBuckets, hasBackendSummary]);
 
   const exclusionItems: ExclusionItem[] = useMemo(() => {
-    if (!hasBackendBuckets) return defaultExclusionItems();
+    if (!hasBackendSummary) return defaultExclusionItems();
+    if (!hasBackendBuckets) return [];
     const items = backendBuckets
       .filter((b) => b.wash_method !== "machine_wash")
       .map((b) => ({
@@ -102,7 +116,7 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
         method: methodLabel(b.wash_method),
       }));
     return items.length > 0 ? items : defaultExclusionItems();
-  }, [backendBuckets, hasBackendBuckets]);
+  }, [backendBuckets, hasBackendBuckets, hasBackendSummary]);
 
   // LLM-enhanced summary
   const [llmSummary, setLlmSummary] = useState<string | null>(null);
@@ -121,10 +135,10 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
 
       <Card accent="purple" className="summary-card">
         <div>
-          <h2>{hasBackendBuckets ? `${backendBuckets.length} 个后端批次` : "3 桶分开洗"}</h2>
+          <h2>{hasBackendBuckets ? `${backendBuckets.length} 个后端批次` : hasBackendSummary ? "暂无本次方案" : "3 桶分开洗"}</h2>
           <p>{llmSummary ?? mobileSummary?.plan.summary ?? "床品单独占用标准筒，不和普通衣物混洗。"}</p>
         </div>
-        <Chip tone="teal">{hasBackendBuckets ? "LaundryPlan" : "可执行"}</Chip>
+        <Chip tone={hasBackendBuckets ? "teal" : "orange"}>{hasBackendBuckets ? "LaundryPlan" : hasBackendSummary ? "待选择" : "可执行"}</Chip>
       </Card>
 
       <Section title="洗衣顺序">
@@ -212,7 +226,7 @@ function programLabel(program: string) {
   return program;
 }
 
-function dryMethodLabel(method: string) {
+function dryLabel(method: string) {
   if (method === "air_dry") return "自然晾干";
   if (method === "low_heat_dryer") return "低温烘干";
   if (method === "normal_dryer") return "普通烘干";
