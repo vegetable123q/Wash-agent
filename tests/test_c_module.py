@@ -161,6 +161,23 @@ class CModuleTests(unittest.TestCase):
                         constraints,  # type: ignore[arg-type]
                     )
 
+    def test_frequency_requires_valid_constraints_fields(self) -> None:
+        item = self.store.get_item("wm-white-tee-001")
+        assert item is not None
+
+        invalid_constraints = [
+            ("urgent_item_ids", LaundryConstraints(urgent_item_ids="wm-white-tee-001")),  # type: ignore[arg-type]
+            ("urgent_item_ids", LaundryConstraints(urgent_item_ids=[True])),  # type: ignore[list-item]
+            ("urgent_item_ids", LaundryConstraints(urgent_item_ids=[""])),
+            ("hygiene_sensitive", LaundryConstraints(hygiene_sensitive="yes")),  # type: ignore[arg-type]
+            ("hygiene_sensitive", LaundryConstraints(hygiene_sensitive=1)),  # type: ignore[arg-type]
+        ]
+
+        for field_name, constraints in invalid_constraints:
+            with self.subTest(field_name=field_name, constraints=constraints):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    advise_frequency(item, constraints)
+
     def test_advise_all_requires_items_and_constraints(self) -> None:
         invalid_items: list[object] = ["items", [object()]]
         for items in invalid_items:

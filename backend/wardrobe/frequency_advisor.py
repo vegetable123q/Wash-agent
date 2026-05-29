@@ -157,6 +157,8 @@ def _validate_items(value: object) -> None:
 def _validate_constraints(value: object) -> None:
     if not isinstance(value, LaundryConstraints):
         raise ValueError("constraints must be LaundryConstraints")
+    _item_id_list(value.urgent_item_ids, "urgent_item_ids")
+    _boolean(value.hygiene_sensitive, "hygiene_sensitive")
 
 
 def _min_score(value: object) -> float:
@@ -164,6 +166,18 @@ def _min_score(value: object) -> float:
         raise ValueError("min_score must be numeric")
     score = float(value)
     return score if math.isfinite(score) else 0.0
+
+
+def _item_id_list(value: object, field_name: str) -> None:
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be a list of non-empty strings")
+    if not all(isinstance(item, str) and item.strip() for item in value):
+        raise ValueError(f"{field_name} must be a list of non-empty strings")
+
+
+def _boolean(value: object, field_name: str) -> None:
+    if not isinstance(value, bool):
+        raise ValueError(f"{field_name} must be a boolean")
 
 
 def _search_text(item: WardrobeItem) -> str:
