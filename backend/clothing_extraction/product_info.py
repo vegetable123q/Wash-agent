@@ -15,6 +15,16 @@ def _normalize_text(value: str) -> str:
     return re.sub(r"\s+", " ", value or "").strip()
 
 
+def _first_text(*values: Any) -> str:
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        text = _normalize_text(value)
+        if text:
+            return text
+    return ""
+
+
 def _string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -76,8 +86,10 @@ def enrich_product_info(raw: ClothingInput) -> ClothingInput:
     name = _normalize_text(raw.name)
     shop_name = _normalize_text(raw.shop_name)
     tag_text = _normalize_text(raw.tag_text)
-    user_note = _normalize_text(
-        str(raw.user_note or raw.extra.get("user_note") or raw.user_description)
+    user_note = _first_text(
+        raw.user_note,
+        raw.extra.get("user_note"),
+        raw.user_description,
     )
     extra = dict(raw.extra)
     image_refs = _string_list(raw.image_refs)

@@ -212,6 +212,19 @@ class ClothingExtractionTests(unittest.TestCase):
         self.assertNotIn("True", enriched.extra["normalized_source_text"])
         self.assertNotIn("123", enriched.extra["normalized_source_text"])
 
+    def test_enrich_product_info_ignores_non_string_user_note_overrides(self) -> None:
+        raw = ClothingInput(
+            name="test shirt",
+            user_description=" legacy note ",
+            extra={"user_note": True},
+        )
+
+        enriched = enrich_product_info(raw)
+
+        self.assertEqual(enriched.user_note, "legacy note")
+        self.assertEqual(enriched.user_description, "legacy note")
+        self.assertEqual(enriched.extra["user_note"], "legacy note")
+
     def test_user_note_is_preserved_without_product_metadata_in_core_profile(self) -> None:
         profile = extract_clothing_info(
             ClothingInput(
