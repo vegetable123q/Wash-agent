@@ -401,7 +401,7 @@ function materialEntryText(value: unknown): string {
 
 function materialWithRatioText(material: string, ratio: unknown): string {
   const name = translateMaterialName(material);
-  const numericRatio = typeof ratio === "number" ? ratio : Number(ratio);
+  const numericRatio = numericRatioValue(ratio);
   if (Number.isFinite(numericRatio) && numericRatio > 0) {
     const normalizedRatio = numericRatio > 1 ? numericRatio / 100 : numericRatio;
     if (normalizedRatio > 0 && normalizedRatio <= 1) {
@@ -409,6 +409,18 @@ function materialWithRatioText(material: string, ratio: unknown): string {
     }
   }
   return name;
+}
+
+function numericRatioValue(value: unknown): number {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.endsWith("%")) {
+      return Number(trimmed.slice(0, -1));
+    }
+    return Number(trimmed);
+  }
+  return Number(value);
 }
 
 function careTexts(value: unknown): string[] {
