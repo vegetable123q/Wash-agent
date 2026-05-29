@@ -231,7 +231,7 @@ export function computeRecommendedStartTime(
   const buffer = 15;
   if (latestPickupTime) {
     const [h, m] = latestPickupTime.split(":").map(Number);
-    if (Number.isFinite(h) && Number.isFinite(m)) {
+    if (isValidTimePart(h, 23) && isValidTimePart(m, 59)) {
       const pickup = new Date(now);
       pickup.setHours(h, m, 0, 0);
       const latestStart = new Date(pickup.getTime() - (duration + buffer) * 60000);
@@ -242,4 +242,8 @@ export function computeRecommendedStartTime(
   }
   const suggested = new Date(now.getTime() + buffer * 60000);
   return `${String(suggested.getHours()).padStart(2, "0")}:${String(suggested.getMinutes()).padStart(2, "0")}`;
+}
+
+function isValidTimePart(value: number, max: number): boolean {
+  return Number.isInteger(value) && value >= 0 && value <= max;
 }
