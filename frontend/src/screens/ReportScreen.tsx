@@ -19,7 +19,11 @@ interface RouteCard {
 }
 
 function formatPrice(price: number | null | undefined): string {
-  return price != null ? `¥${price}` : "待确认";
+  return isFiniteNonNegativeNumber(price) ? `¥${price}` : "待确认";
+}
+
+function formatDuration(minutes: number | null | undefined): string {
+  return isFiniteNonNegativeNumber(minutes) ? `${minutes} 分钟` : "待确认";
 }
 
 export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary | null }) {
@@ -30,10 +34,8 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
   const pricingRules = mobileSummary?.campus_context.pricing_rules as PriceRuleMap | undefined;
   const nameMap = new Map(mobileSummary?.wardrobe.items.map((item) => [item.item_id, item.name]) ?? []);
 
-  const totalText = plan
-    ? plan.estimated_cost_yuan == null ? "待确认" : `¥${plan.estimated_cost_yuan}`
-    : report.total;
-  const durationText = plan?.estimated_duration_minutes == null ? "待确认" : `${plan.estimated_duration_minutes} 分钟`;
+  const totalText = plan ? formatPrice(plan.estimated_cost_yuan) : report.total;
+  const durationText = plan ? formatDuration(plan.estimated_duration_minutes) : "待确认";
   const bucketCountText = plan ? `${plan.buckets.length} 个批次` : "待生成";
   const routeCards = hasPlan && plan ? buildRouteCards(plan.buckets, nameMap, pricingRules) : [];
   const reminders = conciseReminders(planReport?.risk_notes, plan?.global_warnings, plan?.buckets.flatMap((bucket) => bucket.warnings));
@@ -176,7 +178,7 @@ function priceLine(bucket: LaundryBucket, pricingRules?: PriceRuleMap): string {
     ? pricingRules?.dryer_programs?.low?.price_yuan
     : undefined;
   const total = [washPrice, dryerPrice]
-    .filter((value): value is number => typeof value === "number")
+    .filter(isFiniteNonNegativeNumber)
     .reduce((sum, value) => sum + value, 0);
   return total > 0 ? formatPrice(total) : "费用待确认";
 }
@@ -189,13 +191,17 @@ function environmentOverview(summary?: MobileSummary | null) {
   const available = summary.campus_context.available_machines.length;
   const waits = summary.campus_context.queue_estimates
     .map((queue) => queue.estimated_wait_minutes)
-    .filter((wait): wait is number => typeof wait === "number")
+    .filter(isFiniteNonNegativeNumber)
     .sort((a, b) => a - b);
   return {
     machineAvailability: total ? `可用 ${available}/${total}` : "暂无设备",
     waitTime: waits.length ? `${waits[0]} 分钟` : "无需等待",
     drying: dryingLabel(summary.campus_context.drying_context),
   };
+}
+
+function isFiniteNonNegativeNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
 function conciseReminders(...groups: Array<string[] | undefined>): string[] {

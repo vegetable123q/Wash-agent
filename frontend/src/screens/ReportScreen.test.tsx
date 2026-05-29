@@ -243,6 +243,86 @@ describe("ReportScreen", () => {
     expect(container.textContent).not.toContain("¥24");
   });
 
+  it("hides non-finite live report numbers", () => {
+    const mobileSummary = {
+      source: "backend",
+      selected_laundry_item_ids: ["tee-1"],
+      dirty_basket: {
+        item_count: 1,
+        load_percent: 20,
+        oldest_days: 1,
+        urgent_count: 0,
+        status_label: "可清洗",
+        recommendation: "今晚处理。",
+        next_action: "查看报告",
+        items: [],
+      },
+      wardrobe: { items: [wardrobeItem("tee-1", "白色棉 T 恤")] },
+      campus_context: {
+        all_machines: [
+          {
+            machine_id: "washer-1",
+            location: "南区21号楼",
+            machine_type: "standard_washer",
+            status: "running",
+            remaining_minutes: null,
+            price_yuan: null,
+            modes: ["standard"],
+          },
+        ],
+        available_machines: [],
+        queue_estimates: [
+          {
+            machine_type: "standard_washer",
+            total_count: 1,
+            available_count: 0,
+            running_count: 1,
+            out_of_service_count: 0,
+            unknown_count: 0,
+            estimated_wait_minutes: Number.POSITIVE_INFINITY,
+          },
+        ],
+        weather: {},
+        drying_context: {},
+        pricing_rules: {
+          wash_programs: { standard: { price_yuan: Number.POSITIVE_INFINITY } },
+          dryer_programs: {},
+        },
+      },
+      plan: {
+        buckets: [
+          {
+            bucket_id: "light-standard",
+            item_ids: ["tee-1"],
+            wash_method: "machine_wash",
+            machine_type: "standard_washer",
+            program: "standard",
+            detergent_ml: 24,
+            use_laundry_bag: false,
+            dry_method: "air_dry",
+            warnings: [],
+          },
+        ],
+        estimated_cost_yuan: Number.NaN,
+        estimated_duration_minutes: Number.POSITIVE_INFINITY,
+        summary: "浅色衣物标准洗。",
+        global_warnings: [],
+      },
+      report: {
+        title: "本次洗护报告",
+        sections: {},
+        savings_notes: [],
+        risk_notes: [],
+      },
+    } satisfies MobileSummary;
+
+    const { container } = render(<ReportScreen mobileSummary={mobileSummary} />);
+
+    expect(container.textContent).not.toMatch(/NaN|Infinity/);
+    expect(screen.getAllByText("待确认").length).toBeGreaterThan(0);
+    expect(screen.getByText("费用待确认")).toBeInTheDocument();
+  });
+
   it("uses plan global warnings when report risk notes are empty", () => {
     const mobileSummary = {
       source: "backend",
