@@ -249,6 +249,20 @@ class CModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "washed_at"):
                     self.store.list_items()
 
+    def test_store_rejects_invalid_wash_record_method(self) -> None:
+        invalid_methods: list[object] = [True, 123, "", "steam"]
+        for method in invalid_methods:
+            with self.subTest(method=method):
+                payload = json.loads(self.path.read_text(encoding="utf-8"))
+                payload["items"][2]["wash_history"][0]["method"] = method
+                self.path.write_text(
+                    json.dumps(payload, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesRegex(ValueError, "method"):
+                    self.store.list_items()
+
     def test_store_rejects_invalid_wash_record_notes(self) -> None:
         invalid_notes: list[object] = [True, 123]
         for notes in invalid_notes:

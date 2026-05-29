@@ -149,7 +149,7 @@ def _wash_record_from_dict(data: dict[str, Any]) -> WashRecord:
     _require_keys(data, {"washed_at", "method", "notes", "issues"})
     return WashRecord(
         washed_at=_required_text(data["washed_at"], "washed_at"),
-        method=WashMethod(data["method"]),
+        method=_wash_method(data["method"], "method"),
         notes=_text(data["notes"], "notes"),
         issues=_string_list(data["issues"], "issues"),
     )
