@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { MobileSummary } from "../api/mobileSummary";
 import { PRICING_RULES } from "../api/pricingRules";
 import { LaundryRoomScreen } from "./LaundryRoomScreen";
 
@@ -158,6 +159,17 @@ describe("LaundryRoomScreen", () => {
     expect(document.querySelectorAll(".machine-card.machine-card-equal")).toHaveLength(3);
   });
 
+  it("shows the weather error reason in the laundry room context card", () => {
+    render(
+      <LaundryRoomScreen
+        onNavigate={vi.fn()}
+        mobileSummary={laundryRoomSummaryWithUnavailableWeather()}
+      />,
+    );
+
+    expect(screen.getByText("Open-Meteo returned 503")).toBeInTheDocument();
+  });
+
   it("requests a unified refresh from the laundry room status area", () => {
     const onRefresh = vi.fn();
     render(
@@ -276,3 +288,54 @@ describe("LaundryRoomScreen", () => {
     expect(screen.getByRole("button", { name: "刷新天气和洗衣机状态" })).toBeDisabled();
   });
 });
+
+function laundryRoomSummaryWithUnavailableWeather(): MobileSummary {
+  return {
+    source: "backend",
+    selected_laundry_item_ids: [],
+    dirty_basket: {
+      item_count: 0,
+      load_percent: 0,
+      oldest_days: 0,
+      urgent_count: 0,
+      status_label: "空篮",
+      recommendation: "先选择衣物。",
+      next_action: "去衣柜选择这批要洗的衣物。",
+      items: [],
+    },
+    campus_status: {
+      state: "live",
+      dorm_name: "南区21号楼",
+      message: "已读取 0 台实时机器记录。",
+      updated_at: "2026-05-29T14:30:00.000Z",
+    },
+    weather: {
+      source: "open-meteo",
+      status: "unavailable",
+      location: "Tsinghua University",
+      error: "Open-Meteo returned 503",
+    },
+    wardrobe: { items: [] },
+    campus_context: {
+      all_machines: [],
+      available_machines: [],
+      queue_estimates: [],
+      weather: {},
+      drying_context: {},
+      pricing_rules: { ...PRICING_RULES },
+    },
+    plan: {
+      buckets: [],
+      estimated_cost_yuan: 0,
+      estimated_duration_minutes: 0,
+      summary: "",
+      global_warnings: [],
+    },
+    report: {
+      title: "",
+      sections: {},
+      savings_notes: [],
+      risk_notes: [],
+    },
+  };
+}

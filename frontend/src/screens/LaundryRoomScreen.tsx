@@ -239,7 +239,8 @@ function formatUpdateTime(value: string) {
 
 function weatherSummary(mobileSummary: MobileSummary): string {
   const w = mobileSummary.weather;
-  if (!w || w.status !== "live" || !w.current) return "天气数据不可用";
+  if (!w) return "天气数据不可用";
+  if (w.status !== "live" || !w.current) return w.error ?? "天气数据不可用";
   const parts: string[] = [];
   if (w.current.temperature_2m != null) parts.push(`${w.current.temperature_2m}°C`);
   if (w.current.relative_humidity_2m != null) parts.push(`湿度 ${w.current.relative_humidity_2m}%`);
