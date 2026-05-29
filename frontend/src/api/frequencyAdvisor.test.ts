@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adviseFrequency } from "./frequencyAdvisor";
+import { adviseFrequency, recommendedItemIds } from "./frequencyAdvisor";
 import type { LaundryConstraints, WardrobeItemForPlan } from "./types";
 
 const constraints: LaundryConstraints = {
@@ -54,6 +54,12 @@ describe("frequencyAdvisor", () => {
     });
 
     expect(advice.priority_score).toBeGreaterThanOrEqual(25);
+  });
+
+  it("falls back to zero when recommended item min score is invalid", () => {
+    const item = planItem({ name: "white cotton tee", wearCount: 2 });
+
+    expect(recommendedItemIds([item], constraints, Number.NaN)).toEqual(["item-1"]);
   });
 });
 

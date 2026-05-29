@@ -119,8 +119,9 @@ export function recommendedItemIds(
   constraints: LaundryConstraints,
   minScore: number,
 ): string[] {
+  const safeMinScore = Number.isFinite(minScore) ? minScore : 0;
   return adviseAllFrequencies(items, constraints)
-    .filter((advice) => advice.priority_score >= minScore)
+    .filter((advice) => advice.priority_score >= safeMinScore)
     .map((advice) => advice.item_id);
 }
 
