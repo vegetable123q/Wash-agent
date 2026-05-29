@@ -182,6 +182,23 @@ describe("mobileSummary wardrobe selection", () => {
     });
   });
 
+  it("ignores nonnumeric legacy material ratio values", async () => {
+    localStorage.setItem(
+      wardrobeStorageKey,
+      JSON.stringify([
+        {
+          item_id: "legacy-tee",
+          name: "legacy tee",
+          material_ratios: { cotton: true, wool: "50%" },
+        },
+      ]),
+    );
+
+    const summary = await fetchMobileSummary();
+
+    expect(summary.wardrobe.items[0].material_ratios).toEqual({ wool: 0.5 });
+  });
+
   it("assigns unique wardrobe ids when several items are saved in the same millisecond", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-29T12:00:00.000Z"));

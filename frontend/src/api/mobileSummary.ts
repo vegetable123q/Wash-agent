@@ -461,7 +461,7 @@ function storageRatioNumber(value: unknown): number {
     const trimmed = value.trim();
     return Number(trimmed.endsWith("%") ? trimmed.slice(0, -1) : trimmed);
   }
-  return Number(value);
+  return Number.NaN;
 }
 
 function normalizeStoredRiskRecord(value: unknown): Record<string, string> {
