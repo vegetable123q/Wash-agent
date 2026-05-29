@@ -338,6 +338,123 @@ class EModuleTests(unittest.TestCase):
                         _campus_context(),
                     )
 
+    def test_plan_requires_valid_item_search_fields(self) -> None:
+        invalid_items = [
+            (
+                "user_note",
+                WardrobeItem(
+                    profile=ClothingProfile(
+                        item_id="bad-note",
+                        name="white tee",
+                        user_note=True,  # type: ignore[arg-type]
+                    )
+                ),
+            ),
+            (
+                "material_ratios",
+                WardrobeItem(
+                    profile=ClothingProfile(
+                        item_id="bad-materials",
+                        name="white tee",
+                        material_ratios="cotton",  # type: ignore[arg-type]
+                    )
+                ),
+            ),
+            (
+                "material_ratios",
+                WardrobeItem(
+                    profile=ClothingProfile(
+                        item_id="bad-material-keys",
+                        name="white tee",
+                        material_ratios={True: 1.0},  # type: ignore[dict-item]
+                    )
+                ),
+            ),
+            (
+                "colors",
+                WardrobeItem(
+                    profile=ClothingProfile(
+                        item_id="bad-colors",
+                        name="white tee",
+                        colors="white",  # type: ignore[arg-type]
+                    )
+                ),
+            ),
+            (
+                "colors",
+                WardrobeItem(
+                    profile=ClothingProfile(
+                        item_id="bad-colors",
+                        name="white tee",
+                        colors=[True],  # type: ignore[list-item]
+                    )
+                ),
+            ),
+            (
+                "care_warnings",
+                WardrobeItem(
+                    profile=ClothingProfile(
+                        item_id="bad-warnings",
+                        name="white tee",
+                        care_warnings=[True],  # type: ignore[list-item]
+                    )
+                ),
+            ),
+            (
+                "care_recommendations",
+                WardrobeItem(
+                    profile=ClothingProfile(
+                        item_id="bad-recommendations",
+                        name="white tee",
+                        care_recommendations=[True],  # type: ignore[list-item]
+                    )
+                ),
+            ),
+            (
+                "care_forbidden",
+                WardrobeItem(
+                    profile=ClothingProfile(
+                        item_id="bad-care",
+                        name="white tee",
+                        care_forbidden=[True],  # type: ignore[list-item]
+                    )
+                ),
+            ),
+            (
+                "source_notes",
+                WardrobeItem(
+                    profile=ClothingProfile(
+                        item_id="bad-source",
+                        name="white tee",
+                        source_notes=[True],  # type: ignore[list-item]
+                    )
+                ),
+            ),
+            (
+                "user_notes",
+                WardrobeItem(
+                    profile=ClothingProfile(item_id="bad-user-notes", name="white tee"),
+                    user_notes="note",  # type: ignore[arg-type]
+                ),
+            ),
+            (
+                "user_notes",
+                WardrobeItem(
+                    profile=ClothingProfile(item_id="bad-user-notes", name="white tee"),
+                    user_notes=[True],  # type: ignore[list-item]
+                ),
+            ),
+        ]
+
+        for field_name, item in invalid_items:
+            with self.subTest(field_name=field_name, item=item):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    plan_laundry(
+                        [item],
+                        LaundryConstraints(selected_item_ids=[item.profile.item_id]),
+                        _campus_context(),
+                    )
+
     def test_plan_requires_laundry_constraints(self) -> None:
         items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
         invalid_constraints: list[object] = [None, object(), {"selected_item_ids": ["white-tee"]}]

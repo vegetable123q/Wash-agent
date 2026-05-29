@@ -87,6 +87,14 @@ def _validate_item(item: WardrobeItem, field_name: str) -> None:
         raise ValueError(f"{field_name}.profile must be a ClothingProfile")
     _non_empty_string(item.profile.item_id, f"{field_name}.profile.item_id")
     _non_empty_string(item.profile.name, f"{field_name}.profile.name")
+    _string(item.profile.user_note, f"{field_name}.profile.user_note")
+    _string_key_dict(item.profile.material_ratios, f"{field_name}.profile.material_ratios")
+    _string_list(item.profile.colors, f"{field_name}.profile.colors")
+    _string_list(item.profile.care_warnings, f"{field_name}.profile.care_warnings")
+    _string_list(item.profile.care_recommendations, f"{field_name}.profile.care_recommendations")
+    _string_list(item.profile.care_forbidden, f"{field_name}.profile.care_forbidden")
+    _string_list(item.profile.source_notes, f"{field_name}.profile.source_notes")
+    _string_list(item.user_notes, f"{field_name}.user_notes")
 
 
 def _validate_constraints(constraints: LaundryConstraints) -> None:
@@ -146,6 +154,18 @@ def _string_list(value: object, field_name: str) -> None:
         raise ValueError(f"{field_name} must be a list of non-empty strings")
     if not all(isinstance(item, str) and item.strip() for item in value):
         raise ValueError(f"{field_name} must be a list of non-empty strings")
+
+
+def _string(value: object, field_name: str) -> None:
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be a string")
+
+
+def _string_key_dict(value: object, field_name: str) -> None:
+    if not isinstance(value, dict):
+        raise ValueError(f"{field_name} must be an object")
+    if not all(isinstance(key, str) and key.strip() for key in value):
+        raise ValueError(f"{field_name} must contain non-empty string keys")
 
 
 def _queue_estimate_list(value: object, field_name: str) -> None:
