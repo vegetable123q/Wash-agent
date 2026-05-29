@@ -373,7 +373,7 @@ function materialText(value: unknown): string {
 
 function materialStringText(value: string): string {
   return value
-    .split(/[、,，/;；]+/)
+    .split(/[、,，/;；\n]+/)
     .map((part) => materialEntryText(part))
     .filter(Boolean)
     .join("、");

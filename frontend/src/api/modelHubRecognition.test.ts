@@ -300,6 +300,24 @@ describe("ModelHub clothing recognition", () => {
     expect(result.material).toBe("棉 80%、聚酯纤维 20%");
   });
 
+  it("splits newline-separated material ratio strings", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        modelHubResponse({
+          is_clothing: true,
+          name: "cotton polyester hoodie",
+          material: "cotton 80%\npolyester 20%",
+          colors: ["gray"],
+        }),
+      ),
+    );
+
+    const result = await recognizeClothingText("cotton polyester hoodie", modelHubConfig);
+
+    expect(result.material).toBe("棉 80%、聚酯纤维 20%");
+  });
+
   it("splits slash-separated care label strings", async () => {
     vi.stubGlobal(
       "fetch",
