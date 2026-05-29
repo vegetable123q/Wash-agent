@@ -52,6 +52,16 @@ jobs:
           tag_name="$(node -e "const version=require('./package.json').version; const match=version.match(/^(0\.\d+)(?:\.0)?$/); if (!match) { console.error('Release version must use 0.xx form, got ' + version); process.exit(1); } console.log(match[1]);")"
           echo "tag_name=$tag_name" >> "$GITHUB_OUTPUT"
 
+      - name: Update Android version from package.json
+        working-directory: frontend
+        run: |
+          version="$(node -e "console.log(require('./package.json').version)")"
+          version_code="$(echo "$version" | sed 's/^0\.\([0-9]*\).*/\1/')"
+          version_name="$(echo "$version" | sed 's/\([0-9]*\.[0-9]*\)\.[0-9]*/\1/')"
+          echo "Updating build.gradle: versionCode=$version_code, versionName=$version_name"
+          sed -i "s/versionCode [0-9]*/versionCode $version_code/" android/app/build.gradle
+          sed -i "s/versionName \"[^\"]*\"/versionName \"$version_name\"/" android/app/build.gradle
+
       - name: Run frontend tests
         working-directory: frontend
         run: npm test -- --run
@@ -121,6 +131,12 @@ jobs:
         with:
           name: washmate-campus-release-apk
           path: frontend/android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Update release tag
+        run: |
+          TAG_NAME="${{ steps.release_version.outputs.tag_name }}"
+          git tag -f "$TAG_NAME"
+          git push -f origin "$TAG_NAME"
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2

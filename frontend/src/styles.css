@@ -68,31 +68,6 @@ button {
   flex-direction: column;
 }
 
-.status-bar {
-  height: 34px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 20px 0;
-  color: #18222a;
-  font-size: 12px;
-  font-weight: 800;
-  flex: 0 0 auto;
-}
-
-.phone-signal {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.phone-signal span {
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: currentColor;
-  opacity: 0.72;
-}
 
 .page {
   flex: 1;

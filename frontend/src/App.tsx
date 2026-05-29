@@ -6,7 +6,7 @@ import {
   type ModelHubConfig,
 } from "./api/modelHubConfig";
 import { deleteWardrobeItem, fetchMobileSummary, type BackendMachine, type MobileSummary, type WardrobeSummaryItem } from "./api/mobileSummary";
-import { BottomNav, StatusBar } from "./components/AppChrome";
+import { BottomNav } from "./components/AppChrome";
 import { machines, wardrobeItems, type MachineView, type ScreenId, type TabId, type WardrobeItemView } from "./data/washMateContent";
 import { AddClothingScreen } from "./screens/AddClothingScreen";
 import { ClothingDetailScreen } from "./screens/ClothingDetailScreen";
@@ -32,11 +32,6 @@ const parentTab: Record<ScreenId, TabId> = {
   clothingDetail: "wardrobe",
   machineDetail: "laundryRoom",
 };
-
-function currentTimeString(): string {
-  const now = new Date();
-  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-}
 
 export default function App() {
   const [screen, setScreen] = useState<ScreenId>("today");
@@ -178,7 +173,6 @@ export default function App() {
   return (
     <div className="app-shell">
       <div className="phone-frame">
-        <StatusBar time={currentTimeString()} />
         {content}
         {isTabScreen ? <BottomNav active={activeTab} onNavigate={navigateTab} /> : null}
       </div>

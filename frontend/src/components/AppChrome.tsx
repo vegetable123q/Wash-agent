@@ -12,24 +12,6 @@ import {
 import type { ReactNode } from "react";
 import type { TabId, Tone } from "../data/washMateContent";
 
-interface StatusBarProps {
-  time?: string;
-}
-
-export function StatusBar({ time = "21:08" }: StatusBarProps) {
-  return (
-    <div className="status-bar" aria-hidden="true">
-      <span>{time}</span>
-      <span className="phone-signal">
-        <span />
-        <span />
-        <span />
-        82%
-      </span>
-    </div>
-  );
-}
-
 interface TopBarProps {
   title: string;
   onBack?: () => void;
