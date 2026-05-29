@@ -136,7 +136,7 @@ def _wash_record_from_dict(data: dict[str, Any]) -> WashRecord:
         washed_at=str(data["washed_at"]),
         method=WashMethod(data["method"]),
         notes=str(data["notes"]),
-        issues=list(data["issues"]),
+        issues=_string_list(data["issues"], "issues"),
     )
 
 
