@@ -303,7 +303,14 @@ def _image_type(value: Any) -> str:
 def _string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
-    return [str(item) for item in value if str(item).strip()]
+    items: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        text = item.strip()
+        if text:
+            items.append(text)
+    return items
 
 
 def _normalize_colors(value: Any) -> list[str]:
@@ -677,12 +684,11 @@ def _profile_from_llm(raw: ClothingInput, payload: dict[str, Any]) -> ClothingPr
         care_recommendations=care_recommendations,
         risks=risks,
         confidence=confidence,
-        source_notes=[
-            str(note)
-            for note in payload.get("source_notes")
-            or raw.extra.get("source_notes", [])
+        source_notes=(
+            _string_list(payload.get("source_notes"))
+            or _string_list(raw.extra.get("source_notes", []))
             or ["LLM returned usable JSON"]
-        ],
+        ),
         image_type=_image_type(payload.get("image_type")),
         care_symbols=care_symbols,
         care_symbol_evidence=_normalize_care_symbol_evidence(

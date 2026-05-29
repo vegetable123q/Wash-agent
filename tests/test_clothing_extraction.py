@@ -874,6 +874,26 @@ class ClothingExtractionTests(unittest.TestCase):
                 self.assertEqual(profile.colors, expected_colors)
                 self.assertEqual("colors" in profile.missing_fields, colors_missing)
 
+    def test_llm_text_lists_require_string_items(self) -> None:
+        response = {
+            "name": "test shirt",
+            "material_ratios": {"cotton": 1.0},
+            "colors": ["black"],
+            "care_forbidden": [],
+            "risks": {},
+            "confidence": 0.7,
+            "source_notes": "visible tag",
+            "agent_trace": [True, " typed_extractor ", "", 123],
+        }
+
+        profile = extract_clothing_info(
+            ClothingInput(name="", extra={"source_notes": ["fallback note"]}),
+            llm_client=FakeLLMClient(json.dumps(response, ensure_ascii=False)),
+        )
+
+        self.assertEqual(profile.source_notes, ["fallback note"])
+        self.assertEqual(profile.agent_trace, ["typed_extractor"])
+
     def test_missing_fields_are_reported_when_sources_are_insufficient(self) -> None:
         profile = extract_clothing_info(
             ClothingInput(name="外套", user_description="只知道是日常穿的外套"),
