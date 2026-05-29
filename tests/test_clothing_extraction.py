@@ -894,6 +894,30 @@ class ClothingExtractionTests(unittest.TestCase):
         self.assertEqual(profile.source_notes, ["fallback note"])
         self.assertEqual(profile.agent_trace, ["typed_extractor"])
 
+    def test_llm_map_fields_require_objects(self) -> None:
+        response = {
+            "name": "test shirt",
+            "material_ratios": True,
+            "colors": ["black"],
+            "care_forbidden": [],
+            "risks": True,
+            "confidence": 0.7,
+            "field_sources": True,
+        }
+
+        try:
+            profile = extract_clothing_info(
+                ClothingInput(name="test shirt"),
+                llm_client=FakeLLMClient(json.dumps(response, ensure_ascii=False)),
+            )
+        except TypeError as exc:
+            self.fail(f"malformed LLM map fields should not crash: {exc}")
+
+        self.assertEqual(profile.material_ratios, {})
+        self.assertIn("material_ratios", profile.missing_fields)
+        self.assertEqual(profile.risks["shrink"], RiskLevel.UNKNOWN)
+        self.assertEqual(profile.field_sources, {})
+
     def test_missing_fields_are_reported_when_sources_are_insufficient(self) -> None:
         profile = extract_clothing_info(
             ClothingInput(name="外套", user_description="只知道是日常穿的外套"),

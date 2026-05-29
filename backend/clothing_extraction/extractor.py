@@ -270,6 +270,10 @@ def _normalize_confidence(value: Any) -> float:
     return max(0.0, min(confidence, 1.0))
 
 
+def _object_dict(value: Any) -> dict[Any, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 def _risk_level(value: Any) -> RiskLevel:
     if isinstance(value, RiskLevel):
         return value
@@ -647,13 +651,13 @@ def _profile_from_llm(raw: ClothingInput, payload: dict[str, Any]) -> ClothingPr
 
     material_ratios = {
         str(key).lower(): ratio
-        for key, value in dict(payload.get("material_ratios") or {}).items()
+        for key, value in _object_dict(payload.get("material_ratios")).items()
         if (ratio := _normalize_ratio(value)) is not None
     }
     risks = _unknown_risks()
     risks.update({
         str(key): _risk_level(value)
-        for key, value in dict(payload.get("risks") or {}).items()
+        for key, value in _object_dict(payload.get("risks")).items()
     })
 
     confidence = _normalize_confidence(payload.get("confidence", 0.0))
@@ -703,7 +707,7 @@ def _profile_from_llm(raw: ClothingInput, payload: dict[str, Any]) -> ClothingPr
         recommended_wash=str(payload.get("recommended_wash") or ""),
         field_sources={
             str(key): str(value)
-            for key, value in dict(payload.get("field_sources") or {}).items()
+            for key, value in _object_dict(payload.get("field_sources")).items()
         },
         agent_trace=_string_list(payload.get("agent_trace")),
         extraction_status="llm_success",
