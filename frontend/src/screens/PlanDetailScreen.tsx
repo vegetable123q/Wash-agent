@@ -128,6 +128,7 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
   // LLM-enhanced summary
   const [llmSummary, setLlmSummary] = useState<string | null>(null);
   useEffect(() => {
+    setLlmSummary(null);
     if (!mobileSummary?.plan || !modelHubConfig) return;
     let cancelled = false;
     generatePlanSummary(mobileSummary.plan, modelHubConfig).then((result) => {
