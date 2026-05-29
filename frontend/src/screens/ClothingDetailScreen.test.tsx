@@ -61,6 +61,24 @@ describe("ClothingDetailScreen", () => {
     expect(screen.queryByText("第一件的 AI 风险描述")).not.toBeInTheDocument();
     expect(screen.getByText(/羊毛开衫：变形风险较高/)).toBeInTheDocument();
   });
+
+  it("does not tell light backend items to wash with dark clothes", () => {
+    render(
+      <ClothingDetailScreen
+        onBack={vi.fn()}
+        backendItem={wardrobeItem({
+          item_id: "white-tee",
+          name: "白色 T 恤",
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          risks: {},
+        })}
+      />,
+    );
+
+    expect(screen.queryByText("与深色衣物同桶")).not.toBeInTheDocument();
+    expect(screen.getByText("按浅色衣物清洗")).toBeInTheDocument();
+  });
 });
 
 const configuredModelHub = {

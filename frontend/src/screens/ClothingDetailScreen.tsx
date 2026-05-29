@@ -99,7 +99,7 @@ export function ClothingDetailScreen({ onBack, backendItem, staticItem, modelHub
             <div className="dense-row">
               <span className="step-token">1</span>
               <div>
-                <h3>与深色衣物同桶</h3>
+                <h3>{item.recommendationTitle}</h3>
                 <p>{item.recommendation}</p>
               </div>
             </div>
@@ -140,6 +140,7 @@ function detailFromBackend(item: WardrobeSummaryItem) {
     riskLevel: highRisk ? "高" : mediumRisk ? "中" : "低",
     riskProgress: highRisk ? "82%" : mediumRisk ? "54%" : "24%",
     riskDescription: fallbackRiskDescription(item.risks, item.name, item.material_ratios),
+    recommendationTitle: recommendationTitleForBackend(item),
     recommendation: userNote,
     historyText: `已穿 ${item.wear_count_since_wash} 次，累计洗涤 ${item.wash_count} 次。`,
   };
@@ -158,9 +159,22 @@ function detailFromStatic(item: WardrobeItemView) {
     riskLevel: item.riskLevel,
     riskProgress: item.riskLevel === "高" ? "82%" : item.riskLevel === "中" ? "54%" : "24%",
     riskDescription: item.recommendation,
+    recommendationTitle: "查看洗护建议",
     recommendation: item.recommendation,
     historyText: `已穿 ${item.wearCount} 次，累计洗涤 ${item.washCount} 次。`,
   };
+}
+
+function recommendationTitleForBackend(item: WardrobeSummaryItem): string {
+  const colorText = item.colors.join(" ").toLowerCase();
+  const colorBleedRisk = item.risks.color_bleed;
+  if (colorBleedRisk === "high" || colorBleedRisk === "medium") {
+    return "深浅色分开洗";
+  }
+  if (["黑", "深", "black", "dark", "navy"].some((term) => colorText.includes(term))) {
+    return "深色衣物分开洗";
+  }
+  return "按浅色衣物清洗";
 }
 
 function materialText(materialRatios: Record<string, number>) {
