@@ -335,6 +335,13 @@ def _required_mock_object(data: dict[str, Any], key: str) -> dict[str, Any]:
     return value
 
 
+def _required_mock_text(data: dict[str, Any], key: str) -> str:
+    value = data.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"machine {key} must be a non-empty string")
+    return value.strip()
+
+
 def _list_mock_machines(path: Path) -> list[MachineInfo]:
     if not path.is_file():
         raise FileNotFoundError(f"machine data file not found: {path}")
@@ -378,7 +385,7 @@ def _machine_from_mock_dict(data: object) -> MachineInfo:
         raise ValueError("machine modes must be a list")
 
     return MachineInfo(
-        machine_id=str(data["machine_id"]),
+        machine_id=_required_mock_text(data, "machine_id"),
         location=str(data["location"]),
         machine_type=_machine_type_from_value(data["machine_type"]),
         status=_machine_status_from_value(data["status"]),
