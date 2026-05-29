@@ -61,6 +61,21 @@ describe("ModelHub clothing recognition", () => {
     });
   });
 
+  it("parses recognition JSON from a fenced block surrounded by prose", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        modelHubTextResponse('识别结果如下：\n```json\n{"is_clothing":true,"name":"white tee","material_ratios":{"cotton":1},"colors":["white"]}\n```\n请确认。'),
+      ),
+    );
+
+    await expect(recognizeClothingText("white tee", modelHubConfig)).resolves.toMatchObject({
+      name: "white tee",
+      material: "棉 100%",
+      colors: "白色",
+    });
+  });
+
   it("extracts clothing fields from a long text description without image data", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       modelHubResponse({
