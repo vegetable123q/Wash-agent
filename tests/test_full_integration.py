@@ -39,7 +39,9 @@ class FullIntegrationTests(unittest.TestCase):
         report = generate_report(plan, items, campus_context)
 
         self.assertEqual(plan.estimated_cost_yuan, 14.0)
+        self.assertEqual([line.amount_yuan for line in plan.cost_breakdown], [6.0, 4.0, 4.0])
         self.assertIn("本次校园洗衣方案", report.title)
+        self.assertEqual([line.amount_yuan for line in report.cost_breakdown], [6.0, 4.0, 4.0])
 
     def test_sample_wardrobe_campus_planner_and_report_work_together(self) -> None:
         root = Path(__file__).resolve().parents[1]
@@ -117,11 +119,19 @@ class FullIntegrationTests(unittest.TestCase):
             ["hand-wash", "large-bedding", "dark-standard", "light-standard"],
         )
         self.assertEqual(plan.estimated_cost_yuan, 14.0)
+        self.assertEqual(plan.estimated_duration_minutes, 115)
+        self.assertEqual([line.label for line in plan.cost_breakdown], [
+            "large-bedding large 洗",
+            "dark-standard standard 洗",
+            "light-standard standard 洗",
+        ])
         buckets_by_id = {bucket.bucket_id: bucket for bucket in plan.buckets}
+        self.assertEqual(buckets_by_id["large-bedding"].machine_id, "washer-large-1")
         self.assertEqual(buckets_by_id["large-bedding"].detergent_ml, 40.0)
         self.assertIn("推荐使用 washer-large-1", " ".join(buckets_by_id["large-bedding"].warnings))
         self.assertIn("白色纯棉 T 恤", report.sections["洗衣步骤"])
         self.assertIn("洗衣液：", report.sections["洗衣步骤"])
+        self.assertTrue(any("washer-large-1" in step for step in report.action_steps))
         self.assertIn("当前可用机器记录 3 台", report.sections["机器环境"])
         self.assertIn("可用位置", report.sections["机器环境"])
         self.assertIn("排队估算", report.sections["机器环境"])

@@ -203,6 +203,19 @@ class CampusContext:
 
 
 @dataclass(slots=True)
+class LaundryChargeLine:
+    """One priced machine action in a laundry plan."""
+
+    bucket_id: str
+    label: str
+    amount_yuan: float
+    duration_minutes: int
+    machine_id: str = ""
+    machine_type: MachineType = MachineType.UNKNOWN
+    program: str = ""
+
+
+@dataclass(slots=True)
 class LaundryBucket:
     """One recommended bucket or batch in the final laundry plan."""
 
@@ -210,10 +223,16 @@ class LaundryBucket:
     item_ids: list[str]
     wash_method: WashMethod
     machine_type: MachineType = MachineType.UNKNOWN
+    machine_id: str = ""
+    machine_location: str = ""
     program: str = ""
     detergent_ml: float | None = None
     use_laundry_bag: bool = False
     dry_method: DryMethod = DryMethod.UNKNOWN
+    dryer_machine_id: str = ""
+    dryer_machine_location: str = ""
+    estimated_cost_yuan: float | None = None
+    estimated_duration_minutes: int | None = None
     warnings: list[str] = field(default_factory=list)
 
 
@@ -225,6 +244,7 @@ class LaundryPlan:
     estimated_cost_yuan: float | None = None
     estimated_duration_minutes: int | None = None
     summary: str = ""
+    cost_breakdown: list[LaundryChargeLine] = field(default_factory=list)
     global_warnings: list[str] = field(default_factory=list)
 
 
@@ -234,6 +254,7 @@ class WashReport:
 
     title: str
     sections: dict[str, str] = field(default_factory=dict)
+    action_steps: list[str] = field(default_factory=list)
+    cost_breakdown: list[LaundryChargeLine] = field(default_factory=list)
     savings_notes: list[str] = field(default_factory=list)
     risk_notes: list[str] = field(default_factory=list)
-

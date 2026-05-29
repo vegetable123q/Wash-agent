@@ -304,7 +304,11 @@ plan = plan_laundry(items, constraints, campus_context)
 report = generate_report(plan, items, campus_context)
 ```
 
-`plan_laundry()` 会在现有 `LaundryBucket` 字段中写入洗衣液用量，并通过 warnings 给出推荐机器、自然晾干条件和预算提示。`generate_report()` 会保留移动端直接消费的 `WashReport.sections` 结构，并在报告中解释每个分桶原因、洗衣液用量、计费批次、机器位置、排队估算、晾晒条件、风险控制和节水节电省钱价值。
+`plan_laundry()` 会在 `LaundryBucket` 中写入真实执行数据：推荐洗衣机 id/位置、烘干机 id/位置、洗衣液用量、是否使用洗衣袋、本桶费用和本桶机器占用时间。机洗和烘干的每一笔计费会进入 `LaundryPlan.cost_breakdown`，调用方不需要再从文案中解析费用拆分。
+
+`LaundryConstraints` 中的约束会被显式处理：`urgent_item_ids` 必须属于本次 `selected_item_ids`；`allow_mixed_colors=True` 时，只有低掉色风险普通衣物会合并成 `mixed-standard` 批次；高掉色风险、床品、手洗、干洗和不可水洗衣物仍单独处理。`hygiene_sensitive=True` 时，机洗批次会标记使用洗衣袋。
+
+`generate_report()` 会保留移动端直接消费的 `WashReport.sections` 结构，同时输出 `WashReport.action_steps` 和 `WashReport.cost_breakdown`。报告只解释 planner 生成的真实方案，不重算分桶、不重新选择机器、不编造节省金额。报告中会解释每个分桶原因、洗衣液用量、计费批次、机器位置、排队估算、晾晒条件、风险控制和节水节电省钱价值。
 
 校园上下文模块当前支持本地 mock 机器数据和显式规则文件：
 
