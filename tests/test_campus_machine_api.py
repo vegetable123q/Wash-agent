@@ -356,6 +356,30 @@ class CampusMachineApiTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "default_price_yuan"):
                 client.list_machines("ncrkiz1", provider="cleverschool")
 
+    def test_mock_machine_rejects_boolean_remaining_minutes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            mock_path = Path(tmp_dir) / "machines.json"
+            mock_path.write_text(
+                json.dumps(
+                    {
+                        "machines": [
+                            {
+                                "machine_id": "washer-1",
+                                "location": "1F",
+                                "machine_type": "standard_washer",
+                                "status": "running",
+                                "remaining_minutes": True,
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            client = LaundryMachineClient(mock_path=mock_path)
+
+            with self.assertRaisesRegex(ValueError, "remaining_minutes"):
+                client.list_machines()
+
     def test_list_machines_maps_cleverschool_shoe_washer_and_dryer_labels(
         self,
     ) -> None:

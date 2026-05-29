@@ -415,7 +415,7 @@ def _optional_number(value: object, field_name: str) -> float | None:
 def _optional_int(value: object, field_name: str) -> int | None:
     if value is None:
         return None
-    if not isinstance(value, int):
+    if isinstance(value, bool) or not isinstance(value, int):
         raise ValueError(f"machine {field_name} must be an integer")
     return value
 
