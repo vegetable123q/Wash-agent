@@ -281,6 +281,7 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
               className="input-like textarea-like text-extraction-box"
               value={textDescription}
               placeholder="例如：这件灰色连帽卫衣大概是棉混纺，之前高温烘干以后有点缩水，今晚想穿。"
+              disabled={recognitionStatus === "recognizing"}
               onChange={(event) => {
                 setTextDescription(event.target.value);
                 setRecognitionStatus("idle");

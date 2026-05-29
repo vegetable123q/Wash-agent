@@ -333,6 +333,43 @@ describe("AddClothingScreen", () => {
     expect(await screen.findByText("识别完成，已填入可编辑字段")).toBeInTheDocument();
   });
 
+  it("locks the text description input while text recognition is pending", async () => {
+    let resolveRecognition: (value: { ok: boolean; json: () => Promise<object> }) => void = () => undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<{ ok: boolean; json: () => Promise<object> }>((resolve) => {
+            resolveRecognition = resolve;
+          }),
+      ),
+    );
+
+    const { container } = render(<AddClothingScreen modelHubConfig={modelHubConfig} onBack={() => undefined} />);
+
+    const modeButtons = Array.from(container.querySelectorAll<HTMLButtonElement>(".segmented button"));
+    fireEvent.click(modeButtons[2]);
+    const textarea = container.querySelector<HTMLTextAreaElement>(".text-extraction-box");
+    expect(textarea).not.toBeNull();
+    fireEvent.change(textarea!, { target: { value: "gray hoodie" } });
+    const extractButton = container.querySelector<HTMLButtonElement>(".secondary-button");
+    expect(extractButton).not.toBeNull();
+    fireEvent.click(extractButton!);
+
+    await waitFor(() => expect(extractButton).toBeDisabled());
+    expect(textarea).toBeDisabled();
+
+    resolveRecognition({
+      ok: true,
+      json: async () => ({
+        candidates: [{ content: { parts: [{ text: JSON.stringify({ name: "Test hoodie" }) }] } }],
+      }),
+    });
+
+    expect(await screen.findByDisplayValue("Test hoodie")).toBeInTheDocument();
+    expect(textarea).not.toBeDisabled();
+  });
+
   it("locks the single image input while image recognition is pending", async () => {
     let resolveRecognition: (value: { ok: boolean; json: () => Promise<object> }) => void = () => undefined;
     vi.stubGlobal(
