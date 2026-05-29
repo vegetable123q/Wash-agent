@@ -8,6 +8,7 @@ from backend.shared.models import (
     CampusContext,
     ClothingProfile,
     DryMethod,
+    LaundryBucket,
     LaundryConstraints,
     LaundryPlan,
     MachineInfo,
@@ -723,6 +724,52 @@ class EModuleTests(unittest.TestCase):
         invalid_plans = [
             ("buckets", LaundryPlan(buckets="buckets")),  # type: ignore[arg-type]
             (r"buckets\[0\]", LaundryPlan(buckets=[object()])),  # type: ignore[list-item]
+        ]
+
+        for field_name, plan in invalid_plans:
+            with self.subTest(field_name=field_name, plan=plan):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    generate_report(plan, items, _campus_context())
+
+    def test_report_requires_valid_bucket_item_ids(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        invalid_plans = [
+            (
+                "item_ids",
+                LaundryPlan(
+                    buckets=[
+                        LaundryBucket(
+                            bucket_id="light-standard",
+                            item_ids="white-tee",  # type: ignore[arg-type]
+                            wash_method=WashMethod.MACHINE_WASH,
+                        )
+                    ]
+                ),
+            ),
+            (
+                r"item_ids\[0\]",
+                LaundryPlan(
+                    buckets=[
+                        LaundryBucket(
+                            bucket_id="light-standard",
+                            item_ids=[True],  # type: ignore[list-item]
+                            wash_method=WashMethod.MACHINE_WASH,
+                        )
+                    ]
+                ),
+            ),
+            (
+                r"item_ids\[0\]",
+                LaundryPlan(
+                    buckets=[
+                        LaundryBucket(
+                            bucket_id="light-standard",
+                            item_ids=[""],
+                            wash_method=WashMethod.MACHINE_WASH,
+                        )
+                    ]
+                ),
+            ),
         ]
 
         for field_name, plan in invalid_plans:

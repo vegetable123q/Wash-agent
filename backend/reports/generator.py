@@ -53,6 +53,11 @@ def _validate_plan(value: object) -> None:
     for index, bucket in enumerate(value.buckets):
         if not isinstance(bucket, LaundryBucket):
             raise ValueError(f"plan.buckets[{index}] must be a LaundryBucket")
+        _validate_bucket(bucket, f"plan.buckets[{index}]")
+
+
+def _validate_bucket(bucket: LaundryBucket, field_name: str) -> None:
+    _non_empty_string_list(bucket.item_ids, f"{field_name}.item_ids")
 
 
 def _validate_items(value: object) -> None:
@@ -74,6 +79,13 @@ def _validate_item(item: WardrobeItem, field_name: str) -> None:
 def _non_empty_string(value: object, field_name: str) -> None:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field_name} must be a non-empty string")
+
+
+def _non_empty_string_list(value: object, field_name: str) -> None:
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be a list")
+    for index, item in enumerate(value):
+        _non_empty_string(item, f"{field_name}[{index}]")
 
 
 def _validate_campus_context(value: object) -> None:
