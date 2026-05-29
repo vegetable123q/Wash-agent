@@ -24,6 +24,9 @@ def generate_report(
 ) -> WashReport:
     """Generate report sections from the final laundry plan."""
 
+    _validate_plan(plan)
+    _validate_items(items)
+    _validate_campus_context(campus_context)
     item_names = {item.profile.item_id: item.profile.name for item in items}
     sections = {
         "洗衣步骤": _steps_section(plan, item_names),
@@ -39,6 +42,24 @@ def generate_report(
         savings_notes=_savings_notes(plan),
         risk_notes=_risk_notes(plan),
     )
+
+
+def _validate_plan(value: object) -> None:
+    if not isinstance(value, LaundryPlan):
+        raise ValueError("plan must be a LaundryPlan")
+
+
+def _validate_items(value: object) -> None:
+    if not isinstance(value, list):
+        raise ValueError("items must be a list")
+    for index, item in enumerate(value):
+        if not isinstance(item, WardrobeItem):
+            raise ValueError(f"items[{index}] must be a WardrobeItem")
+
+
+def _validate_campus_context(value: object) -> None:
+    if not isinstance(value, CampusContext):
+        raise ValueError("campus_context must be a CampusContext")
 
 
 def _steps_section(plan: LaundryPlan, item_names: dict[str, str]) -> str:

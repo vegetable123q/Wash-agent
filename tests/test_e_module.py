@@ -520,6 +520,44 @@ class EModuleTests(unittest.TestCase):
         self.assertIn("超过预算", warnings)
         self.assertIn("预计等待 12 分钟超过最大等待 5 分钟", warnings)
 
+    def test_report_requires_laundry_plan(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+
+        with self.assertRaisesRegex(ValueError, "plan"):
+            generate_report(
+                object(),  # type: ignore[arg-type]
+                items,
+                _campus_context(),
+            )
+
+    def test_report_requires_wardrobe_item_list(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        plan = plan_laundry(items, LaundryConstraints(selected_item_ids=["white-tee"]), _campus_context())
+
+        invalid_items: list[object] = ["items", [object()]]
+        for report_items in invalid_items:
+            with self.subTest(report_items=report_items):
+                with self.assertRaisesRegex(ValueError, "items"):
+                    generate_report(
+                        plan,
+                        report_items,  # type: ignore[arg-type]
+                        _campus_context(),
+                    )
+
+    def test_report_requires_campus_context(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        plan = plan_laundry(items, LaundryConstraints(selected_item_ids=["white-tee"]), _campus_context())
+
+        invalid_contexts: list[object] = [None, object(), {"available_machines": []}]
+        for campus_context in invalid_contexts:
+            with self.subTest(campus_context=campus_context):
+                with self.assertRaisesRegex(ValueError, "campus_context"):
+                    generate_report(
+                        plan,
+                        items,
+                        campus_context,  # type: ignore[arg-type]
+                    )
+
     def test_report_describes_plan_without_mutating_it(self) -> None:
         items = [
             _item("white-tee", "白色纯棉 T 恤", colors=["white"], materials={"cotton": 1.0}),
