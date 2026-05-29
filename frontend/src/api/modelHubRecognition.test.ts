@@ -391,6 +391,27 @@ describe("ModelHub clothing recognition", () => {
     expect(result.note).not.toContain("no tumble dry");
   });
 
+  it("normalizes dry-clean prohibition care phrases", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        modelHubResponse({
+          is_clothing: true,
+          name: "linen jacket",
+          material_ratios: { linen: 1 },
+          colors: ["beige"],
+          care_warnings: ["do_not_dry_clean", "no dry clean"],
+        }),
+      ),
+    );
+
+    const result = await recognizeClothingText("linen jacket care label says no dry clean", modelHubConfig);
+
+    expect(result.note).toContain("不可干洗");
+    expect(result.note).not.toContain("do_not_dry_clean");
+    expect(result.note).not.toContain("no dry clean");
+  });
+
   it("keeps care label variants in the editable note", async () => {
     vi.stubGlobal(
       "fetch",

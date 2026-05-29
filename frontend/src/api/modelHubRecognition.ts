@@ -63,6 +63,8 @@ const careDisplayNames: Record<string, string> = {
   hand_wash_only: "只能手洗",
   dry_clean: "干洗",
   dry_clean_only: "只能干洗",
+  do_not_dry_clean: "不可干洗",
+  no_dry_clean: "不可干洗",
   air_dry: "自然晾干",
   hang_dry: "悬挂晾干",
   line_dry: "悬挂晾干",
