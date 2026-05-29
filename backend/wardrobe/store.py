@@ -135,7 +135,7 @@ def _wash_record_from_dict(data: dict[str, Any]) -> WashRecord:
     return WashRecord(
         washed_at=_required_text(data["washed_at"], "washed_at"),
         method=WashMethod(data["method"]),
-        notes=str(data["notes"]),
+        notes=_text(data["notes"], "notes"),
         issues=_string_list(data["issues"], "issues"),
     )
 
@@ -174,6 +174,12 @@ def _required_text(value: Any, field_name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field_name} must be a non-empty string")
     return value.strip()
+
+
+def _text(value: Any, field_name: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be a string")
+    return value
 
 
 def _to_jsonable(value: Any) -> Any:
