@@ -603,6 +603,20 @@ button.card {
   opacity: 0.55;
 }
 
+.refresh-button {
+  flex: 0 0 auto;
+}
+
+.refresh-icon-spinning {
+  animation: refresh-spin 0.9s linear infinite;
+}
+
+@keyframes refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .danger-icon-button {
   color: var(--red);
   border-color: #f2c4c0;
@@ -614,6 +628,20 @@ button.card {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.summary-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.refresh-error {
+  margin: 8px 0 0;
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .context-card {

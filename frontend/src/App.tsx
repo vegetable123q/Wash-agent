@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   clearModelHubConfig,
   loadModelHubConfig,
@@ -20,6 +20,10 @@ import { WardrobeScreen } from "./screens/WardrobeScreen";
 import { loadUserProfile, saveUserProfile, type UserProfile } from "./userProfile";
 
 type BackendStatus = "loading" | "connected" | "offline";
+type RefreshState = {
+  isRefreshing: boolean;
+  error: string | null;
+};
 
 const parentTab: Record<ScreenId, TabId> = {
   today: "today",
@@ -37,6 +41,7 @@ export default function App() {
   const [screen, setScreen] = useState<ScreenId>("today");
   const [mobileSummary, setMobileSummary] = useState<MobileSummary | null>(null);
   const [backendStatus, setBackendStatus] = useState<BackendStatus>("loading");
+  const [refreshState, setRefreshState] = useState<RefreshState>({ isRefreshing: false, error: null });
   const [userProfile, setUserProfile] = useState<UserProfile>(() => loadUserProfile());
   const [modelHubConfig, setModelHubConfig] = useState<ModelHubConfig>(() => loadModelHubConfig());
   const [selectedClothingId, setSelectedClothingId] = useState("");
@@ -66,17 +71,23 @@ export default function App() {
     setScreen("machineDetail");
   };
 
-  const refreshMobileSummary = async () => {
-    setBackendStatus("loading");
-    return fetchMobileSummary(userProfile)
-      .then((summary) => {
-        setMobileSummary(summary);
-        setBackendStatus("connected");
-      })
-      .catch(() => {
+  const refreshMobileSummary = useCallback(async (): Promise<void> => {
+    setRefreshState({ isRefreshing: true, error: null });
+    if (!mobileSummary) {
+      setBackendStatus("loading");
+    }
+    try {
+      const summary = await fetchMobileSummary(userProfile);
+      setMobileSummary(summary);
+      setBackendStatus("connected");
+      setRefreshState({ isRefreshing: false, error: null });
+    } catch {
+      if (!mobileSummary) {
         setBackendStatus("offline");
-      });
-  };
+      }
+      setRefreshState({ isRefreshing: false, error: "刷新失败，请稍后重试" });
+    }
+  }, [mobileSummary, userProfile]);
 
   const handleDeleteWardrobeItem = async (itemId: string) => {
     await deleteWardrobeItem(itemId);
@@ -89,6 +100,7 @@ export default function App() {
   useEffect(() => {
     let active = true;
     setBackendStatus("loading");
+    setRefreshState((current) => ({ ...current, error: null }));
     fetchMobileSummary(userProfile)
       .then((summary) => {
         if (!active) {
@@ -96,10 +108,12 @@ export default function App() {
         }
         setMobileSummary(summary);
         setBackendStatus("connected");
+        setRefreshState({ isRefreshing: false, error: null });
       })
       .catch(() => {
         if (active) {
           setBackendStatus("offline");
+          setRefreshState({ isRefreshing: false, error: null });
         }
       });
     return () => {
@@ -123,7 +137,10 @@ export default function App() {
             mobileSummary={mobileSummary}
             userProfile={userProfile}
             modelHubConfig={modelHubConfig}
+            isRefreshing={refreshState.isRefreshing}
+            refreshError={refreshState.error}
             onNavigate={navigate}
+            onRefresh={refreshMobileSummary}
           />
         );
       case "planDetail":
@@ -146,8 +163,11 @@ export default function App() {
           <LaundryRoomScreen
             mobileSummary={mobileSummary}
             userProfile={userProfile}
+            isRefreshing={refreshState.isRefreshing}
+            refreshError={refreshState.error}
             onNavigate={navigate}
             onViewMachine={viewMachineDetail}
+            onRefresh={refreshMobileSummary}
           />
         );
       case "machineDetail":
@@ -174,7 +194,7 @@ export default function App() {
           />
         );
     }
-  }, [backendStatus, mobileSummary, modelHubConfig, screen, selectedClothingId, selectedMachineId, userProfile]);
+  }, [backendStatus, mobileSummary, modelHubConfig, refreshMobileSummary, refreshState, screen, selectedClothingId, selectedMachineId, userProfile]);
 
   const isTabScreen = screen === activeTab;
 
