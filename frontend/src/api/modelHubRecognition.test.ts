@@ -209,6 +209,24 @@ describe("ModelHub clothing recognition", () => {
     expect(result.colors).toBe("蓝色、白色");
   });
 
+  it("splits newline-separated color strings", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        modelHubResponse({
+          is_clothing: true,
+          name: "blue white tee",
+          material_ratios: { cotton: 1 },
+          colors: "blue\nwhite",
+        }),
+      ),
+    );
+
+    const result = await recognizeClothingText("blue white tee", modelHubConfig);
+
+    expect(result.colors).toBe("蓝色、白色");
+  });
+
   it("normalizes object color payloads", async () => {
     vi.stubGlobal(
       "fetch",
