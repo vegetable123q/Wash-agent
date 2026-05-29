@@ -199,6 +199,23 @@ describe("mobileSummary wardrobe selection", () => {
     expect(summary.wardrobe.items[0].material_ratios).toEqual({ wool: 0.5 });
   });
 
+  it("trims legacy stored risk levels before validation", async () => {
+    localStorage.setItem(
+      wardrobeStorageKey,
+      JSON.stringify([
+        {
+          item_id: "legacy-jeans",
+          name: "legacy jeans",
+          risks: { color_bleed: " High " },
+        },
+      ]),
+    );
+
+    const summary = await fetchMobileSummary();
+
+    expect(summary.wardrobe.items[0].risks.color_bleed).toBe("high");
+  });
+
   it("assigns unique wardrobe ids when several items are saved in the same millisecond", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-29T12:00:00.000Z"));
