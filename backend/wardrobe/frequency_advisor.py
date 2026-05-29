@@ -153,6 +153,7 @@ def _validate_item(value: object) -> None:
     _string_list(value.profile.colors, "item.profile.colors")
     _string_list(value.profile.care_forbidden, "item.profile.care_forbidden")
     _string_list(value.profile.source_notes, "item.profile.source_notes")
+    _risk_map(value.profile.risks, "item.profile.risks")
     _string_list(value.user_notes, "user_notes")
     _non_negative_int(value.wear_count_since_wash, "wear_count_since_wash")
 
@@ -220,6 +221,16 @@ def _string_key_dict(value: object, field_name: str) -> None:
         raise ValueError(f"{field_name} must be an object")
     if not all(isinstance(key, str) and key.strip() for key in value):
         raise ValueError(f"{field_name} must contain non-empty string keys")
+
+
+def _risk_map(value: object, field_name: str) -> None:
+    if not isinstance(value, dict):
+        raise ValueError(f"{field_name} must be an object")
+    for key, level in value.items():
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError(f"{field_name} must contain non-empty string keys")
+        if not isinstance(level, RiskLevel):
+            raise ValueError(f"{field_name}.{key} must be a RiskLevel")
 
 
 def _search_text(item: WardrobeItem) -> str:

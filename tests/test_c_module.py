@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from backend.shared.models import ClothingProfile, LaundryConstraints, WardrobeItem, WashMethod, WashRecord
+from backend.shared.models import ClothingProfile, LaundryConstraints, RiskLevel, WardrobeItem, WashMethod, WashRecord
 from backend.wardrobe.frequency_advisor import advise_all_frequencies, advise_frequency, recommended_item_ids
 from backend.wardrobe.store import WardrobeStore
 
@@ -190,6 +190,41 @@ class CModuleTests(unittest.TestCase):
             ("item.profile.item_id", ClothingProfile(item_id="", name="cotton t-shirt")),
             ("item.profile.name", ClothingProfile(item_id="bad-name", name=True)),  # type: ignore[arg-type]
             ("item.profile.name", ClothingProfile(item_id="bad-name", name="")),
+        ]
+
+        for field_name, profile in invalid_profiles:
+            with self.subTest(field_name=field_name, profile=profile):
+                item = WardrobeItem(profile=profile)
+
+                with self.assertRaisesRegex(ValueError, field_name):
+                    advise_frequency(item, LaundryConstraints())
+
+    def test_frequency_requires_valid_profile_risks(self) -> None:
+        invalid_profiles = [
+            (
+                "item.profile.risks",
+                ClothingProfile(
+                    item_id="bad-risks",
+                    name="cotton t-shirt",
+                    risks="high",  # type: ignore[arg-type]
+                ),
+            ),
+            (
+                "item.profile.risks",
+                ClothingProfile(
+                    item_id="bad-risk-key",
+                    name="cotton t-shirt",
+                    risks={True: RiskLevel.HIGH},  # type: ignore[dict-item]
+                ),
+            ),
+            (
+                "item.profile.risks",
+                ClothingProfile(
+                    item_id="bad-risk-value",
+                    name="cotton t-shirt",
+                    risks={"shrink": "high"},  # type: ignore[dict-item]
+                ),
+            ),
         ]
 
         for field_name, profile in invalid_profiles:
