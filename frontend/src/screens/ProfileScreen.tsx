@@ -36,6 +36,7 @@ export function ProfileScreen({
   const [saved, setSaved] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [modelHubSaved, setModelHubSaved] = useState(false);
+  const [modelHubError, setModelHubError] = useState<string | null>(null);
   const selectedDormIsListed = towerOptions.some((tower) => tower.name === draft.dormName);
   const normalizedModelHubDraft = normalizeModelHubConfig(modelHubDraft);
   const hasModelDraft = hasCompleteModelHubConfig(normalizedModelHubDraft);
@@ -65,13 +66,21 @@ export function ProfileScreen({
 
   const handleApiSubmit = (event: FormEvent) => {
     event.preventDefault();
-    setModelHubDraft(onSaveModelHubConfig(modelHubDraft));
+    if (!hasCompleteModelHubConfig(normalizedModelHubDraft)) {
+      setModelHubDraft(normalizedModelHubDraft);
+      setModelHubSaved(false);
+      setModelHubError("请填写有效的 ModelHub baseUrl、apikey 和 model_name");
+      return;
+    }
+    setModelHubError(null);
+    setModelHubDraft(onSaveModelHubConfig(normalizedModelHubDraft));
     setModelHubSaved(true);
   };
 
   const handleApiClear = () => {
     setModelHubDraft({ baseUrl: "https://modelhub.ailemac.com/v1beta", apikey: "", model_name: "gemini-3.1-pro-preview" });
     setModelHubSaved(false);
+    setModelHubError(null);
     onClearModelHubConfig();
   };
 
@@ -193,6 +202,7 @@ export function ProfileScreen({
                 value={modelHubDraft.baseUrl}
                 onChange={(event) => {
                   setModelHubSaved(false);
+                  setModelHubError(null);
                   setModelHubDraft((current) => ({ ...current, baseUrl: event.target.value }));
                 }}
                 placeholder="https://modelhub.ailemac.com/v1beta"
@@ -208,6 +218,7 @@ export function ProfileScreen({
                 value={modelHubDraft.apikey}
                 onChange={(event) => {
                   setModelHubSaved(false);
+                  setModelHubError(null);
                   setModelHubDraft((current) => ({ ...current, apikey: event.target.value }));
                 }}
                 placeholder="sk-your-api-key-here"
@@ -223,6 +234,7 @@ export function ProfileScreen({
                 value={modelHubDraft.model_name}
                 onChange={(event) => {
                   setModelHubSaved(false);
+                  setModelHubError(null);
                   setModelHubDraft((current) => ({ ...current, model_name: event.target.value }));
                 }}
               >
@@ -236,6 +248,7 @@ export function ProfileScreen({
           </div>
         </Section>
 
+        {modelHubError ? <p className="form-status form-status-error">{modelHubError}</p> : null}
         {modelHubSaved && hasModelDraft ? (
           <p className="form-status form-status-ok">识图配置已保存到本机；只在本设备使用，可随时清除</p>
         ) : null}

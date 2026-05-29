@@ -103,4 +103,34 @@ describe("ProfileScreen", () => {
     expect(onSave).not.toHaveBeenCalled();
     expect(screen.getByText("请填写有效的最晚取衣时间")).toBeInTheDocument();
   });
+
+  it("blocks saving incomplete ModelHub recognition config", () => {
+    const onSaveModelHubConfig = vi.fn((config) => config);
+
+    render(
+      <ProfileScreen
+        profile={{
+          displayName: "",
+          dormName: "",
+          latestPickupTime: "22:30",
+          allowDryer: false,
+          budgetYuan: null,
+          maxWaitMinutes: null,
+        }}
+        modelHubConfig={emptyModelHubConfig}
+        backendStatus="connected"
+        towerOptions={[]}
+        onSave={vi.fn()}
+        onSaveModelHubConfig={onSaveModelHubConfig}
+        onClearModelHubConfig={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("ModelHub baseUrl"), { target: { value: "not a url" } });
+    fireEvent.change(screen.getByLabelText("apikey"), { target: { value: "sk-local-test-key" } });
+    fireEvent.click(screen.getByRole("button", { name: /应用识图配置/ }));
+
+    expect(onSaveModelHubConfig).not.toHaveBeenCalled();
+    expect(screen.getByText("请填写有效的 ModelHub baseUrl、apikey 和 model_name")).toBeInTheDocument();
+  });
 });
