@@ -393,10 +393,7 @@ function fromBackendQueueEstimate(estimate: BackendQueueEstimate): MachineQueueE
 // ─── local storage ──────────────────────────────────────────────────────
 
 function readLocalWardrobeItems(): WardrobeSummaryItem[] {
-  const saved = typeof localStorage === "undefined" ? null : localStorage.getItem(LOCAL_WARDROBE_STORAGE_KEY);
-  if (!saved) return [];
-  const parsed = JSON.parse(saved) as WardrobeSummaryItem[];
-  if (!Array.isArray(parsed)) throw new Error("Invalid local wardrobe data");
+  const parsed = readLocalStorageArray<WardrobeSummaryItem>(LOCAL_WARDROBE_STORAGE_KEY, "本地衣柜数据无法读取");
   const repaired = repairDuplicateWardrobeItemIds(parsed);
   if (repaired.changed) {
     writeLocalWardrobeItems(repaired.items);
@@ -450,11 +447,7 @@ function validPhotoDataUrl(value: unknown): value is string {
 }
 
 function readDirtyBasketRecords(items: WardrobeSummaryItem[]): DirtyBasketRecord[] {
-  if (typeof localStorage === "undefined") return [];
-  const saved = localStorage.getItem(LOCAL_LAUNDRY_SELECTION_STORAGE_KEY);
-  if (!saved) return [];
-  const parsed = JSON.parse(saved) as unknown;
-  if (!Array.isArray(parsed)) throw new Error("Invalid selected laundry item data");
+  const parsed = readLocalStorageArray<unknown>(LOCAL_LAUNDRY_SELECTION_STORAGE_KEY, "本地脏衣篮选择无法读取");
   const validIds = new Set(items.map((item) => item.item_id));
   const seen = new Set<string>();
   const records: DirtyBasketRecord[] = [];
@@ -493,6 +486,26 @@ function dirtyBasketRecordFromStorage(value: unknown): DirtyBasketRecord | null 
 
 function validIsoDate(value: unknown): boolean {
   return typeof value === "string" && !Number.isNaN(new Date(value).getTime());
+}
+
+function readLocalStorageArray<T>(key: string, invalidMessage: string): T[] {
+  if (typeof localStorage === "undefined") {
+    return [];
+  }
+  const saved = localStorage.getItem(key);
+  if (!saved) {
+    return [];
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(saved);
+  } catch {
+    throw new Error(invalidMessage);
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error(invalidMessage);
+  }
+  return parsed as T[];
 }
 
 function writeDirtyBasketRecords(records: DirtyBasketRecord[]): void {

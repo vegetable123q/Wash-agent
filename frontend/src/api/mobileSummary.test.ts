@@ -30,6 +30,12 @@ describe("mobileSummary wardrobe selection", () => {
     expect(summary.plan.summary).toContain("请选择本次要清洗的衣物");
   });
 
+  it("reports corrupted local wardrobe storage explicitly", async () => {
+    localStorage.setItem(wardrobeStorageKey, "{not-json");
+
+    await expect(fetchMobileSummary()).rejects.toThrow("本地衣柜数据无法读取");
+  });
+
   it("does not auto-plan recommended items until the user selects this batch", async () => {
     localStorage.setItem(
       wardrobeStorageKey,
