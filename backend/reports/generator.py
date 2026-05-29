@@ -48,6 +48,11 @@ def generate_report(
 def _validate_plan(value: object) -> None:
     if not isinstance(value, LaundryPlan):
         raise ValueError("plan must be a LaundryPlan")
+    if not isinstance(value.buckets, list):
+        raise ValueError("plan.buckets must be a list")
+    for index, bucket in enumerate(value.buckets):
+        if not isinstance(bucket, LaundryBucket):
+            raise ValueError(f"plan.buckets[{index}] must be a LaundryBucket")
 
 
 def _validate_items(value: object) -> None:

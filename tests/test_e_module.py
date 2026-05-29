@@ -9,6 +9,7 @@ from backend.shared.models import (
     ClothingProfile,
     DryMethod,
     LaundryConstraints,
+    LaundryPlan,
     MachineInfo,
     MachineQueueEstimate,
     MachineStatus,
@@ -716,6 +717,18 @@ class EModuleTests(unittest.TestCase):
                 items,
                 _campus_context(),
             )
+
+    def test_report_requires_valid_plan_buckets(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        invalid_plans = [
+            ("buckets", LaundryPlan(buckets="buckets")),  # type: ignore[arg-type]
+            (r"buckets\[0\]", LaundryPlan(buckets=[object()])),  # type: ignore[list-item]
+        ]
+
+        for field_name, plan in invalid_plans:
+            with self.subTest(field_name=field_name, plan=plan):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    generate_report(plan, items, _campus_context())
 
     def test_report_requires_wardrobe_item_list(self) -> None:
         items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
