@@ -395,8 +395,9 @@ function fromBackendQueueEstimate(estimate: BackendQueueEstimate): MachineQueueE
 function readLocalWardrobeItems(): WardrobeSummaryItem[] {
   const parsed = readLocalStorageArray<unknown>(LOCAL_WARDROBE_STORAGE_KEY, "本地衣柜数据无法读取");
   const normalized = parsed.map(normalizeStoredWardrobeItem);
+  const normalizationChanged = JSON.stringify(parsed) !== JSON.stringify(normalized);
   const repaired = repairDuplicateWardrobeItemIds(normalized);
-  if (repaired.changed) {
+  if (normalizationChanged || repaired.changed) {
     writeLocalWardrobeItems(repaired.items);
   }
   return repaired.items;

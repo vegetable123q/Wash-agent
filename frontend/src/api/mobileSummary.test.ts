@@ -163,6 +163,16 @@ describe("mobileSummary wardrobe selection", () => {
       colors: [],
       risks: {},
     });
+
+    const storedItems = JSON.parse(localStorage.getItem(wardrobeStorageKey) ?? "[]");
+    expect(storedItems[0]).toMatchObject({
+      user_note: "",
+      user_notes: [],
+      wash_count: 0,
+      material_ratios: {},
+      colors: [],
+      risks: {},
+    });
   });
 
   it("assigns unique wardrobe ids when several items are saved in the same millisecond", async () => {
