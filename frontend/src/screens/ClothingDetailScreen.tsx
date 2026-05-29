@@ -21,6 +21,7 @@ export function ClothingDetailScreen({ onBack, backendItem, staticItem, modelHub
   const item = backendItem ? detailFromBackend(backendItem) : staticItem ? detailFromStatic(staticItem) : null;
 
   useEffect(() => {
+    setLlmRiskText(null);
     if (!backendItem || !modelHubConfig) return;
     let cancelled = false;
     generateRiskDescription(backendItem.risks, backendItem.name, backendItem.material_ratios, modelHubConfig).then((result) => {
