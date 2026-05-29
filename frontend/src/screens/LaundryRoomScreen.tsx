@@ -150,7 +150,7 @@ function queueFromBackend(queue: BackendQueueEstimate) {
 }
 
 function machineTypeLabel(machineType: string) {
-  if (machineType === "standard_washer" || machineType === "small_washer") {
+  if (machineType === "standard_washer") {
     return "洗衣机";
   }
   if (machineType === "dryer") {

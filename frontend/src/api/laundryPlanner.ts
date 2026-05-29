@@ -158,7 +158,7 @@ function buildBucket(
   }
 
   const program = bucketId === "large-bedding" ? "large" : "standard";
-  const machineType: MachineType = bucketId === "large-bedding" ? "large_washer" : "standard_washer";
+  const machineType: MachineType = "standard_washer";
   const machine = requireAvailableMachine(context.available_machines, machineType, program);
   requireWashProgram(context, program);
 

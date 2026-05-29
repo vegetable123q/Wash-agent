@@ -60,7 +60,7 @@ export interface MachineView {
   name: string;
   location: string;
   type: string;
-  backendType: "small_washer" | "standard_washer" | "large_washer" | "shoe_washer" | "dryer";
+  backendType: "standard_washer" | "shoe_washer" | "dryer";
   capacity: string;
   status: "空闲" | "等待" | "故障";
   backendStatus: "available" | "running" | "out_of_service";
@@ -302,7 +302,7 @@ export const machines: MachineView[] = [
     name: "大件机 C01",
     location: "紫荆 1 号楼 一层",
     type: "大件洗",
-    backendType: "large_washer",
+    backendType: "standard_washer",
     capacity: "12kg",
     status: "等待",
     backendStatus: "running",
@@ -311,7 +311,7 @@ export const machines: MachineView[] = [
     price: "¥6",
     modes: ["standard", "heavy"],
     provider: "haier",
-    ruleKey: "washer_types.large_washer",
+    ruleKey: "washer_types.standard_washer",
     tone: "amber",
   },
   {
@@ -364,7 +364,7 @@ export const queueEstimates: QueueEstimateView[] = [
     tone: "teal",
   },
   {
-    machineType: "large_washer",
+    machineType: "standard_washer",
     label: "大件机",
     total: 1,
     available: 0,

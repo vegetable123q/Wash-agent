@@ -37,7 +37,7 @@ export function WardrobeScreen({ mobileSummary, onNavigate, onViewItem, onDelete
           tag: item.tags[0],
           canDelete: false,
         }));
-  const itemCount = isBackendSnapshot ? String(backendItems.length) : "12";
+  const itemCount = isBackendSnapshot ? String(backendItems.length) : String(cards.length);
   const selectedPlanIds = mobileSummary?.plan.buckets.flatMap((b) => b.item_ids) ?? [];
   const suggestedCount = isBackendSnapshot ? String(new Set(selectedPlanIds).size) : "4";
 
@@ -187,7 +187,7 @@ function tagForItem(item: MobileSummary["wardrobe"]["items"][number]): { label: 
   if (Object.values(item.risks).includes("medium")) {
     return { label: "需注意", tone: "orange" };
   }
-  if (item.colors.some((color) => color.includes("黑") || color.includes("深"))) {
+  if (item.colors.some((color) => color.includes("黑") || color.includes("深") || color.includes("black") || color.includes("dark") || color.includes("navy"))) {
     return { label: "深色", tone: "purple" };
   }
   return { label: "可机洗", tone: "teal" };

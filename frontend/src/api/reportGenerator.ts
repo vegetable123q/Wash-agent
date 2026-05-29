@@ -204,9 +204,7 @@ function dryMethodText(method: DryMethod): string {
 
 function machineTypeText(type: MachineType): string {
   const labels: Record<MachineType, string> = {
-    small_washer: "小型洗衣机",
-    standard_washer: "标准洗衣机",
-    large_washer: "大件洗衣机",
+    standard_washer: "洗衣机",
     shoe_washer: "洗鞋机",
     dryer: "烘干机",
     unknown: "未知机器",

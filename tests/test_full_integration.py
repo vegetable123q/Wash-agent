@@ -63,7 +63,7 @@ class FullIntegrationTests(unittest.TestCase):
                         {
                             "machine_id": "washer-large-1",
                             "location": "Dorm A 1F",
-                            "machine_type": "large_washer",
+                            "machine_type": "standard_washer",
                             "status": "available",
                             "modes": ["large"],
                         },

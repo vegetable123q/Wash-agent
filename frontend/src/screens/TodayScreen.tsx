@@ -26,14 +26,14 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
   );
   const subtitle = userProfile?.dormName
     ? `${userProfile.dormName} · 最晚 ${userProfile.latestPickupTime} 取衣`
-    : todaySummary.subtitle;
+    : "请先在「我的」配置宿舍楼和偏好";
   const constraints = userProfile && hasPersonalContext
     ? [
         userProfile.dormName || "请选择宿舍楼",
         userProfile.allowDryer ? "允许烘干" : "优先低温/晾干",
         `最晚 ${userProfile.latestPickupTime}`,
       ]
-    : todaySummary.constraints;
+    : ["请先配置宿舍楼", "可在「我的」设置偏好"];
   const panelMetrics = connected && mobileSummary
     ? {
         buckets: `${mobileSummary.plan.buckets.length} 桶分洗`,
@@ -42,7 +42,7 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
             ? `¥${mobileSummary.plan.estimated_cost_yuan}${mobileSummary.plan.buckets.some((b) => b.dry_method === "low_heat_dryer") ? " · 含烘干" : ""}`
             : "费用待确认",
       }
-    : { buckets: "3 桶分洗", costDryer: "¥24 · 2 次烘干" };
+    : { buckets: "待生成方案", costDryer: "配置后显示" };
 
   const planSummary = connected
     ? {
@@ -103,12 +103,65 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
     return () => { cancelled = true; };
   }, [mobileSummary, modelHubConfig]);
 
+  // Dynamic clothing items from plan when connected
+  const todayItems = useMemo(() => {
+    if (!connected || !mobileSummary?.plan.buckets.length) return todaySummary.items;
+    const nameMap = new Map(mobileSummary.wardrobe.items.map((i) => [i.item_id, i.name]));
+    return mobileSummary.plan.buckets.map((b) => {
+      const names = b.item_ids.map((id) => nameMap.get(id) || id);
+      return {
+        id: b.bucket_id,
+        label: names.join("、"),
+        description: washMethodDesc(b.wash_method, b.dry_method),
+        tone: b.wash_method === "hand_wash" || b.wash_method === "dry_clean" || b.wash_method === "do_not_wash" ? ("red" as const) : b.bucket_id === "dark-standard" ? ("purple" as const) : ("blue" as const),
+        badge: {
+          label: b.wash_method === "machine_wash" ? "可机洗" : b.wash_method === "hand_wash" ? "手洗" : "排除",
+          tone: b.wash_method === "machine_wash" ? ("teal" as const) : ("orange" as const),
+        },
+      };
+    });
+  }, [connected, mobileSummary]);
+
+  // Dynamic bucket preview from plan when connected
+  const todayBuckets = useMemo(() => {
+    if (!connected || !mobileSummary?.plan.buckets.length) return bucketPlans;
+    const nameMap = new Map(mobileSummary.wardrobe.items.map((i) => [i.item_id, i.name]));
+    return mobileSummary.plan.buckets.map((b) => {
+      const names = b.item_ids.map((id) => nameMap.get(id) || id);
+      const label = bucketLabelFromId(b.bucket_id);
+      const machineLabel = b.wash_method === "machine_wash"
+        ? friendlyMachineType(b.machine_type)
+        : washMethodLabel(b.wash_method);
+      return {
+        id: b.bucket_id,
+        title: label,
+        machine: machineLabel,
+        detail: `${names.join("、")} · ${dryLabel(b.dry_method)}`,
+        accent: b.wash_method === "hand_wash" || b.wash_method === "dry_clean" || b.wash_method === "do_not_wash" ? ("orange" as const) : b.bucket_id === "dark-standard" ? ("purple" as const) : ("blue" as const),
+      };
+    });
+  }, [connected, mobileSummary]);
+
+  // Dynamic stats from campus context when connected
+  const todayStats = useMemo(() => {
+    if (!connected || !mobileSummary) return todaySummary.stats;
+    const available = mobileSummary.campus_context.available_machines.length;
+    const waits = mobileSummary.campus_context.queue_estimates
+      .filter((q) => q.estimated_wait_minutes != null && q.estimated_wait_minutes > 0)
+      .sort((a, b) => (a.estimated_wait_minutes ?? 0) - (b.estimated_wait_minutes ?? 0));
+    const minWait = waits[0]?.estimated_wait_minutes;
+    return [
+      { value: `${available} 台`, label: available > 0 ? "空闲可用，可先开洗" : "当前无空闲机器" },
+      { value: minWait != null ? `${minWait} 分` : "0 分", label: minWait != null && minWait > 0 ? "最短等待后可用" : "无需等待" },
+    ];
+  }, [connected, mobileSummary]);
+
   return (
     <Page>
       <header className="hero-header">
         <div>
           <div className="eyebrow">WashMate Campus</div>
-          <h1>{todaySummary.title}</h1>
+          <h1>{timeOfDayTitle()}</h1>
           <p>{subtitle}</p>
         </div>
         <Chip tone={connected ? "teal" : "amber"}>{statusLabel}</Chip>
@@ -153,7 +206,7 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
       ) : null}
 
       <div className="two-grid">
-        {todaySummary.stats.map((stat) => (
+        {todayStats.map((stat) => (
           <MetricCard key={stat.value} value={stat.value} label={stat.label} />
         ))}
       </div>
@@ -185,7 +238,7 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
       <Section title="本次衣物">
         <Card>
           <div className="list-stack">
-            {todaySummary.items.map((item) => (
+            {todayItems.map((item) => (
               <div className="dense-row" key={item.id}>
                 <span className={`text-icon text-icon-${item.tone}`}>{item.label.slice(0, 1)}</span>
                 <div>
@@ -201,7 +254,7 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
 
       <Section title="分桶摘要" action={<Chip tone="purple">可执行</Chip>}>
         <div className="bucket-preview">
-          {bucketPlans.map((bucket) => (
+          {todayBuckets.map((bucket) => (
             <div key={bucket.id} className={`bucket-chip bucket-${bucket.accent}`}>
               <span>{bucket.machine}</span>
               <strong>{bucket.title}</strong>
@@ -236,9 +289,56 @@ function liveWeather(summary: MobileSummary) {
   };
 }
 
+function timeOfDayTitle(): string {
+  const hour = new Date().getHours();
+  if (hour < 6) return "夜间洗衣";
+  if (hour < 12) return "早晨洗衣";
+  if (hour < 18) return "下午洗衣";
+  return "今晚洗衣";
+}
+
 function formatNumber(value: number | undefined) {
   if (typeof value !== "number" || Number.isNaN(value)) {
     return "--";
   }
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function washMethodDesc(washMethod: string, dryMethod: string): string {
+  const wash = washMethod === "machine_wash" ? "机洗" : washMethod === "hand_wash" ? "手洗" : washMethod === "dry_clean" ? "干洗" : "不水洗";
+  const dry = dryMethod === "low_heat_dryer" ? "，低温烘干" : dryMethod === "air_dry" ? "，自然晾干" : "";
+  return wash + dry;
+}
+
+function bucketLabelFromId(bucketId: string): string {
+  const labels: Record<string, string> = {
+    "do-not-wash": "不可水洗",
+    "dry-clean": "干洗",
+    "hand-wash": "手洗",
+    "large-bedding": "大件洗",
+    "dark-standard": "深色标准洗",
+    "light-standard": "浅色快洗",
+  };
+  return labels[bucketId] ?? bucketId;
+}
+
+function washMethodLabel(method: string): string {
+  if (method === "hand_wash") return "手洗";
+  if (method === "dry_clean") return "干洗";
+  if (method === "do_not_wash") return "不水洗";
+  return method;
+}
+
+function dryLabel(method: string): string {
+  if (method === "air_dry") return "自然晾干";
+  if (method === "low_heat_dryer") return "低温烘干";
+  if (method === "do_not_dry") return "不烘干";
+  return method;
+}
+
+function friendlyMachineType(machineType: string): string {
+  if (machineType === "standard_washer") return "洗衣机";
+  if (machineType === "dryer") return "烘干机";
+  if (machineType === "shoe_washer") return "洗鞋机";
+  return machineType || "未分配";
 }

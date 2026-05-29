@@ -12,11 +12,11 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
   const totalCost = mobileSummary?.plan.estimated_cost_yuan;
   const totalText = totalCost === undefined || totalCost === null ? report.total : `¥${totalCost}`;
   const subtitle = mobileSummary?.plan.estimated_duration_minutes
-    ? `后端计划 · 机器占用 ${mobileSummary.plan.estimated_duration_minutes} 分钟`
-    : report.subtitle;
+    ? `机器占用 ${mobileSummary.plan.estimated_duration_minutes} 分钟`
+    : "费用与时间待确认";
   const backendSections = backendReport
     ? Object.entries(backendReport.sections).map(([title, copy]) => ({ title, copy }))
-    : reportSections;
+    : reportSections.map((s) => ({ ...s, copy: "配置宿舍楼后自动生成" }));
   const hasPlan = Boolean(mobileSummary?.plan.buckets.length);
   const pricingRules = mobileSummary?.campus_context.pricing_rules;
 

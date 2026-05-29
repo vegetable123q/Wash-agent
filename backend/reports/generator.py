@@ -241,9 +241,7 @@ def _dry_method_text(method: DryMethod) -> str:
 
 def _machine_type_text(machine_type: MachineType) -> str:
     labels = {
-        MachineType.SMALL_WASHER: "小型洗衣机",
-        MachineType.STANDARD_WASHER: "标准洗衣机",
-        MachineType.LARGE_WASHER: "大件洗衣机",
+        MachineType.STANDARD_WASHER: "洗衣机",
         MachineType.SHOE_WASHER: "洗鞋机",
         MachineType.DRYER: "烘干机",
         MachineType.UNKNOWN: "未知机器",

@@ -167,7 +167,7 @@ def _build_bucket(
         )
 
     program = "large" if bucket_id == "large-bedding" else "standard"
-    machine_type = MachineType.LARGE_WASHER if bucket_id == "large-bedding" else MachineType.STANDARD_WASHER
+    machine_type = MachineType.STANDARD_WASHER
     machine = _require_available_machine(campus_context.available_machines, machine_type, program)
     _require_wash_program(campus_context, program)
 

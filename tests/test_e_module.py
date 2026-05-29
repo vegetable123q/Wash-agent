@@ -58,7 +58,7 @@ def _campus_context() -> CampusContext:
         MachineInfo(
             machine_id="washer-large-1",
             location="Dorm A",
-            machine_type=MachineType.LARGE_WASHER,
+            machine_type=MachineType.STANDARD_WASHER,
             status=MachineStatus.AVAILABLE,
             modes=["large"],
         ),
@@ -84,9 +84,9 @@ def _campus_context() -> CampusContext:
                 estimated_wait_minutes=0,
             ),
             MachineQueueEstimate(
-                machine_type=MachineType.LARGE_WASHER,
-                total_count=1,
-                available_count=1,
+                machine_type=MachineType.STANDARD_WASHER,
+                total_count=2,
+                available_count=2,
                 running_count=0,
                 out_of_service_count=0,
                 unknown_count=0,
@@ -347,7 +347,7 @@ class EModuleTests(unittest.TestCase):
         self.assertIn("本批费用：4.0 元", report.sections["洗衣步骤"])
         self.assertEqual([line.amount_yuan for line in report.cost_breakdown], [4.0, 4.0])
         self.assertTrue(any("washer-1" in step for step in report.action_steps))
-        self.assertIn("Dorm A 标准洗衣机", report.sections["机器环境"])
+        self.assertIn("Dorm A 洗衣机", report.sections["机器环境"])
         self.assertIn("排队估算", report.sections["机器环境"])
         self.assertIn("晾晒条件", report.sections["机器环境"])
         self.assertTrue(any("自然晾干" in note for note in report.savings_notes))

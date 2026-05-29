@@ -246,9 +246,7 @@ function inferPreferredMethod(profile: ClothingProfile): WashMethod {
   if (allLabels.includes("do_not_wash")) return "do_not_wash";
   if (allLabels.includes("dry_clean_only")) return "dry_clean";
   if (allLabels.includes("hand_wash_only") || allLabels.includes("do_not_machine_wash")) return "hand_wash";
-  const method = inferRecommendedWash(profile.care_warnings);
-  if (method !== "machine_wash") return method as WashMethod;
-  return "unknown";
+  return inferRecommendedWash(profile.care_warnings) as WashMethod;
 }
 
 // ─── utilities ──────────────────────────────────────────────────────────

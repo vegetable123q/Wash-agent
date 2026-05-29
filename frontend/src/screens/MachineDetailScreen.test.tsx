@@ -25,7 +25,7 @@ describe("MachineDetailScreen", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "标准洗衣机 · 南区21号楼 一层" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "洗衣机 · 南区21号楼 一层" })).toBeInTheDocument();
     expect(screen.getByText("设备编号")).toBeInTheDocument();
     expect(screen.getByText("455514")).toBeInTheDocument();
     expect(screen.getByText("容量：接口未提供")).toBeInTheDocument();
@@ -39,7 +39,7 @@ describe("MachineDetailScreen", () => {
     expect(screen.getByRole("heading", { name: "标准筒 A02" })).toBeInTheDocument();
     expect(screen.getByText("设备编号")).toBeInTheDocument();
     expect(screen.getByText("washer-standard-2")).toBeInTheDocument();
-    expect(screen.getByText("标准洗衣机")).toBeInTheDocument();
+    expect(screen.getByText("洗衣机")).toBeInTheDocument();
     expect(screen.getByText("快洗 / 标准 / 强力")).toBeInTheDocument();
     expect(screen.queryByText("machine_id")).not.toBeInTheDocument();
     expect(screen.queryByText("machine_type")).not.toBeInTheDocument();

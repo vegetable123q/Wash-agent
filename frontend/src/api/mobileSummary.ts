@@ -89,7 +89,7 @@ export async function deleteWardrobeItem(itemId: string): Promise<{ status: stri
 // ─── integrated summary builder ─────────────────────────────────────────
 
 async function buildIntegratedMobileSummary(profile?: Pick<UserProfile, "dormName" | "allowDryer">): Promise<MobileSummary> {
-  const wardrobeItems = readLocalWardrobeItems();
+  const storedItems = readLocalWardrobeItems();
 
   let weather: WeatherSnapshot = await fetchTsinghuaWeather();
   let campusContext: CampusContext;
@@ -129,7 +129,7 @@ async function buildIntegratedMobileSummary(profile?: Pick<UserProfile, "dormNam
   }
 
   // Convert stored items to planner-compatible items
-  const planItems = wardrobeItems.map(storedToPlanItem);
+  const planItems = storedItems.map(storedToPlanItem);
 
   // Build constraints — auto-select items recommended for washing
   const constraints: LaundryConstraints = {
@@ -210,7 +210,7 @@ async function buildIntegratedMobileSummary(profile?: Pick<UserProfile, "dormNam
     weather,
     campus_towers: listCampusTowerOptions(),
     campus_status: campusStatus,
-    wardrobe: { items: wardrobeItems },
+    wardrobe: { items: storedItems },
     frequency_advice: frequencyAdvice,
     campus_context: {
       all_machines: allMachines,

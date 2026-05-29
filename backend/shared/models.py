@@ -37,11 +37,9 @@ class DryMethod(str, Enum):
 
 
 class MachineType(str, Enum):
-    """Campus machine capacity categories."""
+    """Campus machine categories — maps directly to API machine types."""
 
-    SMALL_WASHER = "small_washer"
     STANDARD_WASHER = "standard_washer"
-    LARGE_WASHER = "large_washer"
     SHOE_WASHER = "shoe_washer"
     DRYER = "dryer"
     UNKNOWN = "unknown"

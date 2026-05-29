@@ -1,5 +1,6 @@
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+
 import type { ModelHubConfig } from "../api/modelHubConfig";
 import { bucketLabel, generatePlanSummary } from "../api/llmSummary";
 import type { MobileSummary } from "../api/mobileSummary";
@@ -27,12 +28,21 @@ interface ExclusionItem {
 export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: PlanDetailScreenProps) {
   const backendBuckets = mobileSummary?.plan.buckets ?? [];
   const hasBackendBuckets = backendBuckets.length > 0;
+  const nameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (mobileSummary?.wardrobe.items) {
+      for (const item of mobileSummary.wardrobe.items) {
+        map.set(item.item_id, item.name);
+      }
+    }
+    return map;
+  }, [mobileSummary?.wardrobe.items]);
   const bucketRows = hasBackendBuckets
     ? backendBuckets.map((bucket) => ({
         id: bucket.bucket_id,
         title: `${methodLabel(bucket.wash_method)} · ${bucket.program || bucketLabel(bucket.bucket_id)}`,
         machine: bucket.machine_type,
-        detail: `${bucket.item_ids.join("、") || "未列出衣物"} · ${dryLabel(bucket.dry_method)}`,
+        detail: `${bucket.item_ids.map((id) => nameMap.get(id) || id).join("、") || "未列出衣物"} · ${dryLabel(bucket.dry_method)}`,
         tags: bucket.warnings.length
           ? bucket.warnings.map((warning) => ({ label: warning, tone: "orange" as const }))
           : [{ label: "后端批次", tone: "teal" as const }],

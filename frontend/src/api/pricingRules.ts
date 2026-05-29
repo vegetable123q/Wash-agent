@@ -3,7 +3,7 @@
  * Mirrors config/machine_rules.json so the APK is self-contained.
  */
 
-import type { CampusTower, PricingRules } from "./types";
+import type { PricingRules } from "./types";
 
 export const PRICING_RULES: PricingRules = {
   wash_programs: {
@@ -15,9 +15,7 @@ export const PRICING_RULES: PricingRules = {
     low: { price_yuan: 2.0, duration_minutes: 25 },
   },
   washer_types: {
-    small_washer: { capacity_kg: 5.0, default_price_yuan: 2.0, modes: ["quick", "standard"] },
     standard_washer: { capacity_kg: 7.0, default_price_yuan: 3.0, modes: ["quick", "standard", "heavy"] },
-    large_washer: { capacity_kg: 10.0, default_price_yuan: 4.0, modes: ["standard", "heavy"] },
     shoe_washer: {},
   },
   dryer_modes: {
@@ -38,17 +36,3 @@ export const MACHINE_TYPE_MAP: Record<string, string> = {
   烘干机: "dryer",
 };
 
-export const CAMPUS_TOWERS: CampusTower[] = [
-  {
-    name: "紫荆1号楼",
-    tower_key: "ncrkiz1",
-    provider: "cleverschool",
-    provider_keys: { cleverschool: "ncrkiz1", haier: "440" },
-  },
-  {
-    name: "南区21号楼",
-    tower_key: "nq21",
-    provider: "cleverschool",
-    provider_keys: { cleverschool: "nq21" },
-  },
-];

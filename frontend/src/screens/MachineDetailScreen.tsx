@@ -70,21 +70,36 @@ export function MachineDetailScreen({ onBack, backendMachine, staticMachine }: M
       <Section title="适合本次">
         <Card>
           <div className="list-stack">
-            <div className="dense-row">
-              <span className="text-icon text-icon-purple">深</span>
-              <div>
-                <h3>深色厚衣物桶</h3>
-                <p>灰卫衣、黑牛仔裤，容量约 55%。</p>
-              </div>
-              <Chip tone="teal">推荐</Chip>
-            </div>
-            <div className="dense-row">
-              <span className="text-icon text-icon-blue">浅</span>
-              <div>
-                <h3>浅色快速洗也可用</h3>
-                <p>若 A01 被占用，可切换到 A02。</p>
-              </div>
-            </div>
+            {machine.backendType === "dryer" ? (
+              <>
+                <div className="dense-row">
+                  <span className="text-icon text-icon-purple">烘</span>
+                  <div>
+                    <h3>低温烘干</h3>
+                    <p>适合烘干不可晾晒或急需使用的衣物。</p>
+                  </div>
+                  <Chip tone="teal">推荐</Chip>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="dense-row">
+                  <span className="text-icon text-icon-purple">深</span>
+                  <div>
+                    <h3>深色衣物桶</h3>
+                    <p>深色或掉色风险衣物集中处理，防串色。</p>
+                  </div>
+                  <Chip tone="teal">推荐</Chip>
+                </div>
+                <div className="dense-row">
+                  <span className="text-icon text-icon-blue">浅</span>
+                  <div>
+                    <h3>浅色快速洗</h3>
+                    <p>白色和浅色衣物可快速清洗。</p>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </Card>
       </Section>
@@ -138,6 +153,7 @@ function detailFromBackend(machine: BackendMachine) {
     backendId: machine.machine_id,
     name: `${typeLabel} · ${machine.location}`,
     location: machine.location,
+    backendType: machine.machine_type,
     typeLabel,
     capacity: capacityText(machine),
     status: statusText(machine.status),
@@ -153,6 +169,7 @@ function detailFromStatic(machine: MachineView) {
     backendId: machine.backendId,
     name: machine.name,
     location: machine.location,
+    backendType: machine.backendType,
     typeLabel: machineTypeLabel(machine.backendType),
     capacity: machine.capacity,
     status: machine.status,
@@ -177,7 +194,7 @@ function statusText(status: string) {
 }
 
 function machineTypeLabel(machineType: string) {
-  if (machineType === "standard_washer" || machineType === "small_washer") return "标准洗衣机";
+  if (machineType === "standard_washer") return "洗衣机";
   if (machineType === "shoe_washer") return "洗鞋机";
   if (machineType === "dryer") return "烘干机";
   return "未知设备";

@@ -31,20 +31,10 @@
     "烘干机": "dryer"
   },
   "washer_types": {
-    "small_washer": {
-      "capacity_kg": 5.0,
-      "default_price_yuan": 2.0,
-      "modes": ["quick", "standard"]
-    },
     "standard_washer": {
       "capacity_kg": 7.0,
       "default_price_yuan": 3.0,
       "modes": ["quick", "standard", "heavy"]
-    },
-    "large_washer": {
-      "capacity_kg": 10.0,
-      "default_price_yuan": 4.0,
-      "modes": ["standard", "heavy"]
     },
     "shoe_washer": {}
   },

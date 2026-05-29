@@ -6,7 +6,7 @@
 export type RiskLevel = "low" | "medium" | "high" | "unknown";
 export type WashMethod = "hand_wash" | "machine_wash" | "dry_clean" | "do_not_wash" | "unknown";
 export type DryMethod = "air_dry" | "low_heat_dryer" | "normal_dryer" | "do_not_dry" | "unknown";
-export type MachineType = "small_washer" | "standard_washer" | "large_washer" | "shoe_washer" | "dryer" | "unknown";
+export type MachineType = "standard_washer" | "shoe_washer" | "dryer" | "unknown";
 export type MachineStatus = "available" | "running" | "out_of_service" | "unknown";
 
 /** Normalized machine status used by the planner. */
