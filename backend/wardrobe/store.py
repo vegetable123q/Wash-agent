@@ -133,7 +133,7 @@ def _profile_from_dict(data: dict[str, Any]) -> ClothingProfile:
 def _wash_record_from_dict(data: dict[str, Any]) -> WashRecord:
     _require_keys(data, {"washed_at", "method", "notes", "issues"})
     return WashRecord(
-        washed_at=str(data["washed_at"]),
+        washed_at=_required_text(data["washed_at"], "washed_at"),
         method=WashMethod(data["method"]),
         notes=str(data["notes"]),
         issues=_string_list(data["issues"], "issues"),
@@ -168,6 +168,12 @@ def _string_list(value: Any, field_name: str) -> list[str]:
     if not all(isinstance(item, str) for item in value):
         raise ValueError(f"{field_name} must be a list of strings")
     return list(value)
+
+
+def _required_text(value: Any, field_name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} must be a non-empty string")
+    return value.strip()
 
 
 def _to_jsonable(value: Any) -> Any:

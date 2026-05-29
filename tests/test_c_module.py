@@ -152,6 +152,20 @@ class CModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "issues"):
                     self.store.list_items()
 
+    def test_store_rejects_invalid_wash_record_date(self) -> None:
+        invalid_dates: list[object] = [True, 20260510, ""]
+        for washed_at in invalid_dates:
+            with self.subTest(washed_at=washed_at):
+                payload = json.loads(self.path.read_text(encoding="utf-8"))
+                payload["items"][2]["wash_history"][0]["washed_at"] = washed_at
+                self.path.write_text(
+                    json.dumps(payload, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesRegex(ValueError, "washed_at"):
+                    self.store.list_items()
+
 
 if __name__ == "__main__":
     unittest.main()
