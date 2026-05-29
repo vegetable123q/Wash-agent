@@ -32,21 +32,21 @@ export function loadPercentForItems(items: LoadEstimateItem[]): number {
 export function estimatedWasherLoadCount(items: LoadEstimateItem[], targetUnits = TARGET_WASHER_LOAD_UNITS): number {
   const totalUnits = totalLaundryLoadUnits(items);
   if (totalUnits <= 0) return 0;
-  const safeTargetUnits = Number.isFinite(targetUnits) && targetUnits > 0 ? targetUnits : TARGET_WASHER_LOAD_UNITS;
-  return Math.max(1, Math.ceil(totalUnits / safeTargetUnits));
+  return Math.max(1, Math.ceil(totalUnits / safeTargetUnits(targetUnits)));
 }
 
 export function splitItemsByLaundryLoad<T extends LoadEstimateItem>(
   items: T[],
   targetUnits = TARGET_WASHER_LOAD_UNITS,
 ): T[][] {
+  const splitTargetUnits = safeTargetUnits(targetUnits);
   const chunks: T[][] = [];
   let current: T[] = [];
   let currentUnits = 0;
 
   for (const item of items) {
     const itemUnits = estimateLaundryLoadUnits(item);
-    if (current.length > 0 && currentUnits + itemUnits > targetUnits) {
+    if (current.length > 0 && currentUnits + itemUnits > splitTargetUnits) {
       chunks.push(current);
       current = [];
       currentUnits = 0;
@@ -59,6 +59,10 @@ export function splitItemsByLaundryLoad<T extends LoadEstimateItem>(
     chunks.push(current);
   }
   return chunks;
+}
+
+function safeTargetUnits(targetUnits: number): number {
+  return Number.isFinite(targetUnits) && targetUnits > 0 ? targetUnits : TARGET_WASHER_LOAD_UNITS;
 }
 
 function totalLaundryLoadUnits(items: LoadEstimateItem[]): number {
