@@ -45,6 +45,18 @@ describe("modelHubConfig persistence", () => {
     expect(JSON.stringify(localStorage)).not.toContain("sk-local-test-key");
   });
 
+  it("does not return a stale in-memory config after localStorage is cleared externally", () => {
+    saveModelHubConfig({
+      baseUrl: "https://modelhub.ailemac.com/v1beta",
+      apikey: "sk-local-test-key",
+      model_name: "gemini-3.1-pro-preview",
+    });
+
+    localStorage.clear();
+
+    expect(loadModelHubConfig().apikey).toBe("");
+  });
+
   it("does not treat malformed baseUrl values as complete config", () => {
     expect(
       hasCompleteModelHubConfig({

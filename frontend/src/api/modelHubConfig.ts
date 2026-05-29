@@ -17,19 +17,20 @@ const STORAGE_KEY = "washmate.modelHubConfig";
 let inMemoryModelHubConfig: ModelHubConfig | null = null;
 
 export function loadModelHubConfig(): ModelHubConfig {
-  if (inMemoryModelHubConfig) {
-    return inMemoryModelHubConfig;
-  }
   if (typeof localStorage === "undefined") {
-    return emptyModelHubConfig;
+    return inMemoryModelHubConfig ?? emptyModelHubConfig;
   }
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) {
+    inMemoryModelHubConfig = null;
     return emptyModelHubConfig;
   }
   try {
-    return normalizeModelHubConfig(JSON.parse(raw));
+    const normalized = normalizeModelHubConfig(JSON.parse(raw));
+    inMemoryModelHubConfig = normalized;
+    return normalized;
   } catch {
+    inMemoryModelHubConfig = null;
     return emptyModelHubConfig;
   }
 }
