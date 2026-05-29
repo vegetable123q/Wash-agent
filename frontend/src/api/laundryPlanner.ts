@@ -479,9 +479,20 @@ function searchText(item: WardrobeItemForPlan): string {
 
 function containsAny(text: string, terms: Set<string>): boolean {
   for (const term of terms) {
-    if (text.includes(term)) return true;
+    if (termMatches(text, term)) return true;
   }
   return false;
+}
+
+function termMatches(text: string, term: string): boolean {
+  if (/^[a-z0-9 _-]+$/i.test(term)) {
+    return new RegExp(`(^|[^a-z0-9])${escapeRegExp(term)}([^a-z0-9]|$)`).test(text);
+  }
+  return text.includes(term);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function itemIds(items: WardrobeItemForPlan[]): string[] {

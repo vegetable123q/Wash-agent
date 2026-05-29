@@ -79,6 +79,22 @@ describe("planLaundry", () => {
     expect(JSON.stringify(plan)).not.toContain("large_washer");
   });
 
+  it("does not match bedding terms inside unrelated English words", () => {
+    const item = standardItem("tee-1", "worksheet tee");
+    const plan = planLaundry([item], {
+      selected_item_ids: ["tee-1"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: 10,
+      budget_yuan: null,
+    }, context);
+
+    expect(plan.buckets[0].bucket_id).toBe("light-standard");
+    expect(plan.buckets[0].program).toBe("standard");
+  });
+
   it("splits many same-color standard items across multiple washer loads", () => {
     const items: WardrobeItemForPlan[] = Array.from({ length: 12 }, (_, index) => ({
       profile: {
