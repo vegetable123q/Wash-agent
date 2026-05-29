@@ -475,7 +475,7 @@ function colorsText(value: unknown): string {
     return Object.values(value as Record<string, unknown>).map(colorsText).filter(Boolean).join("、");
   }
   return stringValue(value)
-    .split(/[、,，/]+/)
+    .split(/[、,，/;；]+/)
     .map((item) => translateColorName(item))
     .filter(Boolean)
     .join("、");
