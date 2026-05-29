@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 import tempfile
 import unittest
@@ -101,6 +102,20 @@ class CModuleTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "missing required fields"):
             self.store.list_items()
+
+    def test_store_rejects_invalid_wear_count(self) -> None:
+        invalid_counts: list[object] = [True, -1, 1.5, "2"]
+        for count in invalid_counts:
+            with self.subTest(count=count):
+                payload = json.loads(self.path.read_text(encoding="utf-8"))
+                payload["items"][0]["wear_count_since_wash"] = count
+                self.path.write_text(
+                    json.dumps(payload, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesRegex(ValueError, "wear_count_since_wash"):
+                    self.store.list_items()
 
 
 if __name__ == "__main__":

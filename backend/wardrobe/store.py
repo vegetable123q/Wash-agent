@@ -107,7 +107,10 @@ def _wardrobe_item_from_dict(data: dict[str, Any]) -> WardrobeItem:
     _require_keys(data, {"profile", "wear_count_since_wash", "preferred_method", "wash_history", "user_notes"})
     return WardrobeItem(
         profile=_profile_from_dict(data["profile"]),
-        wear_count_since_wash=int(data["wear_count_since_wash"]),
+        wear_count_since_wash=_non_negative_int(
+            data["wear_count_since_wash"],
+            "wear_count_since_wash",
+        ),
         preferred_method=WashMethod(data["preferred_method"]),
         wash_history=[_wash_record_from_dict(record) for record in data["wash_history"]],
         user_notes=list(data["user_notes"]),
@@ -142,6 +145,14 @@ def _require_keys(data: dict[str, Any], keys: set[str]) -> None:
     missing = keys - set(data)
     if missing:
         raise ValueError(f"missing required fields: {', '.join(sorted(missing))}")
+
+
+def _non_negative_int(value: Any, field_name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{field_name} must be a non-negative integer")
+    if value < 0:
+        raise ValueError(f"{field_name} must be a non-negative integer")
+    return value
 
 
 def _to_jsonable(value: Any) -> Any:
