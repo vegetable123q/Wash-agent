@@ -258,6 +258,18 @@ def _normalize_ratio(value: Any) -> float | None:
     return min(ratio, 1.0)
 
 
+def _normalize_confidence(value: Any) -> float:
+    if isinstance(value, bool):
+        return 0.0
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(confidence):
+        return 0.0
+    return max(0.0, min(confidence, 1.0))
+
+
 def _risk_level(value: Any) -> RiskLevel:
     if isinstance(value, RiskLevel):
         return value
@@ -626,10 +638,7 @@ def _profile_from_llm(raw: ClothingInput, payload: dict[str, Any]) -> ClothingPr
         for key, value in dict(payload.get("risks") or {}).items()
     })
 
-    try:
-        confidence = float(payload.get("confidence", 0.0))
-    except (TypeError, ValueError):
-        confidence = 0.0
+    confidence = _normalize_confidence(payload.get("confidence", 0.0))
 
     llm_missing = [str(field) for field in payload.get("missing_fields") or []]
     care_symbols = _normalize_care_symbols(payload.get("care_symbols"))
@@ -656,7 +665,7 @@ def _profile_from_llm(raw: ClothingInput, payload: dict[str, Any]) -> ClothingPr
         care_warnings=care_warnings,
         care_recommendations=care_recommendations,
         risks=risks,
-        confidence=max(0.0, min(confidence, 1.0)),
+        confidence=confidence,
         source_notes=[
             str(note)
             for note in payload.get("source_notes")
