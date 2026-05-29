@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import asdict, fields, is_dataclass
 from enum import Enum
 from pathlib import Path
@@ -131,6 +132,7 @@ def _profile_from_dict(data: dict[str, Any]) -> ClothingProfile:
     cleaned = dict(data)
     cleaned["item_id"] = _required_text(cleaned["item_id"], "item_id")
     cleaned["name"] = _required_text(cleaned["name"], "name")
+    cleaned["material_ratios"] = _ratio_map(cleaned.get("material_ratios"))
     cleaned["colors"] = _string_list(cleaned.get("colors", []), "colors")
     for field_name in (
         "care_forbidden",
@@ -154,6 +156,24 @@ def _profile_from_dict(data: dict[str, Any]) -> ClothingProfile:
             cleaned[field_name] = _text(cleaned[field_name], field_name)
     cleaned["risks"] = _risk_map(cleaned.get("risks"))
     return ClothingProfile(**cleaned)
+
+
+def _ratio_map(value: Any) -> dict[str, float]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError("material_ratios must be an object")
+    ratios: dict[str, float] = {}
+    for key, item_value in value.items():
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError("material_ratios must contain non-empty string keys")
+        if isinstance(item_value, bool) or not isinstance(item_value, (int, float)):
+            raise ValueError(f"material_ratios.{key} must be a ratio from 0 to 1")
+        ratio = float(item_value)
+        if not math.isfinite(ratio) or ratio < 0 or ratio > 1:
+            raise ValueError(f"material_ratios.{key} must be a ratio from 0 to 1")
+        ratios[key.strip()] = ratio
+    return ratios
 
 
 def _risk_map(value: Any) -> dict[str, RiskLevel]:

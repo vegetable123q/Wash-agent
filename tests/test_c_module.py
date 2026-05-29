@@ -276,6 +276,28 @@ class CModuleTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, field_name):
                         self.store.list_items()
 
+    def test_store_rejects_invalid_profile_material_ratios(self) -> None:
+        invalid_ratios: list[object] = [
+            True,
+            ["cotton"],
+            {"": 0.5},
+            {"cotton": True},
+            {"cotton": -0.1},
+            {"cotton": 1.5},
+            {"cotton": float("nan")},
+        ]
+        for ratios in invalid_ratios:
+            with self.subTest(ratios=ratios):
+                payload = json.loads((ROOT / "data" / "wardrobe_sample.json").read_text(encoding="utf-8"))
+                payload["items"][0]["profile"]["material_ratios"] = ratios
+                self.path.write_text(
+                    json.dumps(payload, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesRegex(ValueError, "material_ratios"):
+                    self.store.list_items()
+
     def test_store_rejects_invalid_profile_risks(self) -> None:
         invalid_risks: list[object] = [
             True,
