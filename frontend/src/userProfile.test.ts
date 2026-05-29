@@ -31,6 +31,15 @@ describe("userProfile", () => {
     });
   });
 
+  it("returns a copy of the default profile", () => {
+    const loaded = loadUserProfile();
+
+    loaded.displayName = "Mutated";
+
+    expect(defaultUserProfile.displayName).toBe("");
+    expect(loadUserProfile().displayName).toBe("");
+  });
+
   it("normalizes missing or invalid laundry preferences to null", () => {
     localStorage.setItem(
       storageKey,

@@ -20,16 +20,16 @@ const STORAGE_KEY = "washmate.userProfile";
 
 export function loadUserProfile(): UserProfile {
   if (typeof localStorage === "undefined") {
-    return defaultUserProfile;
+    return defaultProfile();
   }
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) {
-    return defaultUserProfile;
+    return defaultProfile();
   }
   try {
     return normalizeProfile(JSON.parse(raw));
   } catch {
-    return defaultUserProfile;
+    return defaultProfile();
   }
 }
 
@@ -39,6 +39,10 @@ export function saveUserProfile(profile: UserProfile): UserProfile {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
   }
   return normalized;
+}
+
+function defaultProfile(): UserProfile {
+  return { ...defaultUserProfile };
 }
 
 function normalizeProfile(value: unknown): UserProfile {
