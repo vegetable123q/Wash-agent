@@ -131,6 +131,7 @@ def _profile_from_dict(data: dict[str, Any]) -> ClothingProfile:
     cleaned = dict(data)
     cleaned["item_id"] = _required_text(cleaned["item_id"], "item_id")
     cleaned["name"] = _required_text(cleaned["name"], "name")
+    cleaned["colors"] = _string_list(cleaned.get("colors", []), "colors")
     cleaned["risks"] = _risk_map(cleaned.get("risks"))
     return ClothingProfile(**cleaned)
 
