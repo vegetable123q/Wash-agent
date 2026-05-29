@@ -12,6 +12,7 @@ from backend.shared.models import (
     LaundryConstraints,
     LaundryPlan,
     MachineInfo,
+    MachineQueueEstimate,
     MachineStatus,
     MachineType,
     RiskLevel,
@@ -94,6 +95,35 @@ def _validate_constraints(constraints: LaundryConstraints) -> None:
 def _validate_campus_context(value: object) -> None:
     if not isinstance(value, CampusContext):
         raise ValueError("campus_context must be a CampusContext")
+    _machine_info_list(value.all_machines, "all_machines")
+    _machine_info_list(value.available_machines, "available_machines")
+    _queue_estimate_list(value.queue_estimates, "queue_estimates")
+    _dict_field(value.weather, "weather")
+    _dict_field(value.drying_context, "drying_context")
+    _dict_field(value.pricing_rules, "pricing_rules")
+
+
+def _machine_info_list(value: object, field_name: str) -> None:
+    if not isinstance(value, list):
+        raise ValueError(f"campus_context.{field_name} must be a list of MachineInfo")
+    for index, item in enumerate(value):
+        if not isinstance(item, MachineInfo):
+            raise ValueError(f"campus_context.{field_name}[{index}] must be a MachineInfo")
+
+
+def _queue_estimate_list(value: object, field_name: str) -> None:
+    if not isinstance(value, list):
+        raise ValueError(f"campus_context.{field_name} must be a list of MachineQueueEstimate")
+    for index, estimate in enumerate(value):
+        if not isinstance(estimate, MachineQueueEstimate):
+            raise ValueError(
+                f"campus_context.{field_name}[{index}] must be a MachineQueueEstimate"
+            )
+
+
+def _dict_field(value: object, field_name: str) -> None:
+    if not isinstance(value, dict):
+        raise ValueError(f"campus_context.{field_name} must be a dict")
 
 
 def _item_id_list(value: object, field_name: str) -> list[str]:

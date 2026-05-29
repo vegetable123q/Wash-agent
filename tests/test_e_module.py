@@ -337,6 +337,29 @@ class EModuleTests(unittest.TestCase):
                         campus_context,  # type: ignore[arg-type]
                     )
 
+    def test_plan_requires_valid_campus_context_fields(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        cases: list[tuple[str, object, LaundryConstraints]] = [
+            ("all_machines", [object()], LaundryConstraints(selected_item_ids=["white-tee"])),
+            ("available_machines", [object()], LaundryConstraints(selected_item_ids=["white-tee"])),
+            (
+                "queue_estimates",
+                [object()],
+                LaundryConstraints(selected_item_ids=["white-tee"], max_wait_minutes=5),
+            ),
+            ("weather", [], LaundryConstraints(selected_item_ids=["white-tee"])),
+            ("drying_context", [], LaundryConstraints(selected_item_ids=["white-tee"])),
+            ("pricing_rules", [], LaundryConstraints(selected_item_ids=["white-tee"])),
+        ]
+
+        for field_name, value, constraints in cases:
+            with self.subTest(field_name=field_name):
+                context = _campus_context()
+                setattr(context, field_name, value)
+
+                with self.assertRaisesRegex(ValueError, field_name):
+                    plan_laundry(items, constraints, context)
+
     def test_air_dry_and_budget_warnings_use_explicit_context(self) -> None:
         context = _campus_context()
         context.drying_context = {"balcony_available": False, "ventilation": "poor"}
