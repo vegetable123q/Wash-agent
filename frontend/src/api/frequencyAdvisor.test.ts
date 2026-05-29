@@ -33,6 +33,12 @@ describe("frequencyAdvisor", () => {
     expect(advice.priority_score).toBe(0);
     expect(advice.reasons[0]).toContain("未达到建议清洗阈值 4 次");
   });
+
+  it("does not match sport terms inside unrelated English words", () => {
+    const advice = adviseFrequency(planItem({ name: "transport jacket", wearCount: 0 }), constraints);
+
+    expect(advice.priority_score).toBe(0);
+  });
 });
 
 function planItem({ name, wearCount }: { name: string; wearCount: number }): WardrobeItemForPlan {
