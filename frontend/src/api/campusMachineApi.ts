@@ -136,6 +136,7 @@ function cleverSchoolMachineFromPayload(item: Record<string, unknown>, index: nu
     remaining_minutes: remainingMinutes(requiredText(item, "status", `cleverschool[${index}]`)),
     price_yuan: null,
     modes: [],
+    provider: "cleverschool",
   };
 }
 
@@ -155,6 +156,7 @@ function haierMachineFromPayload(
     remaining_minutes: null,
     price_yuan: null,
     modes: [],
+    provider: "haier",
   };
 }
 

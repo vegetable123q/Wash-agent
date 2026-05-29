@@ -103,7 +103,7 @@ Wash-agent/
 - 宿舍楼下拉菜单使用前端本地产品目录；目录只向页面暴露宿舍楼名称，CleverSchool `towerKey` 和海乐 `positionId` 只能留在 API 配置层。
 - 用户保存宿舍楼后，移动端洗衣房通过真实 CleverSchool / 海乐生活接口读取机器状态；未选择宿舍楼时必须显示待配置状态，不请求机器接口，也不使用旧机器 mock。
 - 本地浏览器预览通过 Vite 代理访问 CleverSchool 和海乐生活接口，避免 `localhost` 直接跨域请求失败；Android/Capacitor 环境继续使用 Capacitor HTTP。
-- 洗衣房、个人信息、方案和机器详情页面只能展示宿舍楼名称、机器类型中文名、状态、价格等用户可理解信息；机器容量当前不进入 D/E 契约，也不在前端展示；实时接口未提供价格时必须明确显示“接口未提供”，不展示 `tower_key`、provider key、`machine_type`、规则 key 等内部字段。
+- 洗衣房、个人信息、方案和机器详情页面只能展示宿舍楼名称、机器类型中文名、状态、价格和模式等用户可理解信息；机器容量当前不进入 D/E 契约，也不在前端展示；实时接口未提供价格和模式时，前端必须从显式 `pricing_rules` 生成用户可见的价格区间和模式价格，不展示 `tower_key`、provider key、`machine_type`、规则 key 等内部字段。
 - 床品仍单独成桶，但移动端规划器不再假设存在 `large_washer` 或“大件机”；当前只使用真实存在的 `standard_washer` 和显式配置的 `large` 大物洗衣程序。
 - 图片选择默认只保留文件名用于本地衣柜记录；只有用户主动点击识图时，才把图片内容发送到用户配置的 ModelHub endpoint。
 - 衣柜页必须同时提供查看详情和删除已有本地衣物的操作；删除中应禁用对应按钮，成功或失败都要显示状态。
@@ -258,7 +258,7 @@ Wash-agent/
 - `context.py` 必须生成 `CampusContext.queue_estimates`。该字段按 `MachineType` 汇总总数、可用数、运行中数、异常数、未知数和 `estimated_wait_minutes`：有可用机器时为 `0`；无可用机器但运行中机器有剩余时间时取最短剩余时间；信息不足时保持 `None`。
 - `machine_api.py` 提供 `mock_transport_from_file("data/machines_mock.json")`，用于让交付 mock 文件通过正式 transport 入口参与测试；mock 缺少必要响应时应显式报错。
 - `machines_mock.json` 同时保留本地离线集成使用的 `machines` 列表，以及真实接口 transport 测试使用的 CleverSchool / 海乐响应片段。
-- `machine_rules.json` 保存 E 模块消费的 `pricing_rules`、晾晒上下文 `drying_context`、模式、价格和时长等配置。当前价格规则同时记录海乐生活和智慧校园：通用规划字段保留两家共有的洗衣/烘干/洗鞋程序，`provider_programs.haier` 记录海乐额外的单脱、桶清洁、加温和紫外项目，`provider_programs.cleverschool` 只记录用户确认过的智慧校园项目。机器容量不进入配置；D 模块的真实机器接口解析只产出外部接口明确给出的机器编号、位置、类型、状态和剩余时间，外部状态接口不提供的价格和模式不得在 D 模块内补齐，需由 E 模块或集成层显式注入。
+- `machine_rules.json` 保存 E 模块消费的 `pricing_rules`、晾晒上下文 `drying_context`、模式、价格和时长等配置。当前价格规则同时记录海乐生活和智慧校园：通用规划字段保留两家共有的洗衣/烘干/洗鞋程序，`provider_programs.haier` 记录海乐额外的单脱、桶清洁、加温和紫外项目，`provider_programs.cleverschool` 只记录用户确认过的智慧校园项目。机器容量不进入配置；D 模块的真实机器接口解析只产出外部接口明确给出的机器编号、位置、类型、状态和剩余时间，并保留内部 `provider` 用于集成层选择对应厂商的模式价格表；外部状态接口不提供的价格和模式不得在 D 模块内补齐，需由 E 模块或集成层显式注入。
 
 不应该做：
 

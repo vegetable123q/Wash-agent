@@ -357,6 +357,7 @@ function toBackendMachine(m: MachineInfo): BackendMachine {
     remaining_minutes: m.remaining_minutes,
     price_yuan: m.price_yuan,
     modes: m.modes,
+    provider: m.provider,
   };
 }
 

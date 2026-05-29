@@ -1,4 +1,5 @@
-import { AlertTriangle, Info, WashingMachine } from "lucide-react";
+import { AlertTriangle, WashingMachine } from "lucide-react";
+import { machineProgramOptions, type MachineProgramOption } from "../api/machinePricing";
 import type { BackendMachine } from "../api/mobileSummary";
 import { Card, Chip, Page, PrimaryPanel, Section, TopBar } from "../components/AppChrome";
 import { type MachineView } from "../data/washMateContent";
@@ -7,9 +8,10 @@ interface MachineDetailScreenProps {
   onBack: () => void;
   backendMachine?: BackendMachine | null;
   staticMachine?: MachineView | null;
+  pricingRules?: Record<string, unknown> | null;
 }
 
-export function MachineDetailScreen({ onBack, backendMachine, staticMachine }: MachineDetailScreenProps) {
+export function MachineDetailScreen({ onBack, backendMachine, staticMachine, pricingRules }: MachineDetailScreenProps) {
   if (!backendMachine && !staticMachine) {
     return (
       <Page compact>
@@ -22,8 +24,10 @@ export function MachineDetailScreen({ onBack, backendMachine, staticMachine }: M
     );
   }
 
-  const machine = backendMachine ? detailFromBackend(backendMachine) : detailFromStatic(staticMachine as MachineView);
-  const modes = machine.modes.length ? machine.modes.map(modeLabel).join(" / ") : "暂无可用模式";
+  const machine = backendMachine ? detailFromBackend(backendMachine, pricingRules) : detailFromStatic(staticMachine as MachineView);
+  const modes = machine.modeOptions.length
+    ? machine.modeOptions.map((mode) => mode.label).join(" / ")
+    : machine.modes.length ? machine.modes.map(modeLabel).join(" / ") : "暂无可用模式";
 
   return (
     <Page compact>
@@ -40,8 +44,7 @@ export function MachineDetailScreen({ onBack, backendMachine, staticMachine }: M
             <p>{machine.typeLabel} · {machine.location}</p>
           </div>
           <div className="panel-metrics">
-            <span>{machine.price} 参考价</span>
-            <span>{machine.remaining} 等待</span>
+            <span>{machine.timing}</span>
           </div>
         </div>
       </PrimaryPanel>
@@ -106,23 +109,18 @@ export function MachineDetailScreen({ onBack, backendMachine, staticMachine }: M
 
       <Section title="可选模式">
         <div className="mode-grid">
-          {machine.modes.map((mode) => (
-            <div key={mode} className={`mode-option ${mode === "standard" ? "selected" : ""}`}>
+          {machine.modeOptions.length ? machine.modeOptions.map((mode) => (
+            <div key={mode.id} className="mode-option">
+              <strong>{mode.label}</strong>
+              <span>{mode.summaryText}</span>
+            </div>
+          )) : machine.modes.map((mode) => (
+            <div key={mode} className="mode-option">
               <strong>{modeLabel(mode)}</strong>
               <span>{modeDescription(mode)}</span>
             </div>
           ))}
         </div>
-      </Section>
-
-      <Section title="价格信息">
-        <Card accent="blue" className="machine-detail-card">
-          <div>
-            <Info size={18} />
-            <h3>{machine.price}</h3>
-          </div>
-          <p>以洗衣房实时状态和页面提示为准。</p>
-        </Card>
       </Section>
 
       <Section title="不建议放入">
@@ -147,7 +145,7 @@ export function MachineDetailScreen({ onBack, backendMachine, staticMachine }: M
   );
 }
 
-function detailFromBackend(machine: BackendMachine) {
+function detailFromBackend(machine: BackendMachine, pricingRules?: Record<string, unknown> | null) {
   const typeLabel = machineTypeLabel(machine.machine_type);
   return {
     backendId: machine.machine_id,
@@ -157,9 +155,9 @@ function detailFromBackend(machine: BackendMachine) {
     typeLabel,
     status: statusText(machine.status),
     backendStatus: statusText(machine.status),
-    remaining: machine.remaining_minutes === null ? "等待未知" : `${machine.remaining_minutes} 分钟`,
-    price: priceText(machine),
+    timing: timingText(machine.status, machine.remaining_minutes),
     modes: machine.modes,
+    modeOptions: machineProgramOptions(machine, pricingRules),
   };
 }
 
@@ -172,9 +170,9 @@ function detailFromStatic(machine: MachineView) {
     typeLabel: machineTypeLabel(machine.backendType),
     status: machine.status,
     backendStatus: machine.status,
-    remaining: machine.remaining,
-    price: machine.price,
+    timing: staticTimingText(machine),
     modes: machine.modes,
+    modeOptions: [] as MachineProgramOption[],
   };
 }
 
@@ -198,8 +196,20 @@ function machineTypeLabel(machineType: string) {
   return "未知设备";
 }
 
-function priceText(machine: BackendMachine) {
-  return machine.price_yuan === null ? "价格：接口未提供" : `价格：¥${machine.price_yuan}`;
+function timingText(status: string, remainingMinutes: number | null) {
+  if (status === "available") return "无需等待";
+  if (status === "running") {
+    return remainingMinutes === null ? "运行中" : `剩余 ${remainingMinutes} 分钟`;
+  }
+  if (status === "out_of_service") return "暂不可用";
+  return "状态未知";
+}
+
+function staticTimingText(machine: MachineView) {
+  if (machine.backendStatus === "available") return "无需等待";
+  if (machine.backendStatus === "out_of_service") return "暂不可用";
+  if (machine.remaining === "0 分钟") return "无需等待";
+  return machine.remaining;
 }
 
 function modeLabel(mode: string) {

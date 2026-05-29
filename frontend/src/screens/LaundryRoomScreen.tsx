@@ -1,4 +1,5 @@
 import { Clock3, MapPin } from "lucide-react";
+import { machinePriceText } from "../api/machinePricing";
 import type { BackendMachine, BackendQueueEstimate, MobileSummary } from "../api/mobileSummary";
 import { Card, Chip, Page, Section } from "../components/AppChrome";
 import { dryerOptions, type ScreenId } from "../data/washMateContent";
@@ -20,6 +21,7 @@ export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate, onVi
   const latestPickup = userProfile?.latestPickupTime || "22:30";
   const availableCount = mobileSummary?.campus_context.available_machines.length ?? 0;
   const queueRows = backendQueues.map(queueFromBackend);
+  const pricingRules = mobileSummary?.campus_context.pricing_rules;
 
   return (
     <Page>
@@ -100,7 +102,7 @@ export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate, onVi
                   <span className={`status-dot status-${toneForMachineStatus(machine.status)}`} />
                   <h3>{machineCardTitle(machine)}</h3>
                 </div>
-                <p>{priceText(machine)}</p>
+                <p>{machinePriceText(machine, pricingRules)}</p>
                 <p className="machine-submeta">设备编号 {machine.machine_id}</p>
               </div>
               <Chip tone={toneForMachineStatus(machine.status)}>{statusText(machine.status)}</Chip>
@@ -196,10 +198,6 @@ function statusText(status: string) {
     return "故障";
   }
   return "未知";
-}
-
-function priceText(machine: BackendMachine) {
-  return machine.price_yuan === null ? "价格：接口未提供" : `价格：¥${machine.price_yuan}`;
 }
 
 function machineCardTitle(machine: BackendMachine) {

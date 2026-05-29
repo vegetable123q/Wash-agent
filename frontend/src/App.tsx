@@ -151,7 +151,14 @@ export default function App() {
           />
         );
       case "machineDetail":
-        return <MachineDetailScreen onBack={goBack} backendMachine={selectedBackendMachine} staticMachine={selectedStaticMachine} />;
+        return (
+          <MachineDetailScreen
+            onBack={goBack}
+            backendMachine={selectedBackendMachine}
+            staticMachine={selectedStaticMachine}
+            pricingRules={mobileSummary?.campus_context.pricing_rules}
+          />
+        );
       case "report":
         return <ReportScreen mobileSummary={mobileSummary} />;
       case "profile":

@@ -172,6 +172,7 @@ class MachineInfo:
     remaining_minutes: int | None = None
     price_yuan: float | None = None
     modes: list[str] = field(default_factory=list)
+    provider: str = ""
 
 
 @dataclass(slots=True)

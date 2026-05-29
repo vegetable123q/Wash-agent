@@ -359,6 +359,7 @@ def _machine_from_mock_dict(data: object) -> MachineInfo:
         "remaining_minutes",
         "price_yuan",
         "modes",
+        "provider",
     }
     unknown = set(data) - allowed
     if unknown:
@@ -381,6 +382,7 @@ def _machine_from_mock_dict(data: object) -> MachineInfo:
         remaining_minutes=_optional_int(data.get("remaining_minutes"), "remaining_minutes"),
         price_yuan=_optional_number(data.get("price_yuan"), "price_yuan"),
         modes=[str(mode) for mode in modes],
+        provider=str(data.get("provider", "")).strip(),
     )
 
 
@@ -498,6 +500,7 @@ def _machine_info_from_payload(
             "default_price_yuan",
         ),
         modes=_string_list(rule_details.get("modes"), "modes"),
+        provider="cleverschool",
     )
 
 
@@ -514,6 +517,7 @@ def _machine_info_from_haier_payload(
         location=location,
         machine_type=_haier_machine_type(category_code),
         status=_haier_machine_status(item.get("state")),
+        provider="haier",
     )
 
 

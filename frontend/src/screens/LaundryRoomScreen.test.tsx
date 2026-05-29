@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { PRICING_RULES } from "../api/pricingRules";
 import { LaundryRoomScreen } from "./LaundryRoomScreen";
 
 describe("LaundryRoomScreen", () => {
@@ -99,7 +100,7 @@ describe("LaundryRoomScreen", () => {
             ],
             weather: {},
             drying_context: {},
-            pricing_rules: {},
+            pricing_rules: { ...PRICING_RULES },
           },
           plan: {
             buckets: [],
@@ -123,7 +124,10 @@ describe("LaundryRoomScreen", () => {
     expect(screen.getByText("洗衣机")).toBeInTheDocument();
     expect(screen.getByText("洗鞋机")).toBeInTheDocument();
     expect(screen.getByText("烘干机")).toBeInTheDocument();
-    expect(screen.getAllByText("价格：接口未提供").length).toBeGreaterThan(0);
+    expect(screen.queryByText("价格：接口未提供")).not.toBeInTheDocument();
+    expect(screen.getByText("价格：¥3-4")).toBeInTheDocument();
+    expect(screen.getByText("价格：¥2.5-4")).toBeInTheDocument();
+    expect(screen.getByText("价格：¥2-4")).toBeInTheDocument();
     expect(screen.queryByText(/容量/)).not.toBeInTheDocument();
     expect(screen.queryByText("容量未知")).not.toBeInTheDocument();
     expect(screen.queryByText("价格待定")).not.toBeInTheDocument();

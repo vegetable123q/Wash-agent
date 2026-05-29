@@ -18,6 +18,7 @@ export interface MachineInfo {
   remaining_minutes: number | null;
   price_yuan: number | null;
   modes: string[];
+  provider?: string;
 }
 
 /** Queue and waiting-time summary for one machine type. */
@@ -205,6 +206,7 @@ export interface BackendMachine {
   remaining_minutes: number | null;
   price_yuan: number | null;
   modes: string[];
+  provider?: string;
 }
 
 /** Queue estimate in the shape screens consume. */
