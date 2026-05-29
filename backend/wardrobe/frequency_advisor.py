@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from backend.shared.models import FrequencyAdvice, LaundryConstraints, RiskLevel, WardrobeItem
+from backend.shared.models import ClothingProfile, FrequencyAdvice, LaundryConstraints, RiskLevel, WardrobeItem
 from backend.shared.utils import contains_any, dedupe
 
 
@@ -144,6 +144,8 @@ def _threshold_for(text: str) -> int:
 def _validate_item(value: object) -> None:
     if not isinstance(value, WardrobeItem):
         raise ValueError("item must be a WardrobeItem")
+    if not isinstance(value.profile, ClothingProfile):
+        raise ValueError("item.profile must be a ClothingProfile")
     _non_negative_int(value.wear_count_since_wash, "wear_count_since_wash")
 
 

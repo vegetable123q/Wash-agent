@@ -178,6 +178,12 @@ class CModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, field_name):
                     advise_frequency(item, constraints)
 
+    def test_frequency_requires_valid_item_profile(self) -> None:
+        item = WardrobeItem(profile="profile")  # type: ignore[arg-type]
+
+        with self.assertRaisesRegex(ValueError, "profile"):
+            advise_frequency(item, LaundryConstraints())
+
     def test_frequency_requires_valid_wear_count(self) -> None:
         invalid_counts: list[object] = [True, -1, 1.5, "2"]
 
