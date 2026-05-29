@@ -83,6 +83,17 @@ describe("userProfile", () => {
     expect(loadUserProfile().latestPickupTime).toBe(defaultUserProfile.latestPickupTime);
   });
 
+  it("normalizes one-digit pickup hours to HH:MM", () => {
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        latestPickupTime: "7:05",
+      }),
+    );
+
+    expect(loadUserProfile().latestPickupTime).toBe("07:05");
+  });
+
   it("returns a normalized profile when localStorage is unavailable", () => {
     vi.stubGlobal("localStorage", undefined);
 

@@ -47,11 +47,10 @@ function defaultProfile(): UserProfile {
 
 function normalizeProfile(value: unknown): UserProfile {
   const profile = typeof value === "object" && value !== null ? (value as Partial<UserProfile>) : {};
-  const latestPickupTime = String(profile.latestPickupTime ?? defaultUserProfile.latestPickupTime).trim();
   return {
     displayName: String(profile.displayName ?? "").trim(),
     dormName: String(profile.dormName ?? "").trim(),
-    latestPickupTime: isValidPickupTime(latestPickupTime) ? latestPickupTime : defaultUserProfile.latestPickupTime,
+    latestPickupTime: normalizePickupTime(profile.latestPickupTime),
     allowDryer: booleanValue(profile.allowDryer),
     budgetYuan: positiveNumberOrNull(profile.budgetYuan),
     maxWaitMinutes: positiveNumberOrNull(profile.maxWaitMinutes),
@@ -59,13 +58,28 @@ function normalizeProfile(value: unknown): UserProfile {
 }
 
 export function isValidPickupTime(value: string): boolean {
-  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  return pickupTimeParts(value.trim()) !== null;
+}
+
+function normalizePickupTime(value: unknown): string {
+  const parts = pickupTimeParts(String(value ?? defaultUserProfile.latestPickupTime).trim());
+  if (!parts) {
+    return defaultUserProfile.latestPickupTime;
+  }
+  return `${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}`;
+}
+
+function pickupTimeParts(value: string): { hour: number; minute: number } | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value);
   if (!match) {
-    return false;
+    return null;
   }
   const hour = Number(match[1]);
   const minute = Number(match[2]);
-  return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return null;
+  }
+  return { hour, minute };
 }
 
 function positiveNumberOrNull(value: unknown): number | null {
