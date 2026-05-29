@@ -438,7 +438,7 @@ function careTexts(value: unknown): string[] {
     return Object.values(value as Record<string, unknown>).flatMap(careTexts);
   }
   return String(value)
-    .split(/[、,，;；\n]+/)
+    .split(/[、,，/;；\n]+/)
     .map((item) => item.trim())
     .filter(Boolean);
 }

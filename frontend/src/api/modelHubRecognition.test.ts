@@ -281,6 +281,26 @@ describe("ModelHub clothing recognition", () => {
     expect(result.material).toBe("棉 80%、聚酯纤维 20%");
   });
 
+  it("splits slash-separated care label strings", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        modelHubResponse({
+          is_clothing: true,
+          name: "wool cardigan",
+          material_ratios: { wool: 1 },
+          colors: ["beige"],
+          care_warnings: "hand_wash_only/do_not_tumble_dry",
+        }),
+      ),
+    );
+
+    const result = await recognizeClothingText("wool cardigan", modelHubConfig);
+
+    expect(result.note).toContain("只能手洗");
+    expect(result.note).toContain("不可烘干");
+  });
+
   it("keeps care label variants in the editable note", async () => {
     vi.stubGlobal(
       "fetch",
