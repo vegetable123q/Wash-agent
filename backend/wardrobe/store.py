@@ -104,8 +104,11 @@ class WardrobeStore:
 
 def _wardrobe_item_from_dict(data: dict[str, Any]) -> WardrobeItem:
     _require_keys(data, {"profile", "wear_count_since_wash", "preferred_method", "wash_history", "user_notes"})
+    profile = data["profile"]
+    if not isinstance(profile, dict):
+        raise ValueError("profile must be an object")
     return WardrobeItem(
-        profile=_profile_from_dict(data["profile"]),
+        profile=_profile_from_dict(profile),
         wear_count_since_wash=_non_negative_int(
             data["wear_count_since_wash"],
             "wear_count_since_wash",
