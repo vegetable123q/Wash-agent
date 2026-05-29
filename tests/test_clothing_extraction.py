@@ -804,6 +804,28 @@ class ClothingExtractionTests(unittest.TestCase):
         self.assertIn("care_forbidden", profile.missing_fields)
         self.assertIn("care_forbidden", profile.user_fill_suggestions)
 
+    def test_llm_material_ratios_ignore_boolean_and_nonfinite_values(self) -> None:
+        response = {
+            "name": "test shirt",
+            "material_ratios": {
+                "cotton": True,
+                "wool": float("nan"),
+                "nylon": float("inf"),
+            },
+            "colors": ["black"],
+            "care_forbidden": [],
+            "risks": {},
+            "confidence": 0.7,
+        }
+
+        profile = extract_clothing_info(
+            ClothingInput(name="test shirt"),
+            llm_client=FakeLLMClient(json.dumps(response, ensure_ascii=False)),
+        )
+
+        self.assertEqual(profile.material_ratios, {})
+        self.assertIn("material_ratios", profile.missing_fields)
+
     def test_missing_fields_are_reported_when_sources_are_insufficient(self) -> None:
         profile = extract_clothing_info(
             ClothingInput(name="外套", user_description="只知道是日常穿的外套"),

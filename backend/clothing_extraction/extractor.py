@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from typing import Any
 
@@ -242,9 +243,13 @@ def _parse_json_object(text: str) -> tuple[dict[str, Any], str]:
 
 
 def _normalize_ratio(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
     try:
         ratio = float(value)
     except (TypeError, ValueError):
+        return None
+    if not math.isfinite(ratio):
         return None
     if ratio > 1:
         ratio = ratio / 100
