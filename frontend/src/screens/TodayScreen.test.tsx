@@ -65,6 +65,61 @@ describe("TodayScreen", () => {
     expect(screen.queryByText(/大件机/)).not.toBeInTheDocument();
   });
 
+  it("hides non-finite live dashboard numbers", () => {
+    const mobileSummary = mobileSummaryWithPlanNote("浅色衣物标准洗。", "light-standard");
+    mobileSummary.plan.estimated_cost_yuan = Number.NaN;
+    mobileSummary.plan.estimated_duration_minutes = Number.POSITIVE_INFINITY;
+    mobileSummary.campus_context.all_machines = [
+      {
+        machine_id: "washer-1",
+        location: "南区21号楼",
+        machine_type: "standard_washer",
+        status: "running",
+        remaining_minutes: null,
+        price_yuan: null,
+        modes: ["standard"],
+      },
+    ];
+    mobileSummary.campus_context.queue_estimates = [
+      {
+        machine_type: "standard_washer",
+        total_count: 1,
+        available_count: 0,
+        running_count: 1,
+        out_of_service_count: 0,
+        unknown_count: 0,
+        estimated_wait_minutes: Number.POSITIVE_INFINITY,
+      },
+    ];
+    mobileSummary.weather = {
+      source: "open-meteo",
+      status: "live",
+      location: "Tsinghua University",
+      current: {
+        temperature_2m: Number.POSITIVE_INFINITY,
+        relative_humidity_2m: Number.NaN,
+        precipitation: 0.1,
+      },
+      units: {
+        temperature_2m: "°C",
+        relative_humidity_2m: "%",
+        precipitation: "mm",
+      },
+    };
+
+    const { container } = render(
+      <TodayScreen
+        backendStatus="connected"
+        mobileSummary={mobileSummary}
+        userProfile={{ displayName: "", dormName: "", latestPickupTime: "22:30", allowDryer: false, budgetYuan: null, maxWaitMinutes: null }}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    expect(container.textContent).not.toMatch(/NaN|Infinity/);
+    expect(screen.getAllByText(/待确认/).length).toBeGreaterThan(0);
+  });
+
   it("does not show static clothes when the connected wardrobe has no selected laundry items", () => {
     const mobileSummary = {
       source: "backend",

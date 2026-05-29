@@ -55,7 +55,7 @@ export function TodayScreen({
     ? {
         buckets: `${mobileSummary.plan.buckets.length} 桶分洗`,
         costDryer:
-          mobileSummary.plan.estimated_cost_yuan != null
+          isFiniteNonNegativeNumber(mobileSummary.plan.estimated_cost_yuan)
             ? `¥${mobileSummary.plan.estimated_cost_yuan}${mobileSummary.plan.buckets.some((b) => b.dry_method === "low_heat_dryer") ? " · 含烘干" : ""}`
             : "费用待确认",
       }
@@ -68,11 +68,11 @@ export function TodayScreen({
             ? `${mobileSummary.plan.buckets.length} 个洗护批次`
             : "暂无待洗衣物",
         cost:
-          mobileSummary.plan.estimated_cost_yuan === null
+          !isFiniteNonNegativeNumber(mobileSummary.plan.estimated_cost_yuan)
             ? "费用待确认"
             : `预计 ¥${mobileSummary.plan.estimated_cost_yuan}`,
         duration:
-          mobileSummary.plan.estimated_duration_minutes === null
+          !isPositiveFiniteNumber(mobileSummary.plan.estimated_duration_minutes)
             ? "时长待确认"
             : `机器占用约 ${mobileSummary.plan.estimated_duration_minutes} 分钟`,
         risk: mobileSummary.plan.buckets.length > 0 ? "已按风险自动分桶" : "暂无方案",
@@ -98,7 +98,7 @@ export function TodayScreen({
   const recommendedLabel = useMemo(() => {
     if (!mobileSummary?.plan.buckets.length) return "暂无待洗衣物";
     const duration = mobileSummary.plan.estimated_duration_minutes;
-    if (duration != null) return `全部洗完约 ${duration} 分钟`;
+    if (isPositiveFiniteNumber(duration)) return `全部洗完约 ${duration} 分钟`;
     return "全部洗完并低温烘干";
   }, [mobileSummary?.plan.buckets.length, mobileSummary?.plan.estimated_duration_minutes]);
 
@@ -191,7 +191,7 @@ export function TodayScreen({
     if (!connected || !mobileSummary) return todaySummary.stats;
     const available = mobileSummary.campus_context.available_machines.length;
     const waits = mobileSummary.campus_context.queue_estimates
-      .filter((q) => q.estimated_wait_minutes != null && q.estimated_wait_minutes > 0)
+      .filter((q) => isPositiveFiniteNumber(q.estimated_wait_minutes))
       .sort((a, b) => (a.estimated_wait_minutes ?? 0) - (b.estimated_wait_minutes ?? 0));
     const minWait = waits[0]?.estimated_wait_minutes;
     return [
@@ -404,14 +404,29 @@ function timeOfDayTitle(): string {
 }
 
 function formatNumber(value: number | undefined) {
-  if (typeof value !== "number" || Number.isNaN(value)) {
+  if (!isFiniteNumber(value)) {
     return "--";
   }
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 function formatPreferenceNumber(value: number) {
+  if (!isFiniteNumber(value)) {
+    return "--";
+  }
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isFiniteNonNegativeNumber(value: unknown): value is number {
+  return isFiniteNumber(value) && value >= 0;
+}
+
+function isPositiveFiniteNumber(value: unknown): value is number {
+  return isFiniteNumber(value) && value > 0;
 }
 
 function washMethodDesc(washMethod: string, dryMethod: string): string {
