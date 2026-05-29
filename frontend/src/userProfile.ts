@@ -1,7 +1,6 @@
 export interface UserProfile {
   displayName: string;
   dormName: string;
-  towerKey: string;
   latestPickupTime: string;
   allowDryer: boolean;
 }
@@ -9,7 +8,6 @@ export interface UserProfile {
 export const defaultUserProfile: UserProfile = {
   displayName: "",
   dormName: "",
-  towerKey: "",
   latestPickupTime: "22:30",
   allowDryer: false,
 };
@@ -42,7 +40,6 @@ function normalizeProfile(value: unknown): UserProfile {
   return {
     displayName: String(profile.displayName ?? "").trim(),
     dormName: String(profile.dormName ?? "").trim(),
-    towerKey: String(profile.towerKey ?? "").trim(),
     latestPickupTime: String(profile.latestPickupTime ?? defaultUserProfile.latestPickupTime).trim(),
     allowDryer: Boolean(profile.allowDryer),
   };

@@ -68,7 +68,7 @@ export default function App() {
 
   const refreshMobileSummary = async () => {
     setBackendStatus("loading");
-    return fetchMobileSummary()
+    return fetchMobileSummary(userProfile)
       .then((summary) => {
         setMobileSummary(summary);
         setBackendStatus("connected");
@@ -89,7 +89,7 @@ export default function App() {
   useEffect(() => {
     let active = true;
     setBackendStatus("loading");
-    fetchMobileSummary()
+    fetchMobileSummary(userProfile)
       .then((summary) => {
         if (!active) {
           return;
@@ -105,7 +105,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [userProfile]);
 
   const content = useMemo(() => {
     const selectedBackendItem: WardrobeSummaryItem | null =

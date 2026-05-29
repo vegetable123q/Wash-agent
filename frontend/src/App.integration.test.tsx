@@ -20,8 +20,8 @@ describe("App in-APK backend integration", () => {
     render(<App />);
 
     expect(await screen.findByText("APK 内置")).toBeInTheDocument();
-    // The real planner calculates cost from actual pricing rules and machine availability
-    expect(screen.getByText(/预计 ¥\d+/)).toBeInTheDocument();
+    // Without a configured dorm, the app should not invent machine availability or costs.
+    expect(screen.getAllByText("费用待确认").length).toBeGreaterThan(0);
     // Only Open-Meteo weather fetch is allowed — no private backend service
     for (const call of fetchMock.mock.calls) {
       expect(call[0]).toContain("open-meteo");
@@ -46,6 +46,52 @@ describe("App in-APK backend integration", () => {
 
     expect(await screen.findByText("识图配置仅在本次打开期间生效，apikey 不会保存")).toBeInTheDocument();
     expect(allLocalStorageValues()).not.toContain("sk-test-key");
+  });
+
+  it("uses the saved dorm name to request real machine APIs", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const href = String(url);
+      if (href.includes("/cleverschool-api/")) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            data: [
+              {
+                tower: "南区21号楼",
+                macUnionCode: "洗衣机 455514",
+                floorName: "一层",
+                status: "状态:待机中 更新时间:2026-05-29 13:20:00",
+              },
+            ],
+          }),
+        };
+      }
+      if (href.includes("/haier-api/")) {
+        return {
+          ok: true,
+          json: async () => ({ code: 0, data: { items: [] } }),
+        };
+      }
+      return {
+        ok: false,
+        status: 503,
+        json: async () => ({}),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /我的/ }));
+    fireEvent.change(await screen.findByLabelText("宿舍楼"), { target: { value: "南区21号楼" } });
+    fireEvent.click(screen.getByRole("button", { name: /保存个人信息/ }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/cleverschool-api/"))).toBe(true);
+    });
+    const cleverCall = fetchMock.mock.calls.find(([url]) => String(url).includes("/cleverschool-api/"));
+    expect(JSON.parse(String(cleverCall?.[1]?.body))).toMatchObject({ towerKey: "97zas64" });
   });
 
   it("adds and deletes wardrobe items through the in-APK backend without private backend requests", async () => {

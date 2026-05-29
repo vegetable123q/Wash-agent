@@ -7,37 +7,42 @@
  * with user-provided credentials.
  */
 
-import { buildCampusContext, fetchCampusContext, type MachineInfo, machineInfoFromView } from "./campusContext";
+import { buildCampusContextForDorm } from "./campusMachineApi";
+import { listCampusTowerOptions } from "./campusTowerDirectory";
 import { buildProfileFromInput, storedToPlanItem, type StoredWardrobeItem } from "./clothingExtractor";
 import { adviseAllFrequencies, recommendedItemIds } from "./frequencyAdvisor";
 import { planLaundry } from "./laundryPlanner";
-import { CAMPUS_TOWERS } from "./pricingRules";
+import { DRYING_CONTEXT, PRICING_RULES } from "./pricingRules";
 import { generateReport } from "./reportGenerator";
 import type {
   BackendMachine,
   BackendQueueEstimate,
-  CampusTower,
+  CampusContext,
+  CampusContextStatus,
+  CampusTowerOption,
   LaundryConstraints,
   LaundryPlan,
+  MachineInfo,
   MobileSummary,
   WardrobeInput,
   WardrobeSummaryItem,
   WashReport,
   WeatherSnapshot,
 } from "./types";
-import { machines, wardrobeItems } from "../data/washMateContent";
-import type { MachineView, WardrobeItemView } from "../data/washMateContent";
+import { wardrobeItems } from "../data/washMateContent";
+import { fetchTsinghuaWeather } from "./weatherService";
+import type { UserProfile } from "../userProfile";
 
 // ─── public types re-exported for screens ───────────────────────────────
 
-export type { BackendMachine, BackendQueueEstimate, CampusTower, MobileSummary, WardrobeInput, WardrobeSummaryItem };
+export type { BackendMachine, BackendQueueEstimate, CampusTowerOption, MobileSummary, WardrobeInput, WardrobeSummaryItem };
 
 // ─── wardrobe CRUD ──────────────────────────────────────────────────────
 
 const LOCAL_WARDROBE_STORAGE_KEY = "washmate.localWardrobe";
 
-export async function fetchMobileSummary(): Promise<MobileSummary> {
-  return buildIntegratedMobileSummary();
+export async function fetchMobileSummary(profile?: Pick<UserProfile, "dormName" | "allowDryer">): Promise<MobileSummary> {
+  return buildIntegratedMobileSummary(profile);
 }
 
 export async function createWardrobeItem(input: WardrobeInput): Promise<{ status: string; item: WardrobeSummaryItem }> {
@@ -83,19 +88,44 @@ export async function deleteWardrobeItem(itemId: string): Promise<{ status: stri
 
 // ─── integrated summary builder ─────────────────────────────────────────
 
-async function buildIntegratedMobileSummary(): Promise<MobileSummary> {
+async function buildIntegratedMobileSummary(profile?: Pick<UserProfile, "dormName" | "allowDryer">): Promise<MobileSummary> {
   const wardrobeItems = readLocalWardrobeItems();
 
-  // Try to get live weather; fall back gracefully
-  let weather: WeatherSnapshot;
-  let campusContext: ReturnType<typeof buildCampusContext>;
-  try {
-    const result = await fetchCampusContext();
-    weather = result.weather;
-    campusContext = result.context;
-  } catch {
-    weather = { source: "in-apk", status: "unavailable", error: "天气获取失败，使用默认上下文" };
-    campusContext = buildCampusContext(weather);
+  let weather: WeatherSnapshot = await fetchTsinghuaWeather();
+  let campusContext: CampusContext;
+  let campusStatus: CampusContextStatus;
+  const dormName = profile?.dormName?.trim() ?? "";
+
+  if (!dormName) {
+    campusContext = emptyCampusContext(weather);
+    campusStatus = {
+      state: "unconfigured",
+      dorm_name: "",
+      message: "请先在“我的”选择宿舍楼。",
+      updated_at: new Date().toISOString(),
+    };
+  } else {
+    try {
+      campusContext = await buildCampusContextForDorm(dormName, {
+        weather: weather as unknown as Record<string, unknown>,
+        dryingContext: { ...DRYING_CONTEXT },
+        pricingRules: campusPricingRules(),
+      });
+      campusStatus = {
+        state: "live",
+        dorm_name: dormName,
+        message: `已读取 ${campusContext.all_machines.length} 台实时机器记录。`,
+        updated_at: new Date().toISOString(),
+      };
+    } catch (error) {
+      campusContext = emptyCampusContext(weather);
+      campusStatus = {
+        state: "unavailable",
+        dorm_name: dormName,
+        message: error instanceof Error ? error.message : String(error),
+        updated_at: new Date().toISOString(),
+      };
+    }
   }
 
   // Convert stored items to planner-compatible items
@@ -106,7 +136,7 @@ async function buildIntegratedMobileSummary(): Promise<MobileSummary> {
     selected_item_ids: [],
     urgent_item_ids: [],
     allow_mixed_colors: false,
-    allow_dryer: false,
+    allow_dryer: Boolean(profile?.allowDryer),
     hygiene_sensitive: true,
     max_wait_minutes: null,
     budget_yuan: null,
@@ -149,7 +179,7 @@ async function buildIntegratedMobileSummary(): Promise<MobileSummary> {
       plan = planLaundry(selectedPlanItems, constraints, campusContext);
       report = generateReport(plan, selectedPlanItems, campusContext);
     } catch {
-      // Planner may fail if no matching machines; fall back to basic info
+      // Planner may fail if no matching machines; expose that state instead of inventing a plan.
       plan = {
         buckets: [],
         estimated_cost_yuan: null,
@@ -178,7 +208,8 @@ async function buildIntegratedMobileSummary(): Promise<MobileSummary> {
   return {
     source: "backend",
     weather,
-    campus_towers: CAMPUS_TOWERS,
+    campus_towers: listCampusTowerOptions(),
+    campus_status: campusStatus,
     wardrobe: { items: wardrobeItems },
     frequency_advice: frequencyAdvice,
     campus_context: {
@@ -211,6 +242,24 @@ async function buildIntegratedMobileSummary(): Promise<MobileSummary> {
       global_warnings: plan.global_warnings,
     },
     report,
+  };
+}
+
+function emptyCampusContext(weather: WeatherSnapshot): CampusContext {
+  return {
+    all_machines: [],
+    available_machines: [],
+    queue_estimates: [],
+    weather: weather as unknown as Record<string, unknown>,
+    drying_context: { ...DRYING_CONTEXT },
+    pricing_rules: campusPricingRules(),
+  };
+}
+
+function campusPricingRules(): CampusContext["pricing_rules"] {
+  return {
+    wash_programs: PRICING_RULES.wash_programs,
+    dryer_programs: PRICING_RULES.dryer_programs,
   };
 }
 

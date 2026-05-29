@@ -21,7 +21,6 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
   const hasPersonalContext = Boolean(
     userProfile?.displayName ||
       userProfile?.dormName ||
-      userProfile?.towerKey ||
       userProfile?.allowDryer ||
       (userProfile?.latestPickupTime && userProfile.latestPickupTime !== "22:30"),
   );

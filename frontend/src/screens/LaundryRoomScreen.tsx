@@ -1,13 +1,7 @@
 import { Clock3, MapPin } from "lucide-react";
 import type { BackendMachine, BackendQueueEstimate, MobileSummary } from "../api/mobileSummary";
 import { Card, Chip, Page, Section } from "../components/AppChrome";
-import {
-  campusContext,
-  dryerOptions,
-  machines,
-  queueEstimates,
-  type ScreenId,
-} from "../data/washMateContent";
+import { dryerOptions, type ScreenId } from "../data/washMateContent";
 import type { UserProfile } from "../userProfile";
 
 interface LaundryRoomScreenProps {
@@ -20,14 +14,12 @@ interface LaundryRoomScreenProps {
 export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate, onViewMachine }: LaundryRoomScreenProps) {
   const backendMachines = mobileSummary?.campus_context.all_machines ?? [];
   const backendQueues = mobileSummary?.campus_context.queue_estimates ?? [];
-  const hasBackend = backendMachines.length > 0;
+  const campusStatus = mobileSummary?.campus_status;
+  const hasBackend = campusStatus?.state === "live" && backendMachines.length > 0;
   const dormName = userProfile?.dormName || "请选择宿舍楼";
-  const towerKey = userProfile?.towerKey || mobileSummary?.campus_towers?.[0]?.tower_key || "待选择";
   const latestPickup = userProfile?.latestPickupTime || "22:30";
-  const availableCount = hasBackend
-    ? (mobileSummary?.campus_context.available_machines.length ?? 0)
-    : machines.filter((machine) => machine.backendStatus === "available").length;
-  const queueRows = hasBackend ? backendQueues.map(queueFromBackend) : queueEstimates;
+  const availableCount = mobileSummary?.campus_context.available_machines.length ?? 0;
+  const queueRows = backendQueues.map(queueFromBackend);
 
   return (
     <Page>
@@ -47,39 +39,32 @@ export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate, onVi
       <Card accent="purple" className="summary-card">
         <div>
           <h2>推荐现在开洗</h2>
-          <p>{hasBackend ? `读取到 ${backendMachines.length} 台后端机器记录。` : campusContext.recommendation}</p>
+          <p>{campusStatus?.message ?? "请先在“我的”保存宿舍楼，洗衣房不会再默认紫荆 1 号楼"}</p>
         </div>
         <Chip tone="blue">
           <Clock3 size={14} />
-          {hasBackend ? `更新于 ${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}` : campusContext.updatedAt}
+          {campusStatus?.updated_at ? `更新于 ${formatUpdateTime(campusStatus.updated_at)}` : "待刷新"}
         </Chip>
       </Card>
 
-      <Section title="楼栋与数据源" action={<Chip tone="purple">CampusContext</Chip>}>
+      <Section title="楼栋与实时状态" action={<Chip tone={statusTone(campusStatus?.state)}>{statusLabel(campusStatus?.state)}</Chip>}>
         <Card accent="purple" className="context-card">
           <div className="context-card-head">
             <MapPin size={18} />
             <div>
-              <h3>{hasBackend && mobileSummary?.campus_towers?.length ? mobileSummary.campus_towers.map(t => t.name).join("、") : campusContext.providerLabel}</h3>
-              <p>{hasBackend && mobileSummary ? weatherSummary(mobileSummary) : `${campusContext.weather} · ${campusContext.dryingContext}`}</p>
+              <h3>{dormName}</h3>
+              <p>{mobileSummary ? weatherSummary(mobileSummary) : "天气数据不可用"}</p>
             </div>
           </div>
           <div className="contract-grid">
             <div>
-              <span>tower_key</span>
-              <strong>{towerKey}</strong>
+              <span>机器记录</span>
+              <strong>{backendMachines.length} 台</strong>
             </div>
             <div>
               <span>偏好</span>
               <strong>{userProfile?.allowDryer ? "允许烘干" : "优先低温/晾干"}</strong>
             </div>
-          </div>
-          <div className="provider-row">
-            {(hasBackend && mobileSummary?.campus_towers?.length ? mobileSummary.campus_towers.flatMap(t => Object.entries(t.provider_keys).map(([p, k]) => [p, k] as [string, string])) : campusContext.towerKeys).map(([provider, key]) => (
-              <Chip key={provider} tone={provider === "haier" ? "blue" : "teal"}>
-                {provider}: {key}
-              </Chip>
-            ))}
           </div>
         </Card>
       </Section>
@@ -90,7 +75,7 @@ export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate, onVi
             <div key={estimate.machineType} className={`queue-cell queue-${estimate.tone}`}>
               <div className="queue-cell-title">
                 <strong>{estimate.label}</strong>
-                <span>{estimate.machineType}</span>
+                <span>{estimate.wait === "0 分钟" ? "可用" : `等 ${estimate.wait}`}</span>
               </div>
               <div className="queue-number">{estimate.available}/{estimate.total}</div>
               <p>
@@ -103,49 +88,36 @@ export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate, onVi
 
       <Section title="机器列表">
         <div className="machine-list">
-          {hasBackend
-            ? backendMachines.map((machine) => (
-                <Card
-                  key={machine.machine_id}
-                  className="machine-card"
-                  accent={toneForMachineStatus(machine.status)}
-                  onClick={() => (onViewMachine ? onViewMachine(machine.machine_id) : onNavigate("machineDetail"))}
-                >
-                  <div>
-                    <div className="machine-title">
-                      <span className={`status-dot status-${toneForMachineStatus(machine.status)}`} />
-                      <h3>{machine.machine_id}</h3>
-                    </div>
-                    <p>
-                      {capacityText(machine)} · {machine.machine_type} · {priceText(machine)}
-                    </p>
-                    <p className="machine-submeta">{machine.location} · backend</p>
-                  </div>
-                  <Chip tone={toneForMachineStatus(machine.status)}>{statusText(machine.status)}</Chip>
-                </Card>
-              ))
-            : machines.map((machine) => (
-                <Card
-                  key={machine.id}
-                  className="machine-card"
-                  accent={machine.tone}
-                  onClick={() => (onViewMachine ? onViewMachine(machine.id) : onNavigate("machineDetail"))}
-                >
-                  <div>
-                    <div className="machine-title">
-                      <span className={`status-dot status-${machine.tone}`} />
-                      <h3>{machine.name}</h3>
-                    </div>
-                    <p>
-                      {machine.capacity} · {machine.backendType} · {machine.price}
-                    </p>
-                    <p className="machine-submeta">
-                      {machine.location} · {machine.provider}
-                    </p>
-                  </div>
-                  <Chip tone={machine.tone}>{machine.status}</Chip>
-                </Card>
-              ))}
+          {hasBackend ? backendMachines.map((machine) => (
+            <Card
+              key={machine.machine_id}
+              className="machine-card"
+              accent={toneForMachineStatus(machine.status)}
+              onClick={() => (onViewMachine ? onViewMachine(machine.machine_id) : onNavigate("machineDetail"))}
+            >
+              <div>
+                <div className="machine-title">
+                  <span className={`status-dot status-${toneForMachineStatus(machine.status)}`} />
+                  <h3>{machineCardTitle(machine)}</h3>
+                </div>
+                <p>
+                  <span>{capacityText(machine)}</span> · <span>{priceText(machine)}</span>
+                </p>
+                <p className="machine-submeta">设备编号 {machine.machine_id}</p>
+              </div>
+              <Chip tone={toneForMachineStatus(machine.status)}>{statusText(machine.status)}</Chip>
+            </Card>
+          )) : (
+            <Card className="machine-card" accent="amber">
+              <div>
+                <div className="machine-title">
+                  <span className="status-dot status-amber" />
+                  <h3>暂无实时机器数据</h3>
+                </div>
+                <p>{campusStatus?.message ?? "请先在“我的”选择宿舍楼。"}</p>
+              </div>
+            </Card>
+          )}
         </div>
       </Section>
 
@@ -166,7 +138,7 @@ export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate, onVi
 
 function queueFromBackend(queue: BackendQueueEstimate) {
   return {
-    machineType: queue.machine_type as (typeof queueEstimates)[number]["machineType"],
+    machineType: queue.machine_type,
     label: machineTypeLabel(queue.machine_type),
     total: queue.total_count,
     available: queue.available_count,
@@ -178,8 +150,8 @@ function queueFromBackend(queue: BackendQueueEstimate) {
 }
 
 function machineTypeLabel(machineType: string) {
-  if (machineType === "large_washer") {
-    return "大件机";
+  if (machineType === "standard_washer" || machineType === "small_washer") {
+    return "洗衣机";
   }
   if (machineType === "dryer") {
     return "烘干机";
@@ -187,7 +159,19 @@ function machineTypeLabel(machineType: string) {
   if (machineType === "shoe_washer") {
     return "洗鞋机";
   }
-  return "标准筒";
+  return "未知设备";
+}
+
+function statusLabel(status: string | undefined) {
+  if (status === "live") return "实时";
+  if (status === "unavailable") return "不可用";
+  return "待配置";
+}
+
+function statusTone(status: string | undefined) {
+  if (status === "live") return "teal" as const;
+  if (status === "unavailable") return "red" as const;
+  return "amber" as const;
 }
 
 function toneForMachineStatus(status: string) {
@@ -217,11 +201,21 @@ function statusText(status: string) {
 }
 
 function capacityText(machine: BackendMachine) {
-  return machine.capacity_kg === null ? "容量未知" : `${machine.capacity_kg}kg`;
+  return machine.capacity_kg === null ? "容量：接口未提供" : `容量：${machine.capacity_kg}kg`;
 }
 
 function priceText(machine: BackendMachine) {
-  return machine.price_yuan === null ? "价格待定" : `¥${machine.price_yuan}`;
+  return machine.price_yuan === null ? "价格：接口未提供" : `价格：¥${machine.price_yuan}`;
+}
+
+function machineCardTitle(machine: BackendMachine) {
+  return `${machineTypeLabel(machine.machine_type)} · ${machine.location}`;
+}
+
+function formatUpdateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "刚刚";
+  return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
 }
 
 function weatherSummary(mobileSummary: MobileSummary): string {

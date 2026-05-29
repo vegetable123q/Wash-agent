@@ -1,4 +1,4 @@
-import { AlertTriangle, Database, WashingMachine } from "lucide-react";
+import { AlertTriangle, Info, WashingMachine } from "lucide-react";
 import type { BackendMachine } from "../api/mobileSummary";
 import { Card, Chip, Page, PrimaryPanel, Section, TopBar } from "../components/AppChrome";
 import { type MachineView } from "../data/washMateContent";
@@ -23,7 +23,7 @@ export function MachineDetailScreen({ onBack, backendMachine, staticMachine }: M
   }
 
   const machine = backendMachine ? detailFromBackend(backendMachine) : detailFromStatic(staticMachine as MachineView);
-  const modes = machine.modes.length ? machine.modes.join(" / ") : "无可用模式";
+  const modes = machine.modes.length ? machine.modes.map(modeLabel).join(" / ") : "暂无可用模式";
 
   return (
     <Page compact>
@@ -37,31 +37,31 @@ export function MachineDetailScreen({ onBack, backendMachine, staticMachine }: M
         <div className="hero-number-row">
           <div>
             <strong className="hero-number">{machine.status}</strong>
-            <p>{machine.capacity} {machine.backendType} · {machine.location}</p>
+            <p><span>{machine.capacity}</span> {machine.typeLabel} · {machine.location}</p>
           </div>
           <div className="panel-metrics">
-            <span>{machine.price} 标准洗</span>
+            <span>{machine.price} 参考价</span>
             <span>{machine.remaining} 等待</span>
           </div>
         </div>
       </PrimaryPanel>
 
-      <Section title="后端字段" action={<Chip tone="purple">MachineInfo</Chip>}>
+      <Section title="机器信息" action={<Chip tone="purple">详情</Chip>}>
         <Card accent="purple" className="contract-list">
           <div className="contract-row">
-            <span>machine_id</span>
+            <span>设备编号</span>
             <strong>{machine.backendId}</strong>
           </div>
           <div className="contract-row">
-            <span>machine_type</span>
-            <strong>{machine.backendType}</strong>
+            <span>设备类型</span>
+            <strong>{machine.typeLabel}</strong>
           </div>
           <div className="contract-row">
-            <span>status</span>
+            <span>当前状态</span>
             <strong>{machine.backendStatus}</strong>
           </div>
           <div className="contract-row">
-            <span>modes</span>
+            <span>可选模式</span>
             <strong>{modes}</strong>
           </div>
         </Card>
@@ -93,20 +93,20 @@ export function MachineDetailScreen({ onBack, backendMachine, staticMachine }: M
         <div className="mode-grid">
           {machine.modes.map((mode) => (
             <div key={mode} className={`mode-option ${mode === "standard" ? "selected" : ""}`}>
-              <strong>{mode}</strong>
-              <span>{mode === "quick" ? "34 分 · 轻薄" : mode === "heavy" ? "58 分 · 厚衣" : "45 分 · 日常"}</span>
+              <strong>{modeLabel(mode)}</strong>
+              <span>{modeDescription(mode)}</span>
             </div>
           ))}
         </div>
       </Section>
 
-      <Section title="价格规则">
+      <Section title="价格信息">
         <Card accent="blue" className="machine-detail-card">
           <div>
-            <Database size={18} />
-            <h3>{machine.ruleKey}</h3>
+            <Info size={18} />
+            <h3>{machine.price}</h3>
           </div>
-          <p>前端只展示规则口径，不在页面内计算或请求真实机器接口。</p>
+          <p>以洗衣房实时状态和页面提示为准。</p>
         </Card>
       </Section>
 
@@ -133,18 +133,18 @@ export function MachineDetailScreen({ onBack, backendMachine, staticMachine }: M
 }
 
 function detailFromBackend(machine: BackendMachine) {
+  const typeLabel = machineTypeLabel(machine.machine_type);
   return {
     backendId: machine.machine_id,
-    name: machine.machine_id,
+    name: `${typeLabel} · ${machine.location}`,
     location: machine.location,
-    backendType: machine.machine_type,
-    capacity: machine.capacity_kg === null ? "容量未知" : `${machine.capacity_kg}kg`,
+    typeLabel,
+    capacity: capacityText(machine),
     status: statusText(machine.status),
-    backendStatus: machine.status,
+    backendStatus: statusText(machine.status),
     remaining: machine.remaining_minutes === null ? "等待未知" : `${machine.remaining_minutes} 分钟`,
-    price: machine.price_yuan === null ? "价格待定" : `¥${machine.price_yuan}`,
+    price: priceText(machine),
     modes: machine.modes,
-    ruleKey: `machine_types.${machine.machine_type}`,
   };
 }
 
@@ -153,14 +153,13 @@ function detailFromStatic(machine: MachineView) {
     backendId: machine.backendId,
     name: machine.name,
     location: machine.location,
-    backendType: machine.backendType,
+    typeLabel: machineTypeLabel(machine.backendType),
     capacity: machine.capacity,
     status: machine.status,
-    backendStatus: machine.backendStatus,
+    backendStatus: machine.status,
     remaining: machine.remaining,
     price: machine.price,
     modes: machine.modes,
-    ruleKey: machine.ruleKey,
   };
 }
 
@@ -175,4 +174,34 @@ function statusText(status: string) {
     return "故障";
   }
   return "未知";
+}
+
+function machineTypeLabel(machineType: string) {
+  if (machineType === "standard_washer" || machineType === "small_washer") return "标准洗衣机";
+  if (machineType === "shoe_washer") return "洗鞋机";
+  if (machineType === "dryer") return "烘干机";
+  return "未知设备";
+}
+
+function capacityText(machine: BackendMachine) {
+  return machine.capacity_kg === null ? "容量：接口未提供" : `容量：${machine.capacity_kg}kg`;
+}
+
+function priceText(machine: BackendMachine) {
+  return machine.price_yuan === null ? "价格：接口未提供" : `价格：¥${machine.price_yuan}`;
+}
+
+function modeLabel(mode: string) {
+  if (mode === "quick") return "快洗";
+  if (mode === "standard") return "标准";
+  if (mode === "heavy") return "强力";
+  if (mode === "low") return "低温";
+  return mode;
+}
+
+function modeDescription(mode: string) {
+  if (mode === "quick") return "34 分 · 轻薄";
+  if (mode === "heavy") return "58 分 · 厚衣";
+  if (mode === "low") return "低温烘干";
+  return "45 分 · 日常";
 }

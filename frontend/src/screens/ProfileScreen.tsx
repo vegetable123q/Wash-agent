@@ -7,7 +7,7 @@ import {
   type ModelHubConfig,
 } from "../api/modelHubConfig";
 import { Card, Chip, Page, Section } from "../components/AppChrome";
-import type { CampusTower } from "../api/mobileSummary";
+import type { CampusTowerOption } from "../api/mobileSummary";
 import type { UserProfile } from "../userProfile";
 
 type BackendStatus = "loading" | "connected" | "offline";
@@ -16,7 +16,7 @@ interface ProfileScreenProps {
   profile: UserProfile;
   modelHubConfig: ModelHubConfig;
   backendStatus: BackendStatus;
-  towerOptions?: CampusTower[];
+  towerOptions?: CampusTowerOption[];
   onSave: (profile: UserProfile) => void;
   onSaveModelHubConfig: (config: ModelHubConfig) => ModelHubConfig;
   onClearModelHubConfig: () => void;
@@ -102,31 +102,16 @@ export function ProfileScreen({
                 className="input-like"
                 aria-label="宿舍楼"
                 value={draft.dormName}
-                onChange={(event) => {
-                  const tower = towerOptions.find((option) => option.name === event.target.value);
-                  updateDraft({
-                    dormName: event.target.value,
-                    towerKey: tower?.tower_key ?? "",
-                  });
-                }}
+                onChange={(event) => updateDraft({ dormName: event.target.value })}
               >
                 <option value="">请选择宿舍楼</option>
                 {draft.dormName && !selectedDormIsListed ? <option value={draft.dormName}>{draft.dormName}</option> : null}
                 {towerOptions.map((tower) => (
-                  <option key={`${tower.provider}:${tower.tower_key}`} value={tower.name}>
+                  <option key={tower.name} value={tower.name}>
                     {tower.name}
                   </option>
                 ))}
               </select>
-            </label>
-            <label>
-              <span>楼栋编码</span>
-              <input
-                className="input-like"
-                value={draft.towerKey}
-                onChange={(event) => updateDraft({ towerKey: event.target.value })}
-                placeholder="不知道可以先留空"
-              />
             </label>
           </div>
         </Section>

@@ -12,6 +12,16 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": "http://127.0.0.1:8000",
+      "/cleverschool-api": {
+        target: "https://api.cleverschool.cn",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/cleverschool-api/, ""),
+      },
+      "/haier-api": {
+        target: "https://yshz-user.haier-ioc.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/haier-api/, ""),
+      },
     },
   },
   preview: {

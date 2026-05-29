@@ -100,6 +100,11 @@ Wash-agent/
 - `model_name` 使用选择控件，当前只允许 `gemini-3.1-pro-preview`。
 - 非识图功能不得依赖 ModelHub 配置；识图功能缺少 `baseUrl`、`apikey` 或允许的 `model_name` 时必须显式禁用或报错。
 - 保存仅限当前设备的界面偏好和个人洗衣上下文，例如宿舍楼、最晚取衣时间和烘干偏好；后续接入账号系统后再迁移到后端 profile API。
+- 宿舍楼下拉菜单使用前端本地产品目录；目录只向页面暴露宿舍楼名称，CleverSchool `towerKey` 和海乐 `positionId` 只能留在 API 配置层。
+- 用户保存宿舍楼后，移动端洗衣房通过真实 CleverSchool / 海乐生活接口读取机器状态；未选择宿舍楼时必须显示待配置状态，不请求机器接口，也不使用旧机器 mock。
+- 本地浏览器预览通过 Vite 代理访问 CleverSchool 和海乐生活接口，避免 `localhost` 直接跨域请求失败；Android/Capacitor 环境继续使用 Capacitor HTTP。
+- 洗衣房、个人信息、方案和机器详情页面只能展示宿舍楼名称、机器类型中文名、状态、容量、价格等用户可理解信息；实时接口未提供容量或价格时必须明确显示“接口未提供”，不展示 `tower_key`、provider key、`machine_type`、规则 key 等内部字段。
+- 床品仍单独成桶，但移动端规划器不再假设存在 `large_washer` 或“大件机”；当前只使用真实存在的 `standard_washer` 和显式配置的 `standard` 洗衣程序。
 - 图片选择默认只保留文件名用于本地衣柜记录；只有用户主动点击识图时，才把图片内容发送到用户配置的 ModelHub endpoint。
 - 衣柜页必须同时提供查看详情和删除已有本地衣物的操作；删除中应禁用对应按钮，成功或失败都要显示状态。
 - 添加衣物页的图片入口必须区分“已选图片”和“已识图”，不能把仅选择文件标成识别完成。
@@ -108,9 +113,9 @@ Wash-agent/
 
 不应该做：
 
-- 除用户主动触发的 ModelHub 识图请求外，不直接调用外部网络服务。
+- 除用户主动触发的 ModelHub 识图请求、天气请求和用户已配置宿舍楼后的洗衣机状态请求外，不直接调用外部网络服务。
 - 不在源码、构建配置、APK 或前端持久化存储中保存密钥、令牌、真实账号凭证或遥测数据；用户手动输入的 `apikey` 只作为本次打开期间的内存配置使用。
-- 不在前端加入静默兜底的远程 API 地址或隐藏替代 key。
+- 不在前端加入静默兜底的远程 API 地址、隐藏替代 key、旧机器 mock 或不存在的“大件机”展示。
 
 ## 模块职责
 
@@ -123,13 +128,13 @@ Wash-agent/
 应该做：
 
 - 搭建手机版 WashMate Campus 前端视觉、APK 内置业务服务和本地交互壳。
-- 使用 APK 内置数据和用户本地衣柜记录呈现衣柜、机器、方案和报告。
+- 使用 APK 内置业务服务和用户本地衣柜记录呈现衣柜、方案和报告；机器状态在用户保存宿舍楼后从真实校园机器接口读取。
 - 通过 Capacitor 保留 Android APK 包装路径。
 - Android APK 的 ModelHub `baseUrl` 由用户输入；前端不得保存真实账号凭证或 API key。
 
 不应该做：
 
-- 不调用外部网络服务，除非用户主动触发 ModelHub 识图。
+- 不调用与当前功能无关的外部网络服务；ModelHub 识图必须由用户主动触发，校园机器状态必须由用户保存的宿舍楼名称驱动。
 - 不在源码、构建配置或 APK 中保存真实用户数据、密钥或上传内容。
 - 不在前端加入隐藏远程后端依赖、服务端密钥或静默替代配置。
 
@@ -252,7 +257,7 @@ Wash-agent/
 - `context.py` 必须生成 `CampusContext.queue_estimates`。该字段按 `MachineType` 汇总总数、可用数、运行中数、异常数、未知数和 `estimated_wait_minutes`：有可用机器时为 `0`；无可用机器但运行中机器有剩余时间时取最短剩余时间；信息不足时保持 `None`。
 - `machine_api.py` 提供 `mock_transport_from_file("data/machines_mock.json")`，用于让交付 mock 文件通过正式 transport 入口参与测试；mock 缺少必要响应时应显式报错。
 - `machines_mock.json` 同时保留本地离线集成使用的 `machines` 列表，以及真实接口 transport 测试使用的 CleverSchool / 海乐响应片段。
-- `machine_rules.json` 同时保存 E 模块消费的 `pricing_rules`、晾晒上下文 `drying_context`，以及 D 模块解析真实机器接口所需的机器类型映射、容量、模式、价格和时长等配置。外部状态接口不提供的容量、价格和模式，相关字段只能来自该配置，不能从接口文本猜测。
+- `machine_rules.json` 保存 E 模块消费的 `pricing_rules`、晾晒上下文 `drying_context`、容量、模式、价格和时长等配置。D 模块的真实机器接口解析只产出外部接口明确给出的机器编号、位置、类型、状态和剩余时间；外部状态接口不提供的容量、价格和模式不得在 D 模块内补齐，需由 E 模块或集成层显式注入。
 
 不应该做：
 

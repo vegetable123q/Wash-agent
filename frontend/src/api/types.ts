@@ -142,12 +142,25 @@ export interface WeatherSnapshot {
   error?: string;
 }
 
-/** Tower / dormitory returned by the machine service. */
+/** User-facing dormitory option backed by an internal machine API mapping. */
+export interface CampusTowerOption {
+  name: string;
+}
+
+/** Legacy tower contract kept for modules that still own non-D pricing/sample data. */
 export interface CampusTower {
   name: string;
   tower_key: string;
   provider: string;
   provider_keys: Record<string, string>;
+}
+
+/** Live campus machine context status for screens. */
+export interface CampusContextStatus {
+  state: "unconfigured" | "live" | "unavailable";
+  dorm_name: string;
+  message: string;
+  updated_at: string;
 }
 
 /** Wardrobe item as stored in localStorage and displayed on screens. */
@@ -199,7 +212,8 @@ export interface BackendQueueEstimate {
 export interface MobileSummary {
   source: "backend";
   weather?: WeatherSnapshot;
-  campus_towers?: CampusTower[];
+  campus_towers?: CampusTowerOption[];
+  campus_status?: CampusContextStatus;
   wardrobe: {
     items: WardrobeSummaryItem[];
   };
