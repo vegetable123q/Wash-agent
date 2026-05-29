@@ -26,6 +26,7 @@
 
 * {
   box-sizing: border-box;
+  overflow-wrap: anywhere;
 }
 
 body {
@@ -72,6 +73,7 @@ button {
 .page {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 14px 18px 96px;
   scrollbar-width: none;
 }
@@ -342,6 +344,7 @@ p {
   padding: 13px;
   color: var(--ink);
   text-align: left;
+  overflow: hidden;
 }
 
 button.card {
@@ -450,6 +453,16 @@ button.card {
 
 .dense-row h3 {
   margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dense-row p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .bucket-preview {
@@ -669,6 +682,7 @@ button.card {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
 .summary-actions {
@@ -836,6 +850,21 @@ button.card {
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
+  min-width: 0;
+}
+
+.row-between > h3,
+.row-between > div {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.row-between > h3 {
+  overflow-wrap: anywhere;
+}
+
+.row-between > .chip {
+  flex-shrink: 0;
 }
 
 .warning-surface {
@@ -1165,7 +1194,6 @@ textarea.input-like:focus {
   color: var(--thu-purple);
   font-size: 15px;
   line-height: 1.2;
-  white-space: nowrap;
 }
 
 .progress-bar {
@@ -1315,6 +1343,11 @@ textarea.input-like:focus {
 .basket-check-main strong {
   font-size: 14px;
   line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .basket-check-main em,
@@ -1323,6 +1356,9 @@ textarea.input-like:focus {
   font-size: 11px;
   font-style: normal;
   line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .basket-check-side {
@@ -1695,6 +1731,7 @@ textarea.input-like:focus {
   font-size: 16px;
   line-height: 1.2;
   margin-bottom: 4px;
+  overflow-wrap: anywhere;
 }
 
 .report-route-head p {
