@@ -16,6 +16,7 @@ import type {
   WardrobeItemForPlan,
   WashMethod,
 } from "./types";
+import { splitItemsByLaundryLoad } from "./laundryLoad";
 
 // ─── constants ──────────────────────────────────────────────────────────
 
@@ -46,8 +47,8 @@ export function planLaundry(
 ): LaundryPlan {
   const selected = selectedItems(items, constraints.selected_item_ids);
   const bucketInputs = splitBucketInputs(selected);
-  const buckets = bucketInputs.map(([id, bucketItems]) =>
-    buildBucket(id, bucketItems, constraints, campusContext),
+  const buckets = bucketInputs.map(({ bucketId, baseBucketId, items: bucketItems }) =>
+    buildBucket(bucketId, baseBucketId, bucketItems, constraints, campusContext),
   );
 
   const estimatedCost = estimateCost(buckets, campusContext);
@@ -58,7 +59,7 @@ export function planLaundry(
     buckets,
     estimated_cost_yuan: estimatedCost,
     estimated_duration_minutes: estimatedDuration,
-    summary: `本次共 ${buckets.length} 个洗护批次，已按颜色、材质、床品和高风险衣物分开处理。`,
+    summary: `本次共 ${buckets.length} 个洗护批次，已按容量、颜色、材质、床品和高风险衣物分开处理。`,
     global_warnings: globalWarnings,
   };
 }
@@ -79,14 +80,27 @@ function selectedItems(items: WardrobeItemForPlan[], ids: string[]): WardrobeIte
 
 // ─── bucket splitting ───────────────────────────────────────────────────
 
-function splitBucketInputs(items: WardrobeItemForPlan[]): Array<[string, WardrobeItemForPlan[]]> {
+interface BucketInput {
+  bucketId: string;
+  baseBucketId: string;
+  items: WardrobeItemForPlan[];
+}
+
+function splitBucketInputs(items: WardrobeItemForPlan[]): BucketInput[] {
   const groups = new Map<string, WardrobeItemForPlan[]>();
   for (const item of items) {
     const bucketId = bucketIdFor(item);
     if (!groups.has(bucketId)) groups.set(bucketId, []);
     groups.get(bucketId)!.push(item);
   }
-  return BUCKET_ORDER.filter((id) => groups.has(id)).map((id) => [id, groups.get(id)!]);
+  return BUCKET_ORDER.filter((id) => groups.has(id)).flatMap((baseBucketId) => {
+    const chunks = splitItemsByLaundryLoad(groups.get(baseBucketId)!);
+    return chunks.map((chunk, index) => ({
+      bucketId: chunks.length > 1 ? `${baseBucketId}-${index + 1}` : baseBucketId,
+      baseBucketId,
+      items: chunk,
+    }));
+  });
 }
 
 function bucketIdFor(item: WardrobeItemForPlan): string {
@@ -111,11 +125,12 @@ function bucketIdFor(item: WardrobeItemForPlan): string {
 
 function buildBucket(
   bucketId: string,
+  baseBucketId: string,
   items: WardrobeItemForPlan[],
   constraints: LaundryConstraints,
   context: CampusContext,
 ): LaundryBucket {
-  if (bucketId === "do-not-wash") {
+  if (baseBucketId === "do-not-wash") {
     return {
       bucket_id: bucketId,
       item_ids: itemIds(items),
@@ -129,7 +144,7 @@ function buildBucket(
     };
   }
 
-  if (bucketId === "dry-clean") {
+  if (baseBucketId === "dry-clean") {
     return {
       bucket_id: bucketId,
       item_ids: itemIds(items),
@@ -143,28 +158,29 @@ function buildBucket(
     };
   }
 
-  if (bucketId === "hand-wash") {
+  if (baseBucketId === "hand-wash") {
     return {
       bucket_id: bucketId,
       item_ids: itemIds(items),
       wash_method: "hand_wash",
       machine_type: "unknown",
       program: "",
-      detergent_ml: detergentMl(bucketId, items),
+      detergent_ml: detergentMl(baseBucketId, items),
       use_laundry_bag: true,
       dry_method: "air_dry",
       warnings: handWashWarnings(items, context),
     };
   }
 
-  const program = bucketId === "large-bedding" ? "large" : "standard";
+  const program = baseBucketId === "large-bedding" ? "large" : "standard";
   const machineType: MachineType = "standard_washer";
   const machine = requireAvailableMachine(context.available_machines, machineType, program);
   requireWashProgram(context, program);
 
   const [dryMethod, dryWarnings] = dryingDecision(items, constraints, context);
   const warnings = [
-    ...machineBucketWarnings(bucketId, items),
+    ...machineBucketWarnings(baseBucketId, items),
+    ...capacityBucketWarnings(bucketId, baseBucketId),
     machineRecommendationWarning(machine, program),
     ...dryWarnings,
   ];
@@ -175,8 +191,8 @@ function buildBucket(
     wash_method: "machine_wash",
     machine_type: machineType,
     program,
-    detergent_ml: detergentMl(bucketId, items),
-    use_laundry_bag: bucketId === "dark-standard" || anyRecommendsBag(items),
+    detergent_ml: detergentMl(baseBucketId, items),
+    use_laundry_bag: baseBucketId === "dark-standard" || anyRecommendsBag(items),
     dry_method: dryMethod,
     warnings: dedupe(warnings),
   };
@@ -305,6 +321,11 @@ function machineBucketWarnings(bucketId: string, items: WardrobeItemForPlan[]): 
     }
   }
   return dedupe(warnings);
+}
+
+function capacityBucketWarnings(bucketId: string, baseBucketId: string): string[] {
+  if (bucketId === baseBucketId) return [];
+  return ["同类衣物数量较多，已按洗衣机容量拆成多桶，避免过载和洗不净。"];
 }
 
 function handWashWarnings(items: WardrobeItemForPlan[], context: CampusContext): string[] {

@@ -1,5 +1,5 @@
 import { Camera, Files, FileText, Save } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import { hasCompleteModelHubConfig, type ModelHubConfig } from "../api/modelHubConfig";
 import { recognizeClothingImage, recognizeClothingText, type ClothingRecognitionResult } from "../api/modelHubRecognition";
 import { createWardrobeItem, type WardrobeCategory, type WardrobeInput } from "../api/mobileSummary";
@@ -61,13 +61,14 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
   const [error, setError] = useState("");
   const [recognitionError, setRecognitionError] = useState("");
   const [batchProgress, setBatchProgress] = useState<BatchRecognitionProgress | null>(null);
+  const saveInFlightRef = useRef(false);
 
   const hasModelHubConfig = hasCompleteModelHubConfig(modelHubConfig);
-  const canSubmit = draft.name.trim().length > 0 && status !== "saving" && mode !== "batch";
+  const canSubmit = draft.name.trim().length > 0 && (status === "idle" || status === "error") && mode !== "batch";
   const canRecognizeSingle = hasModelHubConfig && Boolean(imageFile) && recognitionStatus !== "recognizing";
   const canRecognizeText = hasModelHubConfig && textDescription.trim().length > 0 && recognitionStatus !== "recognizing";
   const canRecognizeBatch = hasModelHubConfig && batchFiles.length > 0 && recognitionStatus !== "recognizing";
-  const canSaveBatch = batchDrafts.length > 0 && status !== "saving";
+  const canSaveBatch = batchDrafts.length > 0 && (status === "idle" || status === "error");
 
   const resultRows = [
     ["名称", draft.name.trim() || "待填写"],
@@ -88,6 +89,7 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
 
   const updateDraft = (patch: Partial<ClothingDraft>) => {
     setDraft((current) => ({ ...current, ...patch }));
+    setStatus((current) => (current === "saved" ? "idle" : current));
   };
 
   const fillDraftFromRecognition = (result: ClothingRecognitionResult, imageFilename = "") => {
@@ -104,9 +106,10 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (!canSubmit) {
+    if (!canSubmit || saveInFlightRef.current) {
       return;
     }
+    saveInFlightRef.current = true;
     setStatus("saving");
     setError("");
     try {
@@ -116,6 +119,8 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
     } catch (saveError) {
       setStatus("error");
       setError(saveError instanceof Error ? saveError.message : "保存失败");
+    } finally {
+      saveInFlightRef.current = false;
     }
   };
 
@@ -196,9 +201,10 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
   };
 
   const handleSaveBatch = async () => {
-    if (!canSaveBatch) {
+    if (!canSaveBatch || saveInFlightRef.current) {
       return;
     }
+    saveInFlightRef.current = true;
     setStatus("saving");
     setError("");
     try {
@@ -211,6 +217,8 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
     } catch (saveError) {
       setStatus("error");
       setError(saveError instanceof Error ? saveError.message : "保存失败");
+    } finally {
+      saveInFlightRef.current = false;
     }
   };
 

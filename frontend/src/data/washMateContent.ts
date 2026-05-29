@@ -151,12 +151,12 @@ export const bucketPlans: BucketPlan[] = [
   },
 ];
 
-export const backendPlanSummary = {
+export const planSummaryFallback = {
   buckets: "4 个洗护批次",
   cost: "预计 ¥24",
   duration: "机器占用约 154 分钟",
   risk: "高风险衣物已单独处理",
-  note: "对齐 LaundryPlan 的分桶、费用、时长和 global_warnings 展示口径。",
+  note: "已按衣物风险、费用和时间整理成本次清洗顺序。",
 };
 
 export const campusContext = {

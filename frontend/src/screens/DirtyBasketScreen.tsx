@@ -29,13 +29,13 @@ export function DirtyBasketScreen({ mobileSummary, onBack, onNavigate, onToggleI
     <Page compact>
       <TopBar title="脏衣篮" onBack={onBack} />
 
-      <Card accent="teal" className="dirty-basket-card">
+      <Card accent="teal" className="dirty-basket-card dirty-basket-card-sticky">
         <div className="dirty-basket-head">
           <div>
             <h3>{dirtyBasket.item_count} 件在盆里</h3>
             <p>{dirtyBasket.recommendation}</p>
           </div>
-          <strong>约 {dirtyBasket.load_percent}% 桶</strong>
+          <strong>{dirtyBasketLoadLabel(dirtyBasket)}</strong>
         </div>
         <div className="progress-bar dirty-basket-progress" aria-label="脏衣篮容量">
           <span style={{ width: `${dirtyBasket.load_percent}%` }} />
@@ -110,6 +110,13 @@ function dirtyBasketAgeLabel(item: MobileSummary["dirty_basket"]["items"][number
     return "加入时间待确认";
   }
   return `已放 ${item.days_in_basket} 天`;
+}
+
+function dirtyBasketLoadLabel(dirtyBasket: MobileSummary["dirty_basket"]): string {
+  if ((dirtyBasket.estimated_load_count ?? 0) > 1) {
+    return `约 ${dirtyBasket.estimated_load_count} 桶`;
+  }
+  return `约 ${dirtyBasket.load_percent}% 桶`;
 }
 
 function itemRiskLabel(item: MobileSummary["wardrobe"]["items"][number]): string {

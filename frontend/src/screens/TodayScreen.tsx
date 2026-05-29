@@ -4,7 +4,7 @@ import type { ModelHubConfig } from "../api/modelHubConfig";
 import { computeRecommendedStartTime, generateTodayAdvice } from "../api/llmSummary";
 import type { MobileSummary } from "../api/mobileSummary";
 import { Card, Chip, MetricCard, Page, PrimaryPanel, Section } from "../components/AppChrome";
-import { backendPlanSummary, bucketPlans, todaySummary, type ScreenId } from "../data/washMateContent";
+import { bucketPlans, planSummaryFallback, todaySummary, type ScreenId } from "../data/washMateContent";
 import type { UserProfile } from "../userProfile";
 
 interface TodayScreenProps {
@@ -73,7 +73,7 @@ export function TodayScreen({
         risk: mobileSummary.plan.buckets.length > 0 ? "已按风险自动分桶" : "暂无方案",
         note: mobileSummary.plan.summary,
       }
-    : backendPlanSummary;
+    : planSummaryFallback;
 
   const hasExecutablePlan = connected && mobileSummary.plan.buckets.length > 0;
 
@@ -142,7 +142,7 @@ export function TodayScreen({
         id: b.bucket_id,
         label: names.join("、"),
         description: washMethodDesc(b.wash_method, b.dry_method),
-        tone: b.wash_method === "hand_wash" || b.wash_method === "dry_clean" || b.wash_method === "do_not_wash" ? ("red" as const) : b.bucket_id === "dark-standard" ? ("purple" as const) : ("blue" as const),
+        tone: b.wash_method === "hand_wash" || b.wash_method === "dry_clean" || b.wash_method === "do_not_wash" ? ("red" as const) : baseBucketId(b.bucket_id) === "dark-standard" ? ("purple" as const) : ("blue" as const),
         badge: {
           label: b.wash_method === "machine_wash" ? "可机洗" : b.wash_method === "hand_wash" ? "手洗" : "排除",
           tone: b.wash_method === "machine_wash" ? ("teal" as const) : ("orange" as const),
@@ -175,7 +175,7 @@ export function TodayScreen({
         title: label,
         machine: machineLabel,
         detail: `${names.join("、")} · ${dryLabel(b.dry_method)}`,
-        accent: b.wash_method === "hand_wash" || b.wash_method === "dry_clean" || b.wash_method === "do_not_wash" ? ("orange" as const) : b.bucket_id === "dark-standard" ? ("purple" as const) : ("blue" as const),
+        accent: b.wash_method === "hand_wash" || b.wash_method === "dry_clean" || b.wash_method === "do_not_wash" ? ("orange" as const) : baseBucketId(b.bucket_id) === "dark-standard" ? ("purple" as const) : ("blue" as const),
       };
     });
   }, [connected, mobileSummary]);
@@ -273,9 +273,9 @@ export function TodayScreen({
         ))}
       </div>
 
-      <Section title="后端方案摘要" action={<Chip tone="purple">LaundryPlan</Chip>}>
-        <Card accent="purple" className="backend-summary-card">
-          <div className="backend-signal-grid">
+      <Section title="本次方案概览" action={<Chip tone="purple">已整理</Chip>}>
+        <Card accent="purple" className="plan-summary-card">
+          <div className="plan-signal-grid">
             <div>
               <span>批次</span>
               <strong>{planSummary.buckets}</strong>
@@ -316,7 +316,7 @@ export function TodayScreen({
                     : "点进脏衣篮选择这批要洗的衣物。"}
                 </p>
               </div>
-              <strong>约 {mobileSummary.dirty_basket.load_percent}% 桶</strong>
+              <strong>{dirtyBasketLoadLabel(mobileSummary.dirty_basket)}</strong>
             </div>
             <div className="dirty-basket-metrics">
               <span>{mobileSummary.dirty_basket.item_count} 件脏衣</span>
@@ -410,6 +410,7 @@ function washMethodDesc(washMethod: string, dryMethod: string): string {
 }
 
 function bucketLabelFromId(bucketId: string): string {
+  const normalizedBucketId = baseBucketId(bucketId);
   const labels: Record<string, string> = {
     "do-not-wash": "不可水洗",
     "dry-clean": "干洗",
@@ -418,7 +419,18 @@ function bucketLabelFromId(bucketId: string): string {
     "dark-standard": "深色标准洗",
     "light-standard": "浅色快洗",
   };
-  return labels[bucketId] ?? bucketId;
+  return labels[normalizedBucketId] ?? bucketId;
+}
+
+function baseBucketId(bucketId: string): string {
+  return bucketId.replace(/-\d+$/, "");
+}
+
+function dirtyBasketLoadLabel(dirtyBasket: MobileSummary["dirty_basket"]): string {
+  if ((dirtyBasket.estimated_load_count ?? 0) > 1) {
+    return `约 ${dirtyBasket.estimated_load_count} 桶`;
+  }
+  return `约 ${dirtyBasket.load_percent}% 桶`;
 }
 
 function washMethodLabel(method: string): string {

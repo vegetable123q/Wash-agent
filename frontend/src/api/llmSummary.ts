@@ -206,6 +206,7 @@ function fallbackTodayAdvice(
 // ─── shared label helpers ───────────────────────────────────────────────
 
 export function bucketLabel(bucketId: string): string {
+  const normalizedBucketId = baseBucketId(bucketId);
   const labels: Record<string, string> = {
     "do-not-wash": "不可水洗",
     "dry-clean": "干洗",
@@ -214,7 +215,11 @@ export function bucketLabel(bucketId: string): string {
     "dark-standard": "深色标准",
     "light-standard": "浅色标准",
   };
-  return labels[bucketId] ?? bucketId;
+  return labels[normalizedBucketId] ?? bucketId;
+}
+
+function baseBucketId(bucketId: string): string {
+  return bucketId.replace(/-\d+$/, "");
 }
 
 export function computeRecommendedStartTime(

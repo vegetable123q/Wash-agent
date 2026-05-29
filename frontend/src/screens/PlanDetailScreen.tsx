@@ -2,7 +2,7 @@ import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import type { ModelHubConfig } from "../api/modelHubConfig";
-import { bucketLabel, generatePlanSummary } from "../api/llmSummary";
+import { generatePlanSummary } from "../api/llmSummary";
 import type { MobileSummary } from "../api/mobileSummary";
 import { Card, Chip, Page, Section, TopBar } from "../components/AppChrome";
 import { bucketPlans } from "../data/washMateContent";
@@ -26,9 +26,9 @@ interface ExclusionItem {
 }
 
 export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: PlanDetailScreenProps) {
-  const backendBuckets = mobileSummary?.plan.buckets ?? [];
-  const hasBackendSummary = Boolean(mobileSummary);
-  const hasBackendBuckets = backendBuckets.length > 0;
+  const planBuckets = mobileSummary?.plan.buckets ?? [];
+  const hasSummary = Boolean(mobileSummary);
+  const hasBuckets = planBuckets.length > 0;
   const nameMap = useMemo(() => {
     const map = new Map<string, string>();
     if (mobileSummary?.wardrobe.items) {
@@ -38,18 +38,18 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
     }
     return map;
   }, [mobileSummary?.wardrobe.items]);
-  const bucketRows = hasBackendBuckets
-    ? backendBuckets.map((bucket) => ({
+  const bucketRows = hasBuckets
+    ? planBuckets.map((bucket) => ({
         id: bucket.bucket_id,
-        title: `${methodLabel(bucket.wash_method)} · ${programLabel(bucket.program || bucketLabel(bucket.bucket_id))}`,
+        title: `${bucketDisplayName(bucket.bucket_id)} · ${bucket.program ? programLabel(bucket.program) : methodLabel(bucket.wash_method)}`,
         machine: machineTypeLabel(bucket.machine_type),
-        detail: `${bucket.item_ids.map((id) => nameMap.get(id) || id).join("、") || "未列出衣物"} · ${dryLabel(bucket.dry_method)}`,
+        detail: `衣物：${bucket.item_ids.map((id) => nameMap.get(id) || "本批衣物").join("、") || "未列出衣物"} · ${methodLabel(bucket.wash_method)} · ${dryLabel(bucket.dry_method)}`,
         tags: bucket.warnings.length
-          ? bucket.warnings.map((warning) => ({ label: warning, tone: "orange" as const }))
-          : [{ label: "后端批次", tone: "teal" as const }],
-        accent: bucket.wash_method === "hand_wash" || bucket.wash_method === "dry_clean" ? ("orange" as const) : ("purple" as const),
+          ? bucket.warnings.map((warning) => ({ label: userFacingWarning(warning), tone: "orange" as const }))
+          : [{ label: "已整理", tone: "teal" as const }],
+        accent: bucket.wash_method === "hand_wash" || bucket.wash_method === "dry_clean" || bucket.wash_method === "do_not_wash" ? ("orange" as const) : ("purple" as const),
       }))
-    : hasBackendSummary
+    : hasSummary
       ? [{
           id: "empty-plan",
           title: "暂无本次分桶",
@@ -61,39 +61,39 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
       : bucketPlans;
 
   const preparationSteps: PreparationStep[] = useMemo(() => {
-    if (!hasBackendSummary) return defaultPreparationSteps();
-    if (!hasBackendBuckets) {
+    if (!hasSummary) return defaultPreparationSteps();
+    if (!hasBuckets) {
       return [{ icon: "blue", title: "先选择衣物", description: "回到衣柜勾选本次要清洗的衣物后，再查看分桶、费用和时长。" }];
     }
     const steps: PreparationStep[] = [];
 
-    const detergentBuckets = backendBuckets.filter((b) => b.detergent_ml != null);
+    const detergentBuckets = planBuckets.filter((b) => b.detergent_ml != null);
     if (detergentBuckets.length > 0) {
       const details = detergentBuckets
-        .map((b) => `${bucketLabel(b.bucket_id)} ${b.detergent_ml}ml`)
+        .map((b) => `${bucketDisplayName(b.bucket_id)} ${b.detergent_ml} ml`)
         .join("，");
       steps.push({ icon: "teal", title: "洗衣液按桶分配", description: details });
     }
 
-    const bagBuckets = backendBuckets.filter((b) => b.use_laundry_bag);
+    const bagBuckets = planBuckets.filter((b) => b.use_laundry_bag);
     if (bagBuckets.length > 0) {
       steps.push({
         icon: "blue",
         title: "洗衣袋准备",
-        description: `${bagBuckets.map((b) => bucketLabel(b.bucket_id)).join("、")}需要使用洗衣袋，降低摩擦和变形风险。`,
+        description: `${bagBuckets.map((b) => bucketDisplayName(b.bucket_id)).join("、")}需要使用洗衣袋，降低摩擦和变形风险。`,
       });
     }
 
-    const dryBuckets = backendBuckets.filter((b) => b.dry_method === "low_heat_dryer");
+    const dryBuckets = planBuckets.filter((b) => b.dry_method === "low_heat_dryer");
     if (dryBuckets.length > 0) {
       steps.push({
         icon: "amber",
         title: "烘干安排",
-        description: `${dryBuckets.map((b) => bucketLabel(b.bucket_id)).join("、")}使用低温烘干，注意不可高温的衣物已改为晾干。`,
+        description: `${dryBuckets.map((b) => bucketDisplayName(b.bucket_id)).join("、")}使用低温烘干，注意不可高温的衣物已改为晾干。`,
       });
     }
 
-    const airDryBuckets = backendBuckets.filter((b) => b.dry_method === "air_dry");
+    const airDryBuckets = planBuckets.filter((b) => b.dry_method === "air_dry");
     if (airDryBuckets.length > 0 && dryBuckets.length === 0) {
       steps.push({
         icon: "teal",
@@ -103,20 +103,20 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
     }
 
     return steps.length > 0 ? steps : defaultPreparationSteps();
-  }, [backendBuckets, hasBackendBuckets, hasBackendSummary]);
+  }, [planBuckets, hasBuckets, hasSummary]);
 
   const exclusionItems: ExclusionItem[] = useMemo(() => {
-    if (!hasBackendSummary) return defaultExclusionItems();
-    if (!hasBackendBuckets) return [];
-    const items = backendBuckets
+    if (!hasSummary) return defaultExclusionItems();
+    if (!hasBuckets) return [];
+    const items = planBuckets
       .filter((b) => b.wash_method !== "machine_wash")
       .map((b) => ({
-        title: `${b.item_ids.join("、")}不进共享机`,
+        title: `${b.item_ids.map((id) => nameMap.get(id) || "本批衣物").join("、")}不进共享机`,
         description: exclusionReason(b),
         method: methodLabel(b.wash_method),
       }));
     return items.length > 0 ? items : defaultExclusionItems();
-  }, [backendBuckets, hasBackendBuckets, hasBackendSummary]);
+  }, [nameMap, planBuckets, hasBuckets, hasSummary]);
 
   // LLM-enhanced summary
   const [llmSummary, setLlmSummary] = useState<string | null>(null);
@@ -135,10 +135,10 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
 
       <Card accent="purple" className="summary-card">
         <div>
-          <h2>{hasBackendBuckets ? `${backendBuckets.length} 个后端批次` : hasBackendSummary ? "暂无本次方案" : "3 桶分开洗"}</h2>
+          <h2>{hasBuckets ? `${planBuckets.length} 个洗护批次` : hasSummary ? "暂无本次方案" : "3 桶分开洗"}</h2>
           <p>{llmSummary ?? mobileSummary?.plan.summary ?? "床品单独占用标准筒，不和普通衣物混洗。"}</p>
         </div>
-        <Chip tone={hasBackendBuckets ? "teal" : "orange"}>{hasBackendBuckets ? "LaundryPlan" : hasBackendSummary ? "待选择" : "可执行"}</Chip>
+        <Chip tone={hasBuckets ? "teal" : "orange"}>{hasBuckets ? "已生成" : hasSummary ? "待选择" : "可执行"}</Chip>
       </Card>
 
       <Section title="洗衣顺序">
@@ -211,7 +211,8 @@ function methodLabel(method: string) {
   if (method === "hand_wash") return "手洗";
   if (method === "dry_clean") return "干洗";
   if (method === "machine_wash") return "机洗";
-  return method;
+  if (method === "do_not_wash") return "不水洗";
+  return "待确认";
 }
 
 function programLabel(program: string) {
@@ -223,7 +224,7 @@ function programLabel(program: string) {
   if (program === "standard_40c") return "标准+40度";
   if (program === "standard_60c_uv") return "标准+60度+紫外";
   if (!program) return "未定";
-  return program;
+  return "合适程序";
 }
 
 function dryLabel(method: string) {
@@ -231,11 +232,11 @@ function dryLabel(method: string) {
   if (method === "low_heat_dryer") return "低温烘干";
   if (method === "normal_dryer") return "普通烘干";
   if (method === "do_not_dry") return "不烘干";
-  return method;
+  return "干燥待确认";
 }
 
 function exclusionReason(bucket: { wash_method: string; warnings: string[] }) {
-  if (bucket.warnings.length > 0) return bucket.warnings[0];
+  if (bucket.warnings.length > 0) return userFacingWarning(bucket.warnings[0]);
   if (bucket.wash_method === "hand_wash") return "材质或风险提示不适合共享洗衣机。";
   if (bucket.wash_method === "dry_clean") return "该批次需要专业干洗，不进入共享洗衣机。";
   if (bucket.wash_method === "do_not_wash") return "洗护标签提示不可水洗。";
@@ -257,5 +258,28 @@ function machineTypeLabel(machineType: string) {
   if (machineType === "standard_washer") return "洗衣机";
   if (machineType === "shoe_washer") return "洗鞋机";
   if (machineType === "dryer") return "烘干机";
-  return "未知设备";
+  return "设备待确认";
+}
+
+function bucketDisplayName(bucketId: string): string {
+  const labels: Record<string, string> = {
+    "do-not-wash": "不可水洗衣物",
+    "dry-clean": "干洗衣物",
+    "hand-wash": "手洗衣物",
+    "large-bedding": "床品单独洗",
+    "dark-standard": "深色标准洗",
+    "light-standard": "浅色标准洗",
+  };
+  return labels[bucketId] ?? "本批衣物";
+}
+
+function userFacingWarning(text: string): string {
+  return text
+    .replace(/\bstandard_washer\b/g, "洗衣机")
+    .replace(/\bshoe_washer\b/g, "洗鞋机")
+    .replace(/\bdryer\b/g, "烘干机")
+    .replace(/程序\s+standard/g, "程序 标准")
+    .replace(/程序\s+quick/g, "程序 快洗")
+    .replace(/程序\s+large/g, "程序 大物")
+    .replace(/程序\s+low/g, "程序 低温烘干");
 }

@@ -11,6 +11,7 @@ const modelHubConfig = {
 describe("AddClothingScreen", () => {
   afterEach(() => {
     cleanup();
+    localStorage.clear();
     vi.unstubAllGlobals();
   });
 
@@ -31,6 +32,22 @@ describe("AddClothingScreen", () => {
     expect(await screen.findByText("保存成功，已加入衣柜")).toBeInTheDocument();
     expect(onSaved).toHaveBeenCalledTimes(1);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not save the same manual item again after a successful save", async () => {
+    const onSaved = vi.fn();
+
+    render(<AddClothingScreen modelHubConfig={{ ...modelHubConfig, apikey: "" }} onBack={() => undefined} onSaved={onSaved} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "文字输入" }));
+    fireEvent.change(screen.getByLabelText("衣物名称"), { target: { value: "清华紫连帽卫衣" } });
+    fireEvent.click(screen.getByRole("button", { name: /保存到衣柜/ }));
+
+    expect(await screen.findByText("保存成功，已加入衣柜")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /保存到衣柜/ }));
+
+    expect(JSON.parse(localStorage.getItem("washmate.localWardrobe") ?? "[]")).toHaveLength(1);
+    expect(onSaved).toHaveBeenCalledTimes(1);
   });
 
   it("requires ModelHub settings before image recognition", () => {
@@ -76,8 +93,8 @@ describe("AddClothingScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /智能提取文字/ }));
 
     expect(await screen.findByDisplayValue("灰色连帽卫衣")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("cotton 70%, polyester 30%")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("gray")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("棉 70%、聚酯纤维 30%")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("灰色")).toBeInTheDocument();
     const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
     expect(JSON.stringify(body)).not.toContain("inline_data");
   });
@@ -303,8 +320,8 @@ describe("AddClothingScreen", () => {
     const headers = fetchMock.mock.calls[0][1]?.headers as Headers;
     expect(headers.get("x-goog-api-key")).toBe("test-modelhub-key");
     expect(await screen.findByDisplayValue("蓝色棉质衬衫")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("cotton 100%")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("blue")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("棉 100%")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("蓝色")).toBeInTheDocument();
   });
 
 });

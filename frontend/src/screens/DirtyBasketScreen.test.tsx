@@ -90,6 +90,7 @@ describe("DirtyBasketScreen", () => {
 
     expect(screen.getByRole("heading", { name: "脏衣篮" })).toBeInTheDocument();
     expect(screen.getByText("1 件在盆里")).toBeInTheDocument();
+    expect(screen.getByText("1 件在盆里").closest(".dirty-basket-card-sticky")).toBeInTheDocument();
     expect(screen.getByText("最久 3 天")).toBeInTheDocument();
     expect(screen.getByText("久放易有味")).toBeInTheDocument();
     expect(screen.getByText("已放 3 天")).toBeInTheDocument();

@@ -23,7 +23,7 @@ export function generateReport(
 ): WashReport {
   const itemNames = new Map(items.map((item) => [item.profile.item_id, item.profile.name]));
   return {
-    title: "本次校园洗衣方案",
+    title: "本次校园洗衣报告",
     sections: {
       "洗衣步骤": stepsSection(plan, itemNames),
       "费用和时间": costTimeSection(plan),
@@ -43,15 +43,15 @@ function stepsSection(plan: LaundryPlan, itemNames: Map<string, string>): string
     const bucket = plan.buckets[i];
     const names = bucket.item_ids.map((id) => itemName(id, itemNames));
     const parts = [
-      `${i + 1}. ${names.join("、")}`,
+      `${i + 1}. ${bucketTitle(bucket)}：${names.join("、")}`,
       `原因：${bucketReason(bucket)}`,
       `洗护方式：${washMethodText(bucket.wash_method)}`,
     ];
-    if (bucket.program) parts.push(`程序：${bucket.program}`);
+    if (bucket.program) parts.push(`程序：${programText(bucket.program)}`);
     if (bucket.detergent_ml != null) parts.push(`洗衣液：${bucket.detergent_ml} ml`);
     if (bucket.use_laundry_bag) parts.push("使用洗衣袋");
     parts.push(`干燥：${dryMethodText(bucket.dry_method)}`);
-    if (bucket.warnings.length) parts.push(`提醒：${bucket.warnings.join("；")}`);
+    if (bucket.warnings.length) parts.push(`提醒：${bucket.warnings.map(userFacingWarning).join("；")}`);
     lines.push(parts.join("；") + "。");
   }
   return lines.join("\n");
@@ -72,7 +72,7 @@ function campusSection(context: CampusContext): string {
   const available = context.available_machines.length;
   const total = context.all_machines.length;
   const parts = [
-    `本次报告基于传入的校园上下文生成，当前可用机器记录 ${available} 台，机器总记录 ${total} 台。`,
+    `当前可用洗衣设备 ${available} 台，系统共记录 ${total} 台。`,
   ];
   const locations = availableMachineLocations(context.available_machines);
   if (locations) parts.push(`可用位置：${locations}。`);
@@ -87,7 +87,7 @@ function riskSection(plan: LaundryPlan): string {
   const warnings = dedupe([
     ...plan.buckets.flatMap((b) => b.warnings),
     ...plan.global_warnings,
-  ]);
+  ].map(userFacingWarning));
   if (!warnings.length) return "本次计划没有额外风险提醒。";
   return warnings.map((w) => `- ${w}`).join("\n");
 }
@@ -99,10 +99,10 @@ function savingsNotes(plan: LaundryPlan): string[] {
   if (plan.buckets.some((b) => b.dry_method === "air_dry")) {
     notes.push("自然晾干批次减少烘干用电，也能降低缩水和变形风险。");
   }
-  if (plan.buckets.some((b) => b.bucket_id === "dark-standard" || b.bucket_id === "hand-wash")) {
+  if (plan.buckets.some((b) => baseBucketId(b.bucket_id) === "dark-standard" || baseBucketId(b.bucket_id) === "hand-wash")) {
     notes.push("高风险衣物分开处理，能减少串色、返洗和重复用水。");
   }
-  if (plan.buckets.some((b) => b.bucket_id === "large-bedding")) {
+  if (plan.buckets.some((b) => baseBucketId(b.bucket_id) === "large-bedding")) {
     notes.push("床品单独成桶，减少过载造成的洗不净和返洗。");
   }
   return dedupe(notes);
@@ -111,13 +111,13 @@ function savingsNotes(plan: LaundryPlan): string[] {
 function riskNotes(plan: LaundryPlan): string[] {
   const notes: string[] = [];
   for (const bucket of plan.buckets) {
-    if (bucket.bucket_id === "dark-standard") {
+    if (baseBucketId(bucket.bucket_id) === "dark-standard") {
       notes.push("深色或掉色风险衣物不要与浅色衣物混洗。");
     }
     if (["hand_wash", "dry_clean", "do_not_wash"].includes(bucket.wash_method)) {
       notes.push("非普通机洗衣物应按单独批次处理，不进入共享洗衣机。");
     }
-    notes.push(...bucket.warnings);
+    notes.push(...bucket.warnings.map(userFacingWarning));
   }
   return dedupe(notes);
 }
@@ -125,6 +125,7 @@ function riskNotes(plan: LaundryPlan): string[] {
 // ─── helpers ────────────────────────────────────────────────────────────
 
 function bucketReason(bucket: LaundryBucket): string {
+  const bucketId = baseBucketId(bucket.bucket_id);
   const reasons: Record<string, string> = {
     "do-not-wash": "洗护标签或用户偏好提示不可水洗",
     "dry-clean": "该批次需要专业干洗",
@@ -133,14 +134,14 @@ function bucketReason(bucket: LaundryBucket): string {
     "dark-standard": "深色或高掉色风险衣物单独处理，避免串色",
     "light-standard": "浅色普通机洗衣物集中标准洗",
   };
-  return reasons[bucket.bucket_id] ?? `${bucket.bucket_id} 批次`;
+  return reasons[bucketId] ?? "本批衣物需要单独处理";
 }
 
 function chargedBatches(plan: LaundryPlan): string[] {
   const batches: string[] = [];
   for (const bucket of plan.buckets) {
-    if (bucket.wash_method === "machine_wash") batches.push(`${bucket.bucket_id} 使用 ${bucket.program} 洗`);
-    if (bucket.dry_method === "low_heat_dryer") batches.push(`${bucket.bucket_id} 低温烘干`);
+    if (bucket.wash_method === "machine_wash") batches.push(`${bucketTitle(bucket)} · ${programText(bucket.program)}`);
+    if (bucket.dry_method === "low_heat_dryer") batches.push(`${bucketTitle(bucket)} · 低温烘干`);
   }
   return batches;
 }
@@ -172,6 +173,48 @@ function dryingContextSummary(dc: Record<string, unknown>): string {
   if ("balcony_available" in dc) parts.push(dc.balcony_available ? "有阳台" : "无阳台");
   if ("ventilation" in dc) parts.push(`通风 ${dc.ventilation}`);
   return parts.join("，");
+}
+
+function bucketTitle(bucket: LaundryBucket): string {
+  const bucketId = baseBucketId(bucket.bucket_id);
+  const labels: Record<string, string> = {
+    "do-not-wash": "不可水洗衣物",
+    "dry-clean": "干洗衣物",
+    "hand-wash": "手洗衣物",
+    "large-bedding": "床品单独洗",
+    "dark-standard": "深色标准洗",
+    "light-standard": "浅色标准洗",
+  };
+  return labels[bucketId] ?? "本批衣物";
+}
+
+function baseBucketId(bucketId: string): string {
+  return bucketId.replace(/-\d+$/, "");
+}
+
+function programText(program: string): string {
+  const labels: Record<string, string> = {
+    standard: "标准洗",
+    quick: "快洗",
+    large: "大件洗",
+    spin: "单脱水",
+    tub_clean: "筒自洁",
+    standard_40c: "40 度标准洗",
+    standard_60c_uv: "60 度紫外标准洗",
+    low: "低温烘干",
+  };
+  return labels[program] ?? "合适程序";
+}
+
+function userFacingWarning(text: string): string {
+  return text
+    .replace(/\bstandard_washer\b/g, "洗衣机")
+    .replace(/\bshoe_washer\b/g, "洗鞋机")
+    .replace(/\bdryer\b/g, "烘干机")
+    .replace(/程序\s+standard/g, "程序 标准洗")
+    .replace(/程序\s+quick/g, "程序 快洗")
+    .replace(/程序\s+large/g, "程序 大件洗")
+    .replace(/程序\s+low/g, "程序 低温烘干");
 }
 
 function itemName(id: string, names: Map<string, string>): string {

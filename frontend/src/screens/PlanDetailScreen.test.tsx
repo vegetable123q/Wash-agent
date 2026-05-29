@@ -18,7 +18,21 @@ describe("PlanDetailScreen", () => {
         next_action: "去脏衣篮",
         items: [],
       },
-      wardrobe: { items: [] },
+      wardrobe: {
+        items: [
+          {
+            item_id: "bedding",
+            name: "床单被套",
+            user_note: "",
+            user_notes: [],
+            wear_count_since_wash: 1,
+            wash_count: 0,
+            material_ratios: { cotton: 1 },
+            colors: ["white"],
+            risks: {},
+          },
+        ],
+      },
       campus_context: {
         all_machines: [],
         available_machines: [],
@@ -56,8 +70,11 @@ describe("PlanDetailScreen", () => {
 
     render(<PlanDetailScreen onBack={vi.fn()} mobileSummary={mobileSummary} />);
 
+    expect(screen.getByText("1 个洗护批次")).toBeInTheDocument();
+    expect(screen.getByText("床品单独洗 · 标准")).toBeInTheDocument();
     expect(screen.getByText("洗衣机")).toBeInTheDocument();
     expect(screen.queryByText("standard_washer")).not.toBeInTheDocument();
+    expect(screen.queryByText(/后端|LaundryPlan|large-bedding/)).not.toBeInTheDocument();
   });
 
   it("does not mention a large washer in the static fallback", () => {

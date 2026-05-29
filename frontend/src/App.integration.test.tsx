@@ -128,6 +128,76 @@ describe("App in-APK backend integration", () => {
     }
   });
 
+  it("updates dirty-basket selection without refetching weather or machine data", async () => {
+    localStorage.setItem(
+      "washmate.localWardrobe",
+      JSON.stringify([
+        {
+          item_id: "hoodie-1",
+          name: "清华紫连帽卫衣",
+          user_note: "",
+          user_notes: [],
+          wear_count_since_wash: 1,
+          wash_count: 0,
+          material_ratios: { cotton: 1 },
+          colors: ["purple"],
+          risks: {},
+        },
+      ]),
+    );
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({}),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /管理脏衣篮/ }));
+    fetchMock.mockClear();
+    fireEvent.click(await screen.findByLabelText("加入脏衣篮 清华紫连帽卫衣"));
+
+    expect(await screen.findByLabelText("移出脏衣篮 清华紫连帽卫衣")).toBeChecked();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns to the dirty basket after opening the plan from the dirty basket", async () => {
+    localStorage.setItem(
+      "washmate.localWardrobe",
+      JSON.stringify([
+        {
+          item_id: "hoodie-1",
+          name: "清华紫连帽卫衣",
+          user_note: "",
+          user_notes: [],
+          wear_count_since_wash: 1,
+          wash_count: 0,
+          material_ratios: { cotton: 1 },
+          colors: ["purple"],
+          risks: {},
+        },
+      ]),
+    );
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({}),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /管理脏衣篮/ }));
+    expect(await screen.findByRole("heading", { name: "脏衣篮" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "查看本次方案" }));
+    expect(await screen.findByRole("heading", { name: "本次方案" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+    expect(await screen.findByRole("heading", { name: "脏衣篮" })).toBeInTheDocument();
+  });
+
   it("handles the browser or phone back key by returning to the parent screen", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,

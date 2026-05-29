@@ -5,7 +5,7 @@ import {
   saveModelHubConfig,
   type ModelHubConfig,
 } from "./api/modelHubConfig";
-import { deleteWardrobeItem, fetchMobileSummary, setLaundrySelection, type BackendMachine, type MobileSummary, type WardrobeSummaryItem } from "./api/mobileSummary";
+import { deleteWardrobeItem, fetchMobileSummary, rebuildMobileSummaryForSelection, setLaundrySelection, type BackendMachine, type MobileSummary, type WardrobeSummaryItem } from "./api/mobileSummary";
 import { BottomNav } from "./components/AppChrome";
 import { machines, wardrobeItems, type MachineView, type ScreenId, type TabId, type WardrobeItemView } from "./data/washMateContent";
 import { AddClothingScreen } from "./screens/AddClothingScreen";
@@ -46,6 +46,7 @@ function isScreenId(value: unknown): value is ScreenId {
 export default function App() {
   const [screen, setScreen] = useState<ScreenId>("today");
   const screenRef = useRef<ScreenId>("today");
+  const contextualBackTargetsRef = useRef<Partial<Record<ScreenId, ScreenId>>>({});
   const [mobileSummary, setMobileSummary] = useState<MobileSummary | null>(null);
   const [backendStatus, setBackendStatus] = useState<BackendStatus>("loading");
   const [refreshState, setRefreshState] = useState<RefreshState>({ isRefreshing: false, error: null });
@@ -71,6 +72,9 @@ export default function App() {
 
   const setScreenWithHistory = (target: ScreenId, historyMode: "push" | "replace" = "push") => {
     const current = screenRef.current;
+    if (historyMode === "push" && target !== current && target !== parentTab[target]) {
+      contextualBackTargetsRef.current[target] = current;
+    }
     screenRef.current = target;
     setScreen(target);
     if (target === current) {
@@ -83,7 +87,12 @@ export default function App() {
     }
   };
 
-  const goBack = () => setScreenWithHistory(parentTab[screenRef.current], "replace");
+  const goBack = () => {
+    const current = screenRef.current;
+    const target = contextualBackTargetsRef.current[current] ?? parentTab[current];
+    delete contextualBackTargetsRef.current[current];
+    setScreenWithHistory(target, "replace");
+  };
   const navigate = (target: ScreenId) => setScreenWithHistory(target);
   const navigateTab = (tab: TabId) => setScreenWithHistory(tab);
   const handleProfileSave = (profile: UserProfile) => {
@@ -133,14 +142,19 @@ export default function App() {
   };
 
   const handleToggleLaundrySelection = async (itemId: string) => {
+    if (!mobileSummary) {
+      return;
+    }
     const selected = new Set(mobileSummary?.selected_laundry_item_ids ?? []);
     if (selected.has(itemId)) {
       selected.delete(itemId);
     } else {
       selected.add(itemId);
     }
-    await setLaundrySelection([...selected]);
-    await refreshMobileSummary();
+    const result = await setLaundrySelection([...selected]);
+    setMobileSummary((current) =>
+      current ? rebuildMobileSummaryForSelection(current, result.selected_item_ids, userProfile) : current,
+    );
   };
 
   useEffect(() => {

@@ -45,8 +45,8 @@ describe("ModelHub clothing recognition", () => {
 
     expect(result).toMatchObject({
       name: "灰色连帽卫衣",
-      material: "cotton 80%, polyester 20%",
-      colors: "gray",
+      material: "棉 80%、聚酯纤维 20%",
+      colors: "灰色",
       note: "冷水机洗，低温烘干",
     });
     const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
@@ -100,5 +100,70 @@ describe("ModelHub clothing recognition", () => {
     const result = await recognizeClothingImage(file, modelHubConfig);
 
     expect(result.category).toBe("外套");
+  });
+
+  it("normalizes English material, color, and care terms into Chinese display text", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        modelHubResponse({
+          is_clothing: true,
+          name: "blue white cotton tee",
+          material_ratios: { cotton: 0.7, polyester: 0.3 },
+          colors: ["blue", "white"],
+          recommended_wash: "gentle_cycle",
+          care_warnings: ["do_not_bleach", "do_not_tumble_dry"],
+        }),
+      ),
+    );
+
+    const result = await recognizeClothingText("blue white cotton tee", modelHubConfig);
+
+    expect(result).toMatchObject({
+      material: "棉 70%、聚酯纤维 30%",
+      colors: "蓝色、白色",
+      note: "轻柔洗；不可漂白、不可烘干",
+    });
+  });
+
+  it("accepts common ModelHub material field variants instead of showing unknown", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        modelHubResponse({
+          is_clothing: true,
+          name: "灰色卫衣",
+          material: "cotton 80%, polyester 20%",
+          colors: ["gray"],
+        }),
+      ),
+    );
+
+    await expect(recognizeClothingText("灰色卫衣，棉混纺。", modelHubConfig)).resolves.toMatchObject({
+      material: "棉 80%、聚酯纤维 20%",
+    });
+  });
+
+  it("keeps care label variants in the editable note", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        modelHubResponse({
+          is_clothing: true,
+          name: "羊毛开衫",
+          material_ratios: { wool: 1 },
+          colors: ["beige"],
+          care_symbols: ["hand_wash_only", "do_not_tumble_dry"],
+          care_instructions: "平摊晾干，不可漂白",
+        }),
+      ),
+    );
+
+    const result = await recognizeClothingText("羊毛开衫，洗标写着手洗，不能烘干。", modelHubConfig);
+
+    expect(result.note).toContain("只能手洗");
+    expect(result.note).toContain("不可烘干");
+    expect(result.note).toContain("平摊晾干");
+    expect(result.note).toContain("不可漂白");
   });
 });

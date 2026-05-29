@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createWardrobeItem, fetchMobileSummary, setLaundrySelection } from "./mobileSummary";
+import { createWardrobeItem, fetchMobileSummary, rebuildMobileSummaryForSelection, setLaundrySelection } from "./mobileSummary";
 
 const wardrobeStorageKey = "washmate.localWardrobe";
 const dirtyBasketStorageKey = "washmate.selectedLaundryItemIds";
@@ -90,7 +90,7 @@ describe("mobileSummary wardrobe selection", () => {
     expect(summary.selected_laundry_item_ids).toEqual(["hoodie-1"]);
     expect(summary.dirty_basket).toMatchObject({
       item_count: 1,
-      load_percent: 30,
+      load_percent: 22,
       status_label: "还没满桶",
     });
     expect(summary.dirty_basket.recommendation).toContain("可继续攒");
@@ -323,5 +323,92 @@ describe("mobileSummary wardrobe selection", () => {
       ["tee-1", 2],
       ["hoodie-1", 0],
     ]);
+  });
+
+  it("rebuilds dirty-basket selection from the current summary without remote fetches", async () => {
+    localStorage.setItem(
+      wardrobeStorageKey,
+      JSON.stringify([
+        {
+          item_id: "hoodie-1",
+          name: "灰色连帽卫衣",
+          user_note: "",
+          user_notes: [],
+          wear_count_since_wash: 1,
+          wash_count: 0,
+          material_ratios: { cotton: 0.8, polyester: 0.2 },
+          colors: ["gray"],
+          risks: {},
+        },
+      ]),
+    );
+    const summary = await fetchMobileSummary();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockClear();
+
+    const result = await setLaundrySelection(["hoodie-1"]);
+    const updated = rebuildMobileSummaryForSelection(summary, result.selected_item_ids, { allowDryer: false });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(updated.selected_laundry_item_ids).toEqual(["hoodie-1"]);
+    expect(updated.dirty_basket).toMatchObject({
+      item_count: 1,
+      load_percent: 22,
+      status_label: "还没满桶",
+    });
+    expect(updated.plan.summary).not.toContain("请选择本次要清洗的衣物");
+  });
+
+  it("estimates dirty-basket capacity from clothing load instead of raw item count", async () => {
+    const items = Array.from({ length: 3 }, (_, index) => ({
+      item_id: `tee-${index + 1}`,
+      name: `白色棉 T 恤 ${index + 1}`,
+      user_note: "",
+      user_notes: [],
+      wear_count_since_wash: 1,
+      wash_count: 0,
+      material_ratios: { cotton: 1 },
+      colors: ["white"],
+      risks: {},
+    }));
+    localStorage.setItem(wardrobeStorageKey, JSON.stringify(items));
+    await setLaundrySelection(items.map((item) => item.item_id));
+
+    const summary = await fetchMobileSummary();
+
+    expect(summary.dirty_basket).toMatchObject({
+      item_count: 3,
+      load_percent: 36,
+      status_label: "还没满桶",
+    });
+    expect(summary.dirty_basket.recommendation).toContain("可继续攒");
+  });
+
+  it("flags oversized dirty baskets as multiple washer loads", async () => {
+    const items = Array.from({ length: 12 }, (_, index) => ({
+      item_id: `tee-${index + 1}`,
+      name: `白色棉 T 恤 ${index + 1}`,
+      user_note: "",
+      user_notes: [],
+      wear_count_since_wash: 1,
+      wash_count: 0,
+      material_ratios: { cotton: 1 },
+      colors: ["white"],
+      risks: {},
+    }));
+    localStorage.setItem(wardrobeStorageKey, JSON.stringify(items));
+    await setLaundrySelection(items.map((item) => item.item_id));
+
+    const summary = await fetchMobileSummary();
+
+    expect(summary.dirty_basket).toMatchObject({
+      item_count: 12,
+      load_percent: 100,
+      status_label: "需要分多桶",
+    });
+    expect(summary.dirty_basket.estimated_load_count).toBe(2);
+    expect(summary.dirty_basket.recommendation).toContain("约 2 桶");
+    expect(summary.plan.buckets).toHaveLength(0);
+    expect(summary.plan.summary).toContain("当前机器条件不足");
   });
 });

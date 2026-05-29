@@ -11,6 +11,7 @@ import { buildCampusContextForDorm } from "./campusMachineApi";
 import { listCampusTowerOptions } from "./campusTowerDirectory";
 import { buildProfileFromInput, storedToPlanItem, type StoredWardrobeItem } from "./clothingExtractor";
 import { adviseAllFrequencies } from "./frequencyAdvisor";
+import { estimatedWasherLoadCount, loadPercentForItems } from "./laundryLoad";
 import { planLaundry } from "./laundryPlanner";
 import { DRYING_CONTEXT, PRICING_RULES } from "./pricingRules";
 import { generateReport } from "./reportGenerator";
@@ -23,9 +24,11 @@ import type {
   DirtyBasketAddedAtSource,
   DirtyBasketItem,
   DirtyBasketSummary,
+  FrequencyAdvice,
   LaundryConstraints,
   LaundryPlan,
   MachineInfo,
+  MachineQueueEstimate,
   MobileSummary,
   WardrobeInput,
   WardrobeCategory,
@@ -55,6 +58,39 @@ interface DirtyBasketRecord {
 
 export async function fetchMobileSummary(profile?: Pick<UserProfile, "dormName" | "allowDryer">): Promise<MobileSummary> {
   return buildIntegratedMobileSummary(profile);
+}
+
+export function rebuildMobileSummaryForSelection(
+  summary: MobileSummary,
+  itemIds: string[],
+  profile?: Pick<UserProfile, "allowDryer">,
+): MobileSummary {
+  const storedItems = summary.wardrobe.items;
+  const validIds = new Set(storedItems.map((item) => item.item_id));
+  const selectedLaundryItemIds = [...new Set(itemIds.map((id) => id.trim()).filter((id) => validIds.has(id)))];
+  const existingRecords = new Map(readDirtyBasketRecords(storedItems).map((record) => [record.item_id, record]));
+  const dirtyBasketRecords = selectedLaundryItemIds.map((itemId) =>
+    existingRecords.get(itemId) ?? {
+      item_id: itemId,
+      added_at: new Date().toISOString(),
+      added_at_source: "known" as DirtyBasketAddedAtSource,
+    },
+  );
+  writeDirtyBasketRecords(dirtyBasketRecords);
+
+  const selectedSet = new Set(selectedLaundryItemIds);
+  const selectedItems = storedItems.filter((item) => selectedSet.has(item.item_id));
+  const campusContext = mobileSummaryCampusContextToPlanner(summary.campus_context);
+  const { frequencyAdvice, plan, report } = buildLaundryArtifacts(storedItems, selectedLaundryItemIds, campusContext, profile);
+
+  return {
+    ...summary,
+    selected_laundry_item_ids: selectedLaundryItemIds,
+    dirty_basket: buildDirtyBasketSummary(selectedItems, dirtyBasketRecords),
+    frequency_advice: frequencyAdvice,
+    plan: toMobileLaundryPlan(plan),
+    report,
+  };
 }
 
 export async function createWardrobeItem(input: WardrobeInput): Promise<{ status: string; item: WardrobeSummaryItem }> {
@@ -158,80 +194,13 @@ async function buildIntegratedMobileSummary(profile?: Pick<UserProfile, "dormNam
     }
   }
 
-  // Convert stored items to planner-compatible items
-  const planItems = storedItems.map(storedToPlanItem);
   const dirtyBasketRecords = readDirtyBasketRecords(storedItems);
   if (dirtyBasketRecords.length > 0) {
     writeDirtyBasketRecords(dirtyBasketRecords);
   }
   const selectedLaundryItemIds = dirtyBasketRecords.map((record) => record.item_id);
   const selectedItems = storedItems.filter((item) => selectedLaundryItemIds.includes(item.item_id));
-
-  // Build constraints from explicit user selection for the current laundry batch.
-  const constraints: LaundryConstraints = {
-    selected_item_ids: selectedLaundryItemIds,
-    urgent_item_ids: [],
-    allow_mixed_colors: false,
-    allow_dryer: Boolean(profile?.allowDryer),
-    hygiene_sensitive: true,
-    max_wait_minutes: null,
-    budget_yuan: null,
-  };
-
-  // Get frequency advice for all items
-  const frequencyAdvice = adviseAllFrequencies(planItems, constraints);
-  // Plan laundry only for items explicitly selected for this batch.
-  let plan: LaundryPlan;
-  let report: WashReport;
-
-  if (selectedLaundryItemIds.length === 0) {
-    plan = {
-      buckets: [],
-      estimated_cost_yuan: null,
-      estimated_duration_minutes: null,
-      summary: "请选择本次要清洗的衣物后生成校园洗衣方案。",
-      global_warnings: [],
-    };
-    report = {
-      title: "本次校园洗衣方案",
-      sections: {
-        "洗衣步骤": "请选择本次要清洗的衣物后生成校园洗衣方案。",
-        "费用和时间": "费用待确认。",
-        "机器环境": `当前可用机器记录 ${campusContext.available_machines.length} 台。`,
-        "风险提醒": "本次没有额外风险提醒。",
-      },
-      savings_notes: [],
-      risk_notes: [],
-    };
-  } else {
-    try {
-      const selectedPlanItems = planItems.filter((item) =>
-        selectedLaundryItemIds.includes(item.profile.item_id),
-      );
-      plan = planLaundry(selectedPlanItems, constraints, campusContext);
-      report = generateReport(plan, selectedPlanItems, campusContext);
-    } catch {
-      // Planner may fail if no matching machines; expose that state instead of inventing a plan.
-      plan = {
-        buckets: [],
-        estimated_cost_yuan: null,
-        estimated_duration_minutes: null,
-        summary: "当前机器条件不足以生成完整方案，建议稍后刷新。",
-        global_warnings: ["未能匹配到可用机器，请检查机器状态或手动选择。"],
-      };
-      report = {
-        title: "本次校园洗衣方案",
-        sections: {
-          "洗衣步骤": "方案生成需要可用机器，请稍后刷新或手动查看机器状态。",
-          "费用和时间": "暂时无法估算。",
-          "机器环境": `当前可用机器记录 ${campusContext.available_machines.length} 台。`,
-          "风险提醒": "未能生成完整方案，请留意深浅色分开洗等基本规则。",
-        },
-        savings_notes: [],
-        risk_notes: [],
-      };
-    }
-  }
+  const { frequencyAdvice, plan, report } = buildLaundryArtifacts(storedItems, selectedLaundryItemIds, campusContext, profile);
 
   // Build the summary for screens
   const allMachines: BackendMachine[] = campusContext.all_machines.map(toBackendMachine);
@@ -258,24 +227,101 @@ async function buildIntegratedMobileSummary(profile?: Pick<UserProfile, "dormNam
         source: "integrated",
       },
     },
-    plan: {
-      buckets: plan.buckets.map((b) => ({
-        bucket_id: b.bucket_id,
-        item_ids: b.item_ids,
-        wash_method: b.wash_method,
-        machine_type: b.machine_type,
-        program: b.program,
-        detergent_ml: b.detergent_ml,
-        use_laundry_bag: b.use_laundry_bag,
-        dry_method: b.dry_method,
-        warnings: b.warnings,
-      })),
-      estimated_cost_yuan: plan.estimated_cost_yuan,
-      estimated_duration_minutes: plan.estimated_duration_minutes,
-      summary: plan.summary,
-      global_warnings: plan.global_warnings,
-    },
+    plan: toMobileLaundryPlan(plan),
     report,
+  };
+}
+
+function buildLaundryArtifacts(
+  storedItems: WardrobeSummaryItem[],
+  selectedLaundryItemIds: string[],
+  campusContext: CampusContext,
+  profile?: Pick<UserProfile, "allowDryer">,
+): { frequencyAdvice: FrequencyAdvice[]; plan: LaundryPlan; report: WashReport } {
+  const planItems = storedItems.map(storedToPlanItem);
+  const constraints: LaundryConstraints = {
+    selected_item_ids: selectedLaundryItemIds,
+    urgent_item_ids: [],
+    allow_mixed_colors: false,
+    allow_dryer: Boolean(profile?.allowDryer),
+    hygiene_sensitive: true,
+    max_wait_minutes: null,
+    budget_yuan: null,
+  };
+  const frequencyAdvice = adviseAllFrequencies(planItems, constraints);
+
+  if (selectedLaundryItemIds.length === 0) {
+    return {
+      frequencyAdvice,
+      plan: {
+        buckets: [],
+        estimated_cost_yuan: null,
+        estimated_duration_minutes: null,
+        summary: "请选择本次要清洗的衣物后生成洗护安排。",
+        global_warnings: [],
+      },
+      report: {
+        title: "本次洗护报告",
+        sections: {
+          "洗衣步骤": "请选择本次要清洗的衣物后生成洗护安排。",
+          "费用和时间": "费用待确认。",
+          "机器环境": `当前可用洗衣设备 ${campusContext.available_machines.length} 台。`,
+          "风险提醒": "本次没有额外风险提醒。",
+        },
+        savings_notes: [],
+        risk_notes: [],
+      },
+    };
+  }
+
+  try {
+    const selectedPlanItems = planItems.filter((item) =>
+      selectedLaundryItemIds.includes(item.profile.item_id),
+    );
+    const plan = planLaundry(selectedPlanItems, constraints, campusContext);
+    return { frequencyAdvice, plan, report: generateReport(plan, selectedPlanItems, campusContext) };
+  } catch {
+    return {
+      frequencyAdvice,
+      plan: {
+        buckets: [],
+        estimated_cost_yuan: null,
+        estimated_duration_minutes: null,
+        summary: "当前机器条件不足以生成完整方案，建议稍后刷新。",
+        global_warnings: ["未能匹配到可用机器，请检查机器状态或手动选择。"],
+      },
+      report: {
+        title: "本次洗护报告",
+        sections: {
+          "洗衣步骤": "方案生成需要可用机器，请稍后刷新或手动查看机器状态。",
+          "费用和时间": "暂时无法估算。",
+          "机器环境": `当前可用洗衣设备 ${campusContext.available_machines.length} 台。`,
+          "风险提醒": "未能生成完整方案，请留意深浅色分开洗等基本规则。",
+        },
+        savings_notes: [],
+        risk_notes: [],
+      },
+    };
+  }
+}
+
+function toMobileLaundryPlan(plan: LaundryPlan): MobileSummary["plan"] {
+  return {
+    buckets: plan.buckets.map((b) => ({
+      bucket_id: b.bucket_id,
+      item_ids: b.item_ids,
+      wash_method: b.wash_method,
+      machine_type: b.machine_type,
+      program: b.program,
+      detergent_ml: b.detergent_ml,
+      use_laundry_bag: b.use_laundry_bag,
+      dry_method: b.dry_method,
+      warnings: b.warnings,
+    })),
+    estimated_cost_yuan: plan.estimated_cost_yuan,
+    estimated_duration_minutes: plan.estimated_duration_minutes,
+    summary: plan.summary,
+    global_warnings: plan.global_warnings,
   };
 }
 
@@ -294,6 +340,50 @@ function campusPricingRules(): CampusContext["pricing_rules"] {
   return {
     wash_programs: PRICING_RULES.wash_programs,
     dryer_programs: PRICING_RULES.dryer_programs,
+  };
+}
+
+function mobileSummaryCampusContextToPlanner(context: MobileSummary["campus_context"]): CampusContext {
+  const pricingRules = context.pricing_rules as Partial<CampusContext["pricing_rules"]>;
+  return {
+    all_machines: context.all_machines.map(fromBackendMachine),
+    available_machines: context.available_machines.map(fromBackendMachine),
+    queue_estimates: context.queue_estimates.map(fromBackendQueueEstimate),
+    weather: context.weather,
+    drying_context: context.drying_context,
+    pricing_rules: {
+      wash_programs: pricingRules.wash_programs ?? PRICING_RULES.wash_programs,
+      dryer_programs: pricingRules.dryer_programs ?? PRICING_RULES.dryer_programs,
+      shoe_washer_programs: pricingRules.shoe_washer_programs,
+      provider_programs: pricingRules.provider_programs,
+      washer_types: pricingRules.washer_types,
+      dryer_modes: pricingRules.dryer_modes,
+    },
+  };
+}
+
+function fromBackendMachine(machine: BackendMachine): MachineInfo {
+  return {
+    machine_id: machine.machine_id,
+    location: machine.location,
+    machine_type: machine.machine_type as MachineInfo["machine_type"],
+    status: machine.status as MachineInfo["status"],
+    remaining_minutes: machine.remaining_minutes,
+    price_yuan: machine.price_yuan,
+    modes: machine.modes,
+    provider: machine.provider,
+  };
+}
+
+function fromBackendQueueEstimate(estimate: BackendQueueEstimate): MachineQueueEstimate {
+  return {
+    machine_type: estimate.machine_type as MachineQueueEstimate["machine_type"],
+    total_count: estimate.total_count,
+    available_count: estimate.available_count,
+    running_count: estimate.running_count,
+    out_of_service_count: estimate.out_of_service_count,
+    unknown_count: estimate.unknown_count,
+    estimated_wait_minutes: estimate.estimated_wait_minutes,
   };
 }
 
@@ -412,7 +502,8 @@ function buildDirtyBasketSummary(
   records: DirtyBasketRecord[],
 ): DirtyBasketSummary {
   const itemCount = selectedItems.length;
-  const loadPercent = Math.min(100, itemCount * 30);
+  const loadPercent = loadPercentForItems(selectedItems);
+  const estimatedLoadCount = estimatedWasherLoadCount(selectedItems);
   const itemMap = new Map(selectedItems.map((item) => [item.item_id, item]));
   const basketItems: DirtyBasketItem[] = records
     .map((record) => {
@@ -439,6 +530,7 @@ function buildDirtyBasketSummary(
     return {
       item_count: 0,
       load_percent: 0,
+      estimated_load_count: 0,
       oldest_days: 0,
       urgent_count: 0,
       status_label: "空篮",
@@ -449,13 +541,29 @@ function buildDirtyBasketSummary(
   }
 
   if (oldestDays >= 3) {
+    const multipleLoadText = estimatedLoadCount > 1 ? `这批约 ${estimatedLoadCount} 桶，建议分批处理；` : "";
     return {
       item_count: itemCount,
       load_percent: loadPercent,
+      estimated_load_count: estimatedLoadCount,
       oldest_days: oldestDays,
       urgent_count: urgentCount,
-      status_label: "久放需洗",
-      recommendation: `有衣物已放 ${oldestDays} 天，建议今天处理，运动衣、贴身衣物或潮湿衣物不要继续攒。`,
+      status_label: estimatedLoadCount > 1 ? "需要分多桶" : "久放需洗",
+      recommendation: `${multipleLoadText}有衣物已放 ${oldestDays} 天，建议今天处理，运动衣、贴身衣物或潮湿衣物不要继续攒。`,
+      next_action: "查看本次方案",
+      items: basketItems,
+    };
+  }
+
+  if (estimatedLoadCount > 1) {
+    return {
+      item_count: itemCount,
+      load_percent: loadPercent,
+      estimated_load_count: estimatedLoadCount,
+      oldest_days: oldestDays,
+      urgent_count: urgentCount,
+      status_label: "需要分多桶",
+      recommendation: `这批脏衣约 ${estimatedLoadCount} 桶，建议按方案分批清洗，避免一次塞太满导致洗不净。`,
       next_action: "查看本次方案",
       items: basketItems,
     };
@@ -465,6 +573,7 @@ function buildDirtyBasketSummary(
     return {
       item_count: itemCount,
       load_percent: loadPercent,
+      estimated_load_count: estimatedLoadCount,
       oldest_days: oldestDays,
       urgent_count: urgentCount,
       status_label: "有急用衣物",
@@ -478,6 +587,7 @@ function buildDirtyBasketSummary(
     return {
       item_count: itemCount,
       load_percent: loadPercent,
+      estimated_load_count: estimatedLoadCount,
       oldest_days: oldestDays,
       urgent_count: urgentCount,
       status_label: "基本够一桶",
@@ -490,6 +600,7 @@ function buildDirtyBasketSummary(
   return {
     item_count: itemCount,
     load_percent: loadPercent,
+    estimated_load_count: estimatedLoadCount,
     oldest_days: oldestDays,
     urgent_count: urgentCount,
     status_label: "还没满桶",

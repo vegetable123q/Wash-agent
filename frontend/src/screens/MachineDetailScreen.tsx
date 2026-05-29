@@ -138,7 +138,7 @@ export function MachineDetailScreen({ onBack, backendMachine, staticMachine, pri
         </Card>
       </Section>
 
-      <button className="primary-button" type="button" disabled title="机器选择由后端 LaundryPlan 决定">
+      <button className="primary-button" type="button" disabled title="机器会根据本次方案自动匹配">
         用于深色衣物桶
       </button>
     </Page>
@@ -223,7 +223,7 @@ function modeLabel(mode: string) {
   if (mode === "high") return "高温";
   if (mode === "medium") return "中温";
   if (mode === "low") return "低温";
-  return mode;
+  return "其他模式";
 }
 
 function modeDescription(mode: string) {
@@ -237,5 +237,5 @@ function modeDescription(mode: string) {
   if (mode === "high") return "90 分 · 高温烘干";
   if (mode === "medium") return "60 分 · 中温烘干";
   if (mode === "low") return "50 分 · 低温烘干";
-  return "海乐扫码价格规则";
+  return "以机器页面为准";
 }

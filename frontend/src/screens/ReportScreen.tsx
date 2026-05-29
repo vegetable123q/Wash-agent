@@ -1,142 +1,277 @@
-import { BadgeCheck, TrendingDown } from "lucide-react";
+import { AlertTriangle, BadgeCheck, Clock3, Leaf, Shirt, TrendingDown, WashingMachine } from "lucide-react";
 import type { MobileSummary } from "../api/mobileSummary";
+import type { LaundryBucket } from "../api/types";
 import { Card, Chip, Page, PrimaryPanel, Section } from "../components/AppChrome";
-import { report, reportSections } from "../data/washMateContent";
+import { report } from "../data/washMateContent";
+
+type PriceRuleMap = Record<string, Record<string, { price_yuan?: number }>>;
+
+interface RouteCard {
+  id: string;
+  title: string;
+  items: string;
+  itemCount: string;
+  method: string;
+  detergent: string;
+  dry: string;
+  priceLine: string;
+  tone: "purple" | "teal" | "orange" | "blue" | "red";
+}
 
 function formatPrice(price: number | null | undefined): string {
-  return price != null ? `¥${price}` : "¥—";
+  return price != null ? `¥${price}` : "待确认";
 }
 
 export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary | null }) {
-  const backendReport = mobileSummary?.report;
-  const totalCost = mobileSummary?.plan.estimated_cost_yuan;
-  const totalText = totalCost === undefined || totalCost === null ? report.total : `¥${totalCost}`;
-  const subtitle = mobileSummary?.plan.estimated_duration_minutes
-    ? `机器占用 ${mobileSummary.plan.estimated_duration_minutes} 分钟`
-    : "费用与时间待确认";
-  const backendSections = backendReport
-    ? Object.entries(backendReport.sections).map(([title, copy]) => ({ title, copy }))
-    : reportSections.map((s) => ({ ...s, copy: "配置宿舍楼后自动生成" }));
-  const hasPlan = Boolean(mobileSummary?.plan.buckets.length);
-  const hasBackendSummary = Boolean(mobileSummary);
-  const pricingRules = mobileSummary?.campus_context.pricing_rules;
+  const plan = mobileSummary?.plan;
+  const planReport = mobileSummary?.report;
+  const hasPlan = Boolean(plan?.buckets.length);
+  const hasSummary = Boolean(mobileSummary);
+  const pricingRules = mobileSummary?.campus_context.pricing_rules as PriceRuleMap | undefined;
+  const nameMap = new Map(mobileSummary?.wardrobe.items.map((item) => [item.item_id, item.name]) ?? []);
 
-  const breakdown = hasPlan && mobileSummary?.plan && pricingRules
-    ? mobileSummary.plan.buckets
-        .filter((b) => b.wash_method === "machine_wash" || b.dry_method === "low_heat_dryer")
-        .flatMap((b) => {
-          const items: Array<[string, string]> = [];
-          if (b.wash_method === "machine_wash") {
-            const washPrice = (pricingRules as Record<string, Record<string, { price_yuan?: number }>>).wash_programs?.[b.program]?.price_yuan;
-            items.push([`${b.bucket_id} ${b.program}洗`, formatPrice(washPrice)]);
-          }
-          if (b.dry_method === "low_heat_dryer") {
-            const dryerPrice = (pricingRules as Record<string, Record<string, { price_yuan?: number }>>).dryer_programs?.["low"]?.price_yuan;
-            items.push([`${b.bucket_id} 低温烘干`, formatPrice(dryerPrice)]);
-          }
-          return items;
-        })
-    : hasBackendSummary
-      ? [["暂无费用", "¥0"]]
-      : report.breakdown;
-
-  const savingsNotes = backendReport?.savings_notes.length
-    ? backendReport.savings_notes
-    : hasBackendSummary
-      ? ["选择本次要清洗的衣物后生成节水节电建议。"]
-      : [report.valueCopy];
-  const avoided = backendReport?.risk_notes.length
-    ? backendReport.risk_notes.slice(0, 4)
-    : hasBackendSummary
-      ? ["选择衣物后生成风险提醒。"]
-      : report.avoided;
+  const totalText = plan
+    ? plan.estimated_cost_yuan == null ? "待确认" : `¥${plan.estimated_cost_yuan}`
+    : report.total;
+  const durationText = plan?.estimated_duration_minutes == null ? "待确认" : `${plan.estimated_duration_minutes} 分钟`;
+  const bucketCountText = plan ? `${plan.buckets.length} 个批次` : "待生成";
+  const routeCards = hasPlan && plan ? buildRouteCards(plan.buckets, nameMap, pricingRules) : [];
+  const reminders = conciseReminders(planReport?.risk_notes, plan?.buckets.flatMap((bucket) => bucket.warnings));
+  const overview = environmentOverview(mobileSummary);
 
   return (
     <Page>
       <header className="hero-header">
         <div>
-          <div className="eyebrow">费用与节能报告</div>
-          <h1>{backendReport?.title ?? "本次报告"}</h1>
-          <p>把洗护决策转成费用、时间和风险结果</p>
+          <div className="eyebrow">费用与节能</div>
+          <h1>{planReport?.title ?? "本次洗护报告"}</h1>
+          <p>用几眼看完花费、路线和风险，不再读长段报告。</p>
         </div>
-        <Chip tone={hasPlan ? "teal" : "orange"}>{hasPlan ? "后端报告" : "待选择"}</Chip>
+        <Chip tone={hasPlan ? "teal" : "orange"}>{hasPlan ? "已生成" : "待选择"}</Chip>
       </header>
 
-      <PrimaryPanel className="report-panel">
+      <PrimaryPanel className="report-hero-panel">
         <div className="panel-kicker">
           <TrendingDown size={17} />
-          <span>预计总费用</span>
+          <span>本次结论</span>
         </div>
-        <div className="report-total">
-          <div>
+        <h2>本次结论</h2>
+        <div className="report-hero-grid">
+          <div className="report-hero-total">
             <strong>{totalText}</strong>
-            <p>{subtitle}</p>
+            <span>预计费用</span>
           </div>
-          {hasPlan && backendReport?.savings_notes.length
-            ? <Chip tone="amber">{backendReport.savings_notes[0]}</Chip>
-            : null}
+          <div className="report-hero-stats">
+            <div>
+              <Clock3 size={17} />
+              <strong>{durationText}</strong>
+              <span>机器占用</span>
+            </div>
+            <div>
+              <Shirt size={17} />
+              <strong>{bucketCountText}</strong>
+              <span>洗护批次</span>
+            </div>
+          </div>
         </div>
+        <p className="report-verdict">{plan?.summary ?? "选择本次要清洗的衣物后，这里会生成费用、路线和风险摘要。"}</p>
       </PrimaryPanel>
 
-      <Section title="费用拆分">
-        <Card>
-          <div className="price-list">
-            {breakdown.map(([label, value]) => (
-              <div className="price-row" key={label}>
-                <span>{label}</span>
-                <strong>{value}</strong>
-              </div>
-            ))}
+      <Section title="环境速览">
+        <div className="report-metric-grid">
+          <div className="report-metric-card report-metric-teal">
+            <WashingMachine size={18} />
+            <strong>{overview.machineAvailability}</strong>
+            <span>可用设备</span>
           </div>
-        </Card>
-      </Section>
-
-      <Section title="报告结构" action={<Chip tone="purple">WashReport</Chip>}>
-        <div className="report-section-grid">
-          {backendSections.map((section) => (
-            <div className="report-section-cell" key={section.title}>
-              <strong>{section.title}</strong>
-              <span>{section.copy}</span>
-            </div>
-          ))}
+          <div className="report-metric-card report-metric-blue">
+            <Clock3 size={18} />
+            <strong>{overview.waitTime}</strong>
+            <span>最快等待</span>
+          </div>
+          <div className="report-metric-card report-metric-amber">
+            <Leaf size={18} />
+            <strong>{overview.drying}</strong>
+            <span>晾晒条件</span>
+          </div>
         </div>
       </Section>
 
-      <Section title="节水节电价值">
-        <Card>
-          <div className="progress-block">
-            <div className="row-between">
-              <h3>{report.valueTitle}</h3>
-              <strong>{report.valueLabel}</strong>
-            </div>
-            <div className="progress-bar">
-              <span style={{ width: "76%" }} />
-            </div>
-            {savingsNotes.map((note) => (
-              <p key={note}>{note}</p>
+      <Section title="洗护路线" action={<Chip tone={hasPlan ? "teal" : "orange"}>{hasPlan ? "可执行" : "待生成"}</Chip>}>
+        {routeCards.length ? (
+          <div className="report-route-list">
+            {routeCards.map((route, index) => (
+              <Card key={route.id} accent={route.tone} className="report-route-card">
+                <div className="report-route-head">
+                  <span className={`report-route-index report-route-index-${route.tone}`}>{index + 1}</span>
+                  <div>
+                    <h3>{route.title}</h3>
+                    <p>{route.items}</p>
+                  </div>
+                  <Chip tone={route.tone}>{route.itemCount}</Chip>
+                </div>
+                <div className="report-route-facts">
+                  <span>{route.method}</span>
+                  <span>{route.detergent}</span>
+                  <span>{route.dry}</span>
+                  <span>{route.priceLine}</span>
+                </div>
+              </Card>
             ))}
           </div>
-        </Card>
+        ) : (
+          <Card accent="blue" className="report-empty-card">
+            <h3>还没有路线</h3>
+            <p>{hasSummary ? "先在脏衣篮选择本次要洗的衣物，报告会自动变成可执行路线。" : "加载完成后会显示本次洗护路线。"}</p>
+          </Card>
+        )}
       </Section>
 
-      <Section title="本次避免的问题">
-        <Card>
-          <div className="row-between">
-            <h3>风险控制</h3>
-            <Chip tone="teal">
-              <BadgeCheck size={14} />
-              完成
-            </Chip>
-          </div>
-          <div className="chip-row">
-            {avoided.map((item, index) => (
-              <Chip key={item} tone={index < 2 ? "orange" : "blue"}>
-                {item}
-              </Chip>
-            ))}
-          </div>
-        </Card>
+      <Section title="重点提醒">
+        <div className="report-reminder-list">
+          {reminders.length ? reminders.map((note, index) => (
+            <Card key={note} accent={index === 0 ? "orange" : "blue"} className="report-reminder-card">
+              <AlertTriangle size={18} />
+              <span>{note}</span>
+            </Card>
+          )) : (
+            <Card accent="teal" className="report-reminder-card">
+              <BadgeCheck size={18} />
+              <span>暂无额外风险，按路线执行即可。</span>
+            </Card>
+          )}
+        </div>
       </Section>
     </Page>
   );
+}
+
+function buildRouteCards(
+  buckets: LaundryBucket[],
+  nameMap: Map<string, string>,
+  pricingRules?: PriceRuleMap,
+): RouteCard[] {
+  return buckets.map((bucket) => {
+    const itemNames = bucket.item_ids.map((id) => nameMap.get(id) ?? "本批衣物");
+    return {
+      id: bucket.bucket_id,
+      title: bucketTitle(bucket),
+      items: itemNames.join("、") || "未列出衣物",
+      itemCount: `${bucket.item_ids.length} 件衣物`,
+      method: methodLabel(bucket),
+      detergent: bucket.detergent_ml == null ? "洗衣液按需" : `洗衣液 ${bucket.detergent_ml} ml`,
+      dry: dryLabel(bucket.dry_method),
+      priceLine: priceLine(bucket, pricingRules),
+      tone: bucketTone(bucket),
+    };
+  });
+}
+
+function priceLine(bucket: LaundryBucket, pricingRules?: PriceRuleMap): string {
+  if (bucket.wash_method !== "machine_wash" && bucket.dry_method !== "low_heat_dryer") return "无需机洗计费";
+  const washPrice = bucket.wash_method === "machine_wash"
+    ? pricingRules?.wash_programs?.[bucket.program]?.price_yuan
+    : undefined;
+  const dryerPrice = bucket.dry_method === "low_heat_dryer"
+    ? pricingRules?.dryer_programs?.low?.price_yuan
+    : undefined;
+  const total = [washPrice, dryerPrice]
+    .filter((value): value is number => typeof value === "number")
+    .reduce((sum, value) => sum + value, 0);
+  return total > 0 ? formatPrice(total) : "费用待确认";
+}
+
+function environmentOverview(summary?: MobileSummary | null) {
+  if (!summary) {
+    return { machineAvailability: "待同步", waitTime: "待确认", drying: "待确认" };
+  }
+  const total = summary.campus_context.all_machines.length;
+  const available = summary.campus_context.available_machines.length;
+  const waits = summary.campus_context.queue_estimates
+    .map((queue) => queue.estimated_wait_minutes)
+    .filter((wait): wait is number => typeof wait === "number")
+    .sort((a, b) => a - b);
+  return {
+    machineAvailability: total ? `可用 ${available}/${total}` : "暂无设备",
+    waitTime: waits.length ? `${waits[0]} 分钟` : "无需等待",
+    drying: dryingLabel(summary.campus_context.drying_context),
+  };
+}
+
+function conciseReminders(...groups: Array<string[] | undefined>): string[] {
+  const raw = groups.flatMap((group) => group ?? []);
+  const cleaned = raw
+    .map(cleanReminder)
+    .filter(Boolean)
+    .filter((note) => !note.includes("推荐使用"));
+  return [...new Set(cleaned)].slice(0, 3);
+}
+
+function cleanReminder(note: string): string {
+  return note
+    .replace(/，?位置[^，。；]*[，。；]?/g, "")
+    .replace(/，?程序\s+[a-z0-9_+-]+[。；]?/gi, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 42);
+}
+
+function bucketTitle(bucket: LaundryBucket): string {
+  const labels: Record<string, string> = {
+    "do-not-wash": "不可水洗",
+    "dry-clean": "干洗衣物",
+    "hand-wash": "手洗衣物",
+    "large-bedding": "床品单独洗",
+    "dark-standard": "深色标准洗",
+    "light-standard": "浅色标准洗",
+  };
+  return labels[baseBucketId(bucket.bucket_id)] ?? "本批衣物";
+}
+
+function methodLabel(bucket: LaundryBucket): string {
+  if (bucket.wash_method === "machine_wash") return `机洗 · ${programLabel(bucket.program)}`;
+  if (bucket.wash_method === "hand_wash") return "手洗";
+  if (bucket.wash_method === "dry_clean") return "干洗";
+  if (bucket.wash_method === "do_not_wash") return "不水洗";
+  return "方式待确认";
+}
+
+function programLabel(program: string): string {
+  const labels: Record<string, string> = {
+    standard: "标准洗",
+    quick: "快洗",
+    large: "大件洗",
+    spin: "单脱水",
+    tub_clean: "筒自洁",
+    standard_40c: "40 度标准洗",
+    standard_60c_uv: "60 度紫外标准洗",
+  };
+  return labels[program] ?? "合适程序";
+}
+
+function dryLabel(method: string): string {
+  if (method === "air_dry") return "自然晾干";
+  if (method === "low_heat_dryer") return "低温烘干";
+  if (method === "normal_dryer") return "普通烘干";
+  if (method === "do_not_dry") return "不烘干";
+  return "干燥待确认";
+}
+
+function dryingLabel(context: Record<string, unknown>): string {
+  if (context.balcony_available === true) return "有阳台";
+  if (context.balcony_available === false) return "无阳台";
+  if (typeof context.ventilation === "string") return `通风 ${context.ventilation}`;
+  return "待确认";
+}
+
+function bucketTone(bucket: LaundryBucket): RouteCard["tone"] {
+  if (bucket.wash_method === "dry_clean" || bucket.wash_method === "do_not_wash") return "red";
+  if (bucket.wash_method === "hand_wash") return "orange";
+  if (baseBucketId(bucket.bucket_id) === "dark-standard") return "purple";
+  if (baseBucketId(bucket.bucket_id) === "large-bedding") return "orange";
+  return "blue";
+}
+
+function baseBucketId(bucketId: string): string {
+  return bucketId.replace(/-\d+$/, "");
 }

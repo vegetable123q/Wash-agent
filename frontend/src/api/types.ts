@@ -191,6 +191,7 @@ export interface DirtyBasketItem {
 export interface DirtyBasketSummary {
   item_count: number;
   load_percent: number;
+  estimated_load_count?: number;
   oldest_days: number;
   urgent_count: number;
   status_label: string;
