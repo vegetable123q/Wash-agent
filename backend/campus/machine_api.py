@@ -310,6 +310,8 @@ def _required_text(item: dict[str, Any], key: str, context: str) -> str:
 
 def _required_identifier(item: dict[str, Any], key: str, context: str) -> str:
     value = item.get(key)
+    if isinstance(value, bool):
+        raise ValueError(f"Missing required {context}.{key}")
     if isinstance(value, (str, int)) and str(value).strip():
         return str(value).strip()
     raise ValueError(f"Missing required {context}.{key}")

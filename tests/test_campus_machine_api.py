@@ -186,6 +186,38 @@ class CampusMachineApiTests(unittest.TestCase):
         self.assertEqual(machines[2].machine_type, MachineType.DRYER)
         self.assertEqual(machines[2].status, MachineStatus.RUNNING)
 
+    def test_list_machines_rejects_boolean_haier_machine_id(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            rules_path = _write_rules(tmp_dir)
+            transport = FakeCleverSchoolTransport(
+                {
+                    "tower": {"success": True, "data": []},
+                    "status": {"success": True, "data": []},
+                    "haier_positions": {"code": 0, "data": {"items": []}},
+                    "haier_detail_00": {
+                        "code": 0,
+                        "data": {
+                            "items": [
+                                {
+                                    "id": True,
+                                    "name": "washer 1",
+                                    "state": 1,
+                                }
+                            ]
+                        },
+                    },
+                    "haier_detail_01": {"code": 0, "data": {"items": []}},
+                    "haier_detail_02": {"code": 0, "data": {"items": []}},
+                }
+            )
+            client = LaundryMachineClient(
+                transport=transport,
+                machine_rules_path=rules_path,
+            )
+
+            with self.assertRaisesRegex(ValueError, r"haier_machine\[0\]\.id"):
+                client.list_machines("516", provider="haier")
+
     def test_list_machines_requires_explicit_provider(self) -> None:
         transport = FakeCleverSchoolTransport(
             {
