@@ -117,6 +117,20 @@ class CModuleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "missing required fields"):
             self.store.list_items()
 
+    def test_store_rejects_invalid_item_shape(self) -> None:
+        invalid_items: list[object] = [True, 123, "item"]
+        for item in invalid_items:
+            with self.subTest(item=item):
+                payload = json.loads(self.path.read_text(encoding="utf-8"))
+                payload["items"][0] = item
+                self.path.write_text(
+                    json.dumps(payload, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesRegex(ValueError, r"items\[0\]"):
+                    self.store.list_items()
+
     def test_store_rejects_invalid_profile_shape(self) -> None:
         invalid_profiles: list[object] = [True, ["profile"], "profile"]
         for profile in invalid_profiles:

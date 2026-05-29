@@ -93,6 +93,9 @@ class WardrobeStore:
         items = payload["items"]
         if not isinstance(items, list):
             raise ValueError("wardrobe data field 'items' must be a list")
+        for index, item in enumerate(items):
+            if not isinstance(item, dict):
+                raise ValueError(f"items[{index}] must be an object")
         return items
 
     def _write_items(self, items: list[dict[str, Any]]) -> None:
