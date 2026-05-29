@@ -656,4 +656,11 @@ def _string_list(value: Any, field_name: str) -> list[str]:
         return []
     if not isinstance(value, list):
         raise ValueError(f"machine_rules {field_name} must be a list")
-    return [str(item) for item in value if str(item).strip()]
+    result: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(
+                f"machine_rules {field_name} entries must be non-empty strings"
+            )
+        result.append(item.strip())
+    return result

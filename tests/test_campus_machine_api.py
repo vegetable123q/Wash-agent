@@ -467,6 +467,43 @@ class CampusMachineApiTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "default_price_yuan"):
                 client.list_machines("ncrkiz1", provider="cleverschool")
 
+    def test_machine_rules_reject_non_string_modes(self) -> None:
+        invalid_modes: list[object] = [True, 123, ""]
+        for mode in invalid_modes:
+            with self.subTest(mode=mode):
+                with tempfile.TemporaryDirectory() as tmp_dir:
+                    rules_path = _write_rules(tmp_dir)
+                    rules = json.loads(rules_path.read_text(encoding="utf-8"))
+                    rules["washer_types"]["standard_washer"]["modes"] = ["quick", mode]
+                    rules_path.write_text(
+                        json.dumps(rules, ensure_ascii=False),
+                        encoding="utf-8",
+                    )
+                    transport = FakeCleverSchoolTransport(
+                        {
+                            "tower": {"success": True, "data": []},
+                            "status": {
+                                "success": True,
+                                "data": [
+                                    {
+                                        "tower": "紫荆1号楼",
+                                        "towerKey": "ncrkiz1",
+                                        "macUnionCode": "洗衣机 he10000177",
+                                        "floorName": "一层",
+                                        "status": "状态: 待机中 更新时间:2026-05-28 13:26:28",
+                                    }
+                                ],
+                            },
+                        }
+                    )
+                    client = LaundryMachineClient(
+                        transport=transport,
+                        machine_rules_path=rules_path,
+                    )
+
+                    with self.assertRaisesRegex(ValueError, "modes"):
+                        client.list_machines("ncrkiz1", provider="cleverschool")
+
     def test_mock_machine_rejects_boolean_remaining_minutes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             mock_path = Path(tmp_dir) / "machines.json"
