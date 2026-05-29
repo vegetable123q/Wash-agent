@@ -67,6 +67,16 @@ describe("modelHubConfig persistence", () => {
     ).toBe(false);
   });
 
+  it("does not treat whitespace-only apikey values as complete config", () => {
+    expect(
+      hasCompleteModelHubConfig({
+        baseUrl: "https://modelhub.ailemac.com/v1beta",
+        apikey: "   ",
+        model_name: "gemini-3.1-pro-preview",
+      }),
+    ).toBe(false);
+  });
+
   it("trims supported model names before validation", () => {
     const saved = saveModelHubConfig({
       baseUrl: "https://modelhub.ailemac.com/v1beta",

@@ -53,7 +53,7 @@ export function clearModelHubConfig(): ModelHubConfig {
 }
 
 export function hasCompleteModelHubConfig(config: ModelHubConfig): boolean {
-  return Boolean(hasHttpModelHubBaseUrl(config.baseUrl) && config.apikey && supportedModelNames.includes(config.model_name as SupportedModelName));
+  return Boolean(hasHttpModelHubBaseUrl(config.baseUrl) && config.apikey.trim() && supportedModelNames.includes(config.model_name as SupportedModelName));
 }
 
 export function normalizeModelHubConfig(value: unknown): ModelHubConfig {
