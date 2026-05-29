@@ -30,6 +30,7 @@ export function TodayScreen({
 }: TodayScreenProps) {
   const connected = backendStatus === "connected" && mobileSummary;
   const weather = connected ? liveWeather(mobileSummary) : null;
+  const weatherError = connected ? mobileSummary.weather?.error : null;
   const hasPersonalContext = Boolean(
     userProfile?.displayName ||
       userProfile?.dormName ||
@@ -265,7 +266,7 @@ export function TodayScreen({
             <Card className="weather-card" accent="amber">
               <div>
                 <strong>天气数据不可用</strong>
-                <span>请稍后刷新</span>
+                <span>{weatherError ?? "请稍后刷新"}</span>
               </div>
             </Card>
           )}

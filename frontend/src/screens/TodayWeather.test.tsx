@@ -70,6 +70,20 @@ describe("TodayScreen weather integration", () => {
     expect(screen.getByText("降水 0.1mm")).toBeInTheDocument();
   });
 
+  it("shows the weather error reason when weather is unavailable", () => {
+    const mobileSummary = liveWeatherSummary();
+    mobileSummary.weather = {
+      source: "open-meteo",
+      status: "unavailable",
+      location: "Tsinghua University",
+      error: "Open-Meteo returned 503",
+    };
+
+    render(<TodayScreen backendStatus="connected" mobileSummary={mobileSummary} onNavigate={vi.fn()} />);
+
+    expect(screen.getByText("Open-Meteo returned 503")).toBeInTheDocument();
+  });
+
   it("requests a unified refresh from the live weather section", () => {
     const onRefresh = vi.fn();
     render(
