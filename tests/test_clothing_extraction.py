@@ -158,6 +158,27 @@ class ClothingExtractionTests(unittest.TestCase):
 
         self.assertEqual(enriched.extra["source_notes"], ["kept note"])
 
+    def test_enrich_product_info_ignores_malformed_supplemental_sources(self) -> None:
+        raw = ClothingInput(
+            name="",
+            extra={
+                "supplemental_sources": [
+                    True,
+                    {"source": 123, "text": True},
+                    {"source": " manual ", "text": " kept text "},
+                    " loose text ",
+                ]
+            },
+        )
+
+        enriched = enrich_product_info(raw)
+        source_text = enriched.extra["normalized_source_text"]
+
+        self.assertIn("kept text", source_text)
+        self.assertIn("loose text", source_text)
+        self.assertNotIn("True", source_text)
+        self.assertNotIn("123", source_text)
+
     def test_user_note_is_preserved_without_product_metadata_in_core_profile(self) -> None:
         profile = extract_clothing_info(
             ClothingInput(

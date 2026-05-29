@@ -44,14 +44,26 @@ def _iter_supplemental_sources(extra: dict[str, Any]) -> list[str]:
         if formatted:
             parts.append(formatted)
 
-    for index, source in enumerate(extra.get("supplemental_sources") or [], start=1):
+    supplemental_sources = extra.get("supplemental_sources") or []
+    if not isinstance(supplemental_sources, list):
+        return parts
+
+    for index, source in enumerate(supplemental_sources, start=1):
         if isinstance(source, dict):
-            name = _normalize_text(str(source.get("source") or f"补充来源{index}"))
-            text = _normalize_text(str(source.get("text") or ""))
+            text_value = source.get("text")
+            if not isinstance(text_value, str):
+                continue
+            name_value = source.get("source")
+            name = (
+                _normalize_text(name_value)
+                if isinstance(name_value, str)
+                else f"补充来源{index}"
+            )
+            text = _normalize_text(text_value)
             if text:
                 parts.append(f"{name}: {text}")
-        else:
-            text = _normalize_text(str(source))
+        elif isinstance(source, str):
+            text = _normalize_text(source)
             if text:
                 parts.append(f"补充来源{index}: {text}")
     return parts
