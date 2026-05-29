@@ -112,7 +112,7 @@ def _wardrobe_item_from_dict(data: dict[str, Any]) -> WardrobeItem:
         ),
         preferred_method=WashMethod(data["preferred_method"]),
         wash_history=[_wash_record_from_dict(record) for record in data["wash_history"]],
-        user_notes=list(data["user_notes"]),
+        user_notes=_string_list(data["user_notes"], "user_notes"),
     )
 
 
@@ -160,6 +160,14 @@ def _positive_int(value: Any, field_name: str) -> int:
     if value < 1:
         raise ValueError(f"{field_name} must be a positive integer")
     return value
+
+
+def _string_list(value: Any, field_name: str) -> list[str]:
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be a list of strings")
+    if not all(isinstance(item, str) for item in value):
+        raise ValueError(f"{field_name} must be a list of strings")
+    return list(value)
 
 
 def _to_jsonable(value: Any) -> Any:
