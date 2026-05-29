@@ -404,7 +404,7 @@ def _machine_status_from_value(value: object) -> MachineStatus:
 def _optional_number(value: object, field_name: str) -> float | None:
     if value is None:
         return None
-    if not isinstance(value, int | float):
+    if isinstance(value, bool) or not isinstance(value, int | float):
         raise ValueError(f"machine {field_name} must be numeric")
     number = float(value)
     if not math.isfinite(number):
@@ -618,6 +618,8 @@ def _rule_details_for_type(
 def _optional_float(value: Any, field_name: str) -> float | None:
     if value is None:
         return None
+    if isinstance(value, bool):
+        raise ValueError(f"machine_rules {field_name} must be numeric")
     try:
         number = float(value)
     except (TypeError, ValueError) as exc:
