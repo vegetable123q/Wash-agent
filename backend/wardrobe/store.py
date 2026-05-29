@@ -37,7 +37,7 @@ class WardrobeStore:
         items = self._read_items()
         item_dict = _to_jsonable(item)
         for index, existing in enumerate(items):
-            if existing["profile"]["item_id"] == item.profile.item_id:
+            if _stored_item_id(existing, index) == item.profile.item_id:
                 items[index] = item_dict
                 self._write_items(items)
                 return
@@ -48,7 +48,10 @@ class WardrobeStore:
         """Delete one wardrobe item by id."""
 
         items = self._read_items()
-        kept = [item for item in items if item["profile"]["item_id"] != item_id]
+        kept: list[dict[str, Any]] = []
+        for index, item in enumerate(items):
+            if _stored_item_id(item, index) != item_id:
+                kept.append(item)
         if len(kept) == len(items):
             raise KeyError(f"wardrobe item not found: {item_id}")
         self._write_items(kept)
@@ -121,6 +124,15 @@ def _wardrobe_item_from_dict(data: dict[str, Any]) -> WardrobeItem:
         wash_history=_wash_history(data["wash_history"]),
         user_notes=_string_list(data["user_notes"], "user_notes"),
     )
+
+
+def _stored_item_id(data: dict[str, Any], index: int) -> str:
+    profile = data.get("profile")
+    if not isinstance(profile, dict):
+        raise ValueError(f"items[{index}].profile must be an object")
+    if "item_id" not in profile:
+        raise ValueError(f"items[{index}].profile missing required fields: item_id")
+    return _required_text(profile["item_id"], f"items[{index}].profile.item_id")
 
 
 def _profile_from_dict(data: dict[str, Any]) -> ClothingProfile:

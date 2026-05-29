@@ -65,6 +65,28 @@ class CModuleTests(unittest.TestCase):
         with self.assertRaises(KeyError):
             self.store.delete_item("wm-black-jeans-001")
 
+    def test_store_mutations_reject_malformed_existing_item_ids(self) -> None:
+        new_item = WardrobeItem(
+            profile=ClothingProfile(
+                item_id="new-item",
+                name="new item",
+                material_ratios={"cotton": 1.0},
+            )
+        )
+
+        for operation in ("upsert", "delete"):
+            with self.subTest(operation=operation):
+                self.path.write_text(
+                    json.dumps({"items": [{"profile": {"name": "broken"}}]}),
+                    encoding="utf-8",
+                )
+
+                with self.assertRaisesRegex(ValueError, "item_id"):
+                    if operation == "upsert":
+                        self.store.upsert_item(new_item)
+                    else:
+                        self.store.delete_item("missing-item")
+
     def test_frequency_raises_priority_for_sports_and_urgent_items(self) -> None:
         items = self.store.list_items()
         constraints = LaundryConstraints(urgent_item_ids=["wm-white-tee-001"])
