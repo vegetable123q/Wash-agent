@@ -253,7 +253,13 @@ function parseGeminiJsonText(raw: unknown): Record<string, unknown> {
 function stripJsonCodeFence(text: string): string {
   const trimmed = text.trim();
   const match = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  return match ? match[1].trim() : trimmed;
+  if (match) return match[1].trim();
+  const objectStart = trimmed.indexOf("{");
+  const objectEnd = trimmed.lastIndexOf("}");
+  if (objectStart >= 0 && objectEnd > objectStart) {
+    return trimmed.slice(objectStart, objectEnd + 1).trim();
+  }
+  return trimmed;
 }
 
 function normalizeRecognitionPayload(payload: Record<string, unknown>, source: RecognitionSource): ClothingRecognitionResult {
