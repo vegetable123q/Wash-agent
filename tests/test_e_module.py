@@ -289,6 +289,21 @@ class EModuleTests(unittest.TestCase):
                 CampusContext(available_machines=_campus_context().available_machines, pricing_rules={}),
             )
 
+    def test_invalid_pricing_values_are_explicit_error(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        invalid_prices: list[object] = [True, float("nan"), float("inf")]
+        for price in invalid_prices:
+            with self.subTest(price=price):
+                context = _campus_context()
+                context.pricing_rules["wash_programs"]["standard"]["price_yuan"] = price
+
+                with self.assertRaisesRegex(ValueError, "wash program standard price_yuan"):
+                    plan_laundry(
+                        items,
+                        LaundryConstraints(selected_item_ids=["white-tee"]),
+                        context,
+                    )
+
     def test_budget_and_max_wait_constraints_are_explicit_warnings(self) -> None:
         items = [_item("white-tee", "白色纯棉 T 恤", colors=["white"], materials={"cotton": 1.0})]
         context = _campus_context()

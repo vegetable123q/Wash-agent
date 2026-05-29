@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from backend.shared.models import (
     CampusContext,
     DryMethod,
@@ -357,9 +359,12 @@ def _dryer_program_value(campus_context: CampusContext, program: str, key: str) 
 
 
 def _number(value: object, field_name: str) -> float:
-    if not isinstance(value, int | float):
+    if isinstance(value, bool) or not isinstance(value, int | float):
         raise ValueError(f"{field_name} must be numeric")
-    return float(value)
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"{field_name} must be finite")
+    return number
 
 
 def _machine_bucket_warnings(bucket_id: str, items: list[WardrobeItem]) -> list[str]:
