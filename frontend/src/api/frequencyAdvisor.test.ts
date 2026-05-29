@@ -26,6 +26,13 @@ describe("frequencyAdvisor", () => {
     expect(advice.priority_score).toBeGreaterThanOrEqual(45);
     expect(advice.reasons[0]).toContain("达到建议清洗阈值 1 次");
   });
+
+  it("does not match short English threshold terms inside unrelated words", () => {
+    const advice = adviseFrequency(planItem({ name: "steel gray jacket", wearCount: 2 }), constraints);
+
+    expect(advice.priority_score).toBe(0);
+    expect(advice.reasons[0]).toContain("未达到建议清洗阈值 4 次");
+  });
 });
 
 function planItem({ name, wearCount }: { name: string; wearCount: number }): WardrobeItemForPlan {

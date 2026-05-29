@@ -127,10 +127,21 @@ export function recommendedItemIds(
 function thresholdFor(text: string): number {
   const matches: number[] = [];
   for (const [term, threshold] of Object.entries(FREQUENCY_THRESHOLDS)) {
-    if (text.includes(term)) matches.push(threshold);
+    if (thresholdTermMatches(text, term)) matches.push(threshold);
   }
   if (!matches.length) return 4; // default threshold for unknown items
   return Math.min(...matches);
+}
+
+function thresholdTermMatches(text: string, term: string): boolean {
+  if (/^[a-z0-9 -]+$/i.test(term)) {
+    return new RegExp(`(^|[^a-z0-9])${escapeRegExp(term)}([^a-z0-9]|$)`).test(text);
+  }
+  return text.includes(term);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function riskPenalty(item: WardrobeItemForPlan): number {
