@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from backend.shared.models import (
     CampusContext,
+    ClothingProfile,
     DryMethod,
     LaundryBucket,
     LaundryPlan,
@@ -55,6 +56,19 @@ def _validate_items(value: object) -> None:
     for index, item in enumerate(value):
         if not isinstance(item, WardrobeItem):
             raise ValueError(f"items[{index}] must be a WardrobeItem")
+        _validate_item(item, f"items[{index}]")
+
+
+def _validate_item(item: WardrobeItem, field_name: str) -> None:
+    if not isinstance(item.profile, ClothingProfile):
+        raise ValueError(f"{field_name}.profile must be a ClothingProfile")
+    _non_empty_string(item.profile.item_id, f"{field_name}.profile.item_id")
+    _non_empty_string(item.profile.name, f"{field_name}.profile.name")
+
+
+def _non_empty_string(value: object, field_name: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} must be a non-empty string")
 
 
 def _validate_campus_context(value: object) -> None:
