@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MobileSummary } from "../api/mobileSummary";
 import { WardrobeScreen } from "./WardrobeScreen";
@@ -159,5 +159,37 @@ describe("WardrobeScreen", () => {
       "src",
       "data:image/png;base64,Y29hdA==",
     );
+  });
+
+  it("disables every delete button while a delete is pending", async () => {
+    let resolveDelete: () => void = () => undefined;
+    const onDeleteItem = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveDelete = resolve;
+        }),
+    );
+
+    const { container } = render(
+      <WardrobeScreen
+        mobileSummary={selectableSummary}
+        onNavigate={vi.fn()}
+        onDeleteItem={onDeleteItem}
+      />,
+    );
+
+    const deleteButtons = Array.from(container.querySelectorAll<HTMLButtonElement>(".danger-icon-button"));
+    expect(deleteButtons.length).toBeGreaterThan(1);
+
+    fireEvent.click(deleteButtons[0]);
+
+    await waitFor(() => expect(deleteButtons[0]).toBeDisabled());
+    expect(deleteButtons[1]).toBeDisabled();
+
+    fireEvent.click(deleteButtons[1]);
+    expect(onDeleteItem).toHaveBeenCalledTimes(1);
+
+    resolveDelete();
+    await waitFor(() => expect(deleteButtons[0]).not.toBeDisabled());
   });
 });

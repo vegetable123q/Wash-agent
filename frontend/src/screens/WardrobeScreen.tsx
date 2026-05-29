@@ -109,7 +109,7 @@ export function WardrobeScreen({ mobileSummary, onNavigate, onViewItem, onDelete
                           type="button"
                           className="icon-button danger-icon-button"
                           aria-label={`删除 ${item.name}`}
-                          disabled={deletingId === item.id}
+                          disabled={Boolean(deletingId)}
                           onClick={async () => {
                             if (!onDeleteItem) {
                               return;
