@@ -10,6 +10,15 @@
       "modes": ["standard", "gentle"]
     },
     {
+      "machine_id": "washer-standard-2",
+      "location": "Dorm A 1F",
+      "machine_type": "standard_washer",
+      "status": "available",
+      "remaining_minutes": null,
+      "price_yuan": 4.0,
+      "modes": ["standard", "gentle"]
+    },
+    {
       "machine_id": "washer-large-1",
       "location": "Dorm A 1F",
       "machine_type": "standard_washer",

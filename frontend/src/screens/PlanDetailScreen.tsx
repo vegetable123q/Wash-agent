@@ -40,16 +40,24 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
     return map;
   }, [mobileSummary?.wardrobe.items]);
   const bucketRows = hasBuckets
-    ? planBuckets.map((bucket) => ({
-        id: bucket.bucket_id,
-        title: `${bucketDisplayName(bucket.bucket_id)} · ${bucket.program ? programLabel(bucket.program) : methodLabel(bucket.wash_method)}`,
-        machine: machineTypeLabel(bucket.machine_type),
-        detail: `衣物：${bucket.item_ids.map((id) => nameMap.get(id) || "本批衣物").join("、") || "未列出衣物"} · ${methodLabel(bucket.wash_method)} · ${dryLabel(bucket.dry_method)}`,
-        tags: bucket.warnings.length
-          ? bucket.warnings.map((warning) => ({ label: userFacingWarning(warning), tone: "orange" as const }))
-          : [{ label: "已整理", tone: "teal" as const }],
-        accent: bucket.wash_method === "hand_wash" || bucket.wash_method === "dry_clean" || bucket.wash_method === "do_not_wash" ? ("orange" as const) : ("purple" as const),
-      }))
+    ? planBuckets.map((bucket) => {
+        const missingWasher = bucketUnavailableWasherReason(bucket);
+        const method = methodLabel(bucket.wash_method);
+        const dryMethod = bucketDryMethod(dryingPlan, bucket.bucket_id, bucket.dry_method);
+        const isManual = bucket.wash_method === "hand_wash" || bucket.wash_method === "dry_clean" || bucket.wash_method === "do_not_wash";
+        return {
+          id: bucket.bucket_id,
+          title: `${bucketDisplayName(bucket.bucket_id)} · ${bucket.wash_method === "machine_wash" && bucket.program ? programLabel(bucket.program) : method}`,
+          machine: bucket.wash_method === "machine_wash"
+            ? missingWasher ?? machineTypeLabel(bucket.machine_type)
+            : method,
+          detail: `衣物：${bucket.item_ids.map((id) => nameMap.get(id) || "本批衣物").join("、") || "未列出衣物"} · ${method} · ${dryLabel(dryMethod)}`,
+          tags: bucket.warnings.length
+            ? bucket.warnings.map((warning) => ({ label: userFacingWarning(warning), tone: "orange" as const }))
+            : [{ label: "已整理", tone: "teal" as const }],
+          accent: missingWasher || isManual ? ("orange" as const) : ("purple" as const),
+        };
+      })
     : hasSummary
       ? [{
           id: "empty-plan",
@@ -285,6 +293,18 @@ function machineTypeLabel(machineType: string) {
   if (machineType === "shoe_washer") return "洗鞋机";
   if (machineType === "dryer") return "烘干机";
   return "设备待确认";
+}
+
+function bucketUnavailableWasherReason(bucket: { warnings: string[] }): string | null {
+  return bucket.warnings.find((warning) => warning === "没有空闲洗衣机" || warning === "没有空闲洗鞋机") ?? null;
+}
+
+function bucketDryMethod(
+  dryingPlan: MobileSummary["drying_plan"] | undefined,
+  bucketId: string,
+  fallback: MobileSummary["plan"]["buckets"][number]["dry_method"],
+): MobileSummary["plan"]["buckets"][number]["dry_method"] {
+  return dryingPlan?.steps.find((step) => step.bucket_id === bucketId)?.dry_method ?? fallback;
 }
 
 function bucketDisplayName(bucketId: string): string {

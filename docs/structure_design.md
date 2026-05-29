@@ -281,12 +281,13 @@ Wash-agent/
 
 - 根据衣物、用户约束和校园上下文生成 `LaundryPlan`。
 - 负责手洗、机洗、干洗判断，分桶规则，模式推荐，洗衣袋、洗衣液、烘干强度、防串色、防缩水和公共洗衣卫生策略。
-- 第一版确定性实现要求调用方显式传入所选衣物、可用机器和 `CampusContext.pricing_rules` 中的洗衣/烘干价格与时长；缺少所选衣物、机器、价格或时长时抛出错误，不生成默认方案。若 `LaundryConstraints.preferred_machine_floor` 与机器的 `machine_floor` 同时存在，E 模块在候选可用机器中选择楼层距离最近的机器；楼层缺失时保持原有机器匹配顺序。
+- 第一版确定性实现要求调用方显式传入所选衣物、可用机器和 `CampusContext.pricing_rules` 中的洗衣/烘干价格与时长；缺少所选衣物、价格或时长时抛出错误，不生成默认方案。若 `LaundryConstraints.preferred_machine_floor` 与机器的 `machine_floor` 同时存在，E 模块在候选可用机器中选择楼层距离最近的机器；楼层缺失时保持原有机器匹配顺序。
 - 当 `LaundryConstraints` 包含预算或最大等待时间时，在 `LaundryPlan.global_warnings` 中显式说明超预算、等待估算缺失、等待未知或等待超时，不能静默忽略这些约束。
 - 当前分桶规则按不可水洗、干洗、手洗、床品大件、深色/掉色风险、浅色标准和允许混色的低风险标准批次拆分。
 - `urgent_item_ids` 必须属于本次 `selected_item_ids`，否则抛出错误；planner 不会替用户把未选择的急用衣物加入方案。
-- 每个机洗桶必须记录推荐机器 id/位置、程序、本桶费用、本桶机器占用时间、洗衣液用量和是否使用洗衣袋；如果使用低温烘干，还必须记录烘干机 id/位置。
-- `LaundryPlan.cost_breakdown` 必须由真实机洗和烘干动作生成，金额和时长只能来自 `CampusContext.pricing_rules`。
+- 每个机洗桶必须记录程序、洗衣液用量和是否使用洗衣袋，并在有可用机器时记录推荐机器 id/位置、本桶费用和本桶机器占用时间；如果使用低温烘干，还必须记录烘干机 id/位置。
+- 分桶必须先于机器分配执行。可用洗衣机或烘干机不足时，E 模块保留已经生成的桶，在该桶 `warnings` 中显式写入“没有空闲洗衣机/烘干机”，并让对应机器 id/位置保持空值；不得因为机器不足清空 `LaundryPlan.buckets`。
+- `LaundryPlan.cost_breakdown` 必须由真实已分配的机洗和烘干动作生成，金额和时长只能来自 `CampusContext.pricing_rules`；只要存在未分配机器的桶，整份计划的总费用和总时长保持未知。
 
 不应该做：
 

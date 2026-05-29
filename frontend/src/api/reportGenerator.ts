@@ -78,11 +78,12 @@ function dryingSection(dryingPlan: DryingPlan, itemNames: Map<string, string>): 
 }
 
 function costTimeSection(plan: LaundryPlan, dryingPlan?: DryingPlan): string {
-  if (plan.estimated_cost_yuan == null) throw new Error("plan estimated_cost_yuan is required for report");
-  if (plan.estimated_duration_minutes == null) throw new Error("plan estimated_duration_minutes is required for report");
-
   const washCharged = washChargedBatches(plan);
   const washText = washCharged.length ? washCharged.join("；") : "本次没有洗衣机计费批次";
+
+  if (plan.estimated_cost_yuan == null || plan.estimated_duration_minutes == null) {
+    return `费用和机器占用时间暂时无法估算，因为存在尚未分配到空闲机器的分桶。待执行批次：${washText}。`;
+  }
 
   if (dryingPlan && dryingPlan.estimated_cost_yuan) {
     const dryCharged = dryingChargedBatches(dryingPlan);

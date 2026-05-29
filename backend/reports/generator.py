@@ -109,6 +109,9 @@ def _action_steps(
     for index, bucket in enumerate(plan.buckets, start=1):
         names = "、".join(_item_name(item_id, item_names) for item_id in bucket.item_ids)
         if bucket.wash_method == WashMethod.MACHINE_WASH:
+            if not bucket.machine_id:
+                steps.append(f"{index}. {names} 暂无空闲{_machine_type_text(bucket.machine_type)}，保留分桶，刷新机器状态后再执行。")
+                continue
             machine = bucket.machine_id or _machine_type_text(bucket.machine_type)
             step = f"{index}. {names} 使用 {machine} 执行 {bucket.program} 程序"
             if bucket.detergent_ml is not None:
@@ -135,15 +138,13 @@ def _cost_time_section(plan: LaundryPlan, drying_plan: DryingPlan | None) -> str
     wash_cost = plan.estimated_cost_yuan
     wash_duration = plan.estimated_duration_minutes
 
-    if wash_cost is None:
-        raise ValueError("plan estimated_cost_yuan is required for report generation")
-    if wash_duration is None:
-        raise ValueError("plan estimated_duration_minutes is required for report generation")
-
     wash_breakdown = "；".join(
         f"{line.label} {line.amount_yuan} 元/{line.duration_minutes} 分钟"
         for line in plan.cost_breakdown
     ) if plan.cost_breakdown else "本次没有洗衣机计费批次"
+
+    if wash_cost is None or wash_duration is None:
+        return f"费用和机器占用时间暂时无法估算，因为存在尚未分配到空闲机器的分桶。待执行批次：{wash_breakdown}。"
 
     if drying_plan and drying_plan.estimated_cost_yuan:
         dry_cost = drying_plan.estimated_cost_yuan

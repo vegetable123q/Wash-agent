@@ -94,4 +94,62 @@ describe("generateReport", () => {
     expect(text).toContain("洗衣机 等待时间未知");
     expect(text).not.toMatch(/large-bedding|standard_washer|程序 standard/);
   });
+
+  it("renders an explicit unknown cost section when machines are not fully assigned", () => {
+    const plan: LaundryPlan = {
+      buckets: [
+        {
+          bucket_id: "light-standard",
+          item_ids: ["tee-1"],
+          wash_method: "machine_wash",
+          machine_type: "standard_washer",
+          program: "standard",
+          detergent_ml: 25,
+          use_laundry_bag: false,
+          dry_method: "air_dry",
+          warnings: ["没有空闲洗衣机"],
+        },
+      ],
+      estimated_cost_yuan: null,
+      estimated_duration_minutes: null,
+      summary: "机器不足时仍保留分桶。",
+      global_warnings: [],
+    };
+    const items: WardrobeItemForPlan[] = [
+      {
+        profile: {
+          item_id: "tee-1",
+          name: "白色棉 T 恤",
+          user_note: "",
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          care_warnings: [],
+          care_recommendations: [],
+          care_forbidden: [],
+          care_symbols: {},
+          risks: {},
+          recommended_wash: "machine_wash",
+        },
+        wear_count_since_wash: 1,
+        preferred_method: "machine_wash",
+        user_notes: [],
+      },
+    ];
+    const campusContext: CampusContext = {
+      all_machines: [],
+      available_machines: [],
+      queue_estimates: [],
+      weather: {},
+      drying_context: {},
+      pricing_rules: {
+        wash_programs: { standard: { price_yuan: 3.5, duration_minutes: 40 } },
+        dryer_programs: {},
+      },
+    };
+
+    const report = generateReport(plan, items, campusContext);
+
+    expect(report.sections["费用和时间"]).toContain("暂时无法估算");
+    expect(report.sections["风险提醒"]).toContain("没有空闲洗衣机");
+  });
 });

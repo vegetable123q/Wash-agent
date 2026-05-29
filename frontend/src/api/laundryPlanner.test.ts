@@ -115,7 +115,100 @@ describe("planLaundry", () => {
     expect(plan.buckets).toHaveLength(2);
     expect(plan.buckets.map((bucket) => bucket.bucket_id)).toEqual(["light-standard-1", "light-standard-2"]);
     expect(plan.buckets.every((bucket) => bucket.item_ids.length <= 7)).toBe(true);
+    expect(plan.buckets[0].machine_id).toBe("455514");
+    expect(plan.buckets[1].machine_id).toBeUndefined();
+    expect(plan.buckets[1].warnings).toContain("没有空闲洗衣机");
+    expect(plan.estimated_cost_yuan).toBeNull();
+    expect(plan.estimated_duration_minutes).toBeNull();
     expect(plan.summary).toContain("2 个洗护批次");
+  });
+
+  it("keeps machine-wash buckets when no washer is available", () => {
+    const unavailableContext: CampusContext = {
+      ...context,
+      available_machines: [],
+    };
+    const item: WardrobeItemForPlan = {
+      profile: {
+        item_id: "hoodie",
+        name: "黑色连帽卫衣",
+        user_note: "",
+        material_ratios: { cotton: 1 },
+        colors: ["black"],
+        care_warnings: [],
+        care_recommendations: [],
+        care_forbidden: [],
+        care_symbols: {},
+        risks: {},
+        recommended_wash: "machine_wash",
+      },
+      wear_count_since_wash: 1,
+      preferred_method: "machine_wash",
+      user_notes: [],
+    };
+    const constraints: LaundryConstraints = {
+      selected_item_ids: ["hoodie"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    };
+
+    const plan = planLaundry([item], constraints, unavailableContext);
+
+    expect(plan.buckets).toHaveLength(1);
+    expect(plan.buckets[0]).toMatchObject({
+      bucket_id: "dark-standard",
+      machine_type: "standard_washer",
+      program: "standard",
+    });
+    expect(plan.buckets[0].machine_id).toBeUndefined();
+    expect(plan.buckets[0].warnings).toContain("没有空闲洗衣机");
+  });
+
+  it("keeps the wash bucket when dryer assignment is unavailable", () => {
+    const item: WardrobeItemForPlan = {
+      profile: {
+        item_id: "shirt",
+        name: "白色短袖",
+        user_note: "",
+        material_ratios: { cotton: 1 },
+        colors: ["white"],
+        care_warnings: [],
+        care_recommendations: [],
+        care_forbidden: [],
+        care_symbols: {},
+        risks: {},
+        recommended_wash: "machine_wash",
+      },
+      wear_count_since_wash: 1,
+      preferred_method: "machine_wash",
+      user_notes: [],
+    };
+    const constraints: LaundryConstraints = {
+      selected_item_ids: ["shirt"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: true,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    };
+
+    const plan = planLaundry([item], constraints, context);
+    const drying = recommendDrying(plan.buckets, context, {
+      allowDryer: true,
+      items: [item],
+    });
+
+    expect(plan.buckets).toHaveLength(1);
+    expect(plan.buckets[0].machine_id).toBe("455514");
+    expect(plan.estimated_cost_yuan).toBe(3.5);
+    expect(plan.estimated_duration_minutes).toBe(40);
+    expect(drying.steps[0].dry_method).toBe("air_dry");
+    expect(drying.steps[0].warnings).toContain("没有空闲烘干机");
   });
 
   it("prefers the available washer closest to the user's dorm floor", () => {
@@ -331,7 +424,7 @@ describe("recommendDrying", () => {
     });
 
     expect(drying.steps[0].dry_method).toBe("air_dry");
-    expect(drying.steps[0].warnings.join(" ")).toContain("没有可用烘干机");
+    expect(drying.steps[0].warnings.join(" ")).toContain("没有空闲烘干机");
   });
 });
 

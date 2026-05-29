@@ -74,14 +74,15 @@ def plan_laundry(
     selected_items = _selected_items(items, constraints.selected_item_ids)
     _validate_urgent_items(constraints)
     bucket_inputs = _split_bucket_inputs(selected_items, constraints)
+    machine_pool = list(campus_context.available_machines)
     buckets = [
-        _build_bucket(bucket_id, base_bucket_id, bucket_items, constraints, campus_context)
+        _build_bucket(bucket_id, base_bucket_id, bucket_items, constraints, campus_context, machine_pool)
         for bucket_id, base_bucket_id, bucket_items in bucket_inputs
     ]
 
     cost_breakdown = _wash_cost_breakdown(buckets, campus_context)
-    estimated_cost = _estimate_cost(cost_breakdown)
-    estimated_duration = _estimate_duration(cost_breakdown)
+    estimated_cost = _estimate_cost(cost_breakdown, buckets)
+    estimated_duration = _estimate_duration(cost_breakdown, buckets)
     global_warnings = _global_warnings(buckets, constraints, estimated_cost, campus_context)
 
     return LaundryPlan(
@@ -117,6 +118,7 @@ def recommend_drying(
 
     steps: list[DryingStep] = []
     cost_lines: list[LaundryChargeLine] = []
+    dryer_pool = list(campus_context.available_machines)
     total_cost = 0.0
     total_duration = 0
 
@@ -145,6 +147,15 @@ def recommend_drying(
             ))
             continue
 
+        if not bucket.machine_id:
+            steps.append(DryingStep(
+                bucket_id=bucket.bucket_id,
+                item_ids=bucket.item_ids,
+                dry_method=bucket.dry_method,
+                warnings=["洗衣机未分配，暂不安排烘干。"],
+            ))
+            continue
+
         # Determine dryer safety from item data.
         bucket_items = (
             [items_by_id[item_id] for item_id in bucket.item_ids if items_by_id and item_id in items_by_id]
@@ -170,19 +181,18 @@ def recommend_drying(
             continue
 
         # Try to assign an available dryer.
-        try:
-            dryer = _require_available_machine(
-                campus_context.available_machines,
-                MachineType.DRYER,
-                "low",
-                preferred_machine_floor,
-            )
-        except ValueError:
+        dryer = _reserve_available_machine(
+            dryer_pool,
+            MachineType.DRYER,
+            "low",
+            preferred_machine_floor,
+        )
+        if dryer is None:
             steps.append(DryingStep(
                 bucket_id=bucket.bucket_id,
                 item_ids=bucket.item_ids,
                 dry_method=DryMethod.AIR_DRY,
-                warnings=["没有可用烘干机，本批次改为自然晾干。"],
+                warnings=["没有空闲烘干机"],
             ))
             continue
 
@@ -306,6 +316,7 @@ def _build_bucket(
     items: list[WardrobeItem],
     constraints: LaundryConstraints,
     campus_context: CampusContext,
+    machine_pool: list[MachineInfo],
 ) -> LaundryBucket:
     if base_bucket_id == "do-not-wash":
         return LaundryBucket(
@@ -343,13 +354,13 @@ def _build_bucket(
     # Machine-wash buckets.
     program = "large" if base_bucket_id == "large-bedding" else "standard"
     machine_type = MachineType.STANDARD_WASHER
-    machine = _require_available_machine(
-        campus_context.available_machines,
+    _require_wash_program(campus_context, program)
+    machine = _reserve_available_machine(
+        machine_pool,
         machine_type,
         program,
         constraints.preferred_machine_floor,
     )
-    _require_wash_program(campus_context, program)
 
     wash_cost = _wash_program_value(campus_context, program, "price_yuan")
     wash_duration = int(_wash_program_value(campus_context, program, "duration_minutes"))
@@ -359,7 +370,7 @@ def _build_bucket(
     warnings = (
         _machine_bucket_warnings(base_bucket_id, items)
         + _capacity_bucket_warnings(bucket_id, base_bucket_id)
-        + [_machine_recommendation_warning(machine, program)]
+        + ([_machine_recommendation_warning(machine, program)] if machine else ["没有空闲洗衣机"])
         + _air_dry_context_warnings(campus_context)
     )
 
@@ -368,9 +379,9 @@ def _build_bucket(
         item_ids=_item_ids(items),
         wash_method=WashMethod.MACHINE_WASH,
         machine_type=machine_type,
-        machine_id=machine.machine_id,
-        machine_location=machine.location,
-        machine_floor=machine.machine_floor,
+        machine_id=machine.machine_id if machine else "",
+        machine_location=machine.location if machine else "",
+        machine_floor=machine.machine_floor if machine else None,
         program=program,
         detergent_ml=_detergent_ml(base_bucket_id, items),
         use_laundry_bag=(
@@ -380,8 +391,8 @@ def _build_bucket(
             or _any_high_shrink_deform(items)
         ),
         dry_method=DryMethod.AIR_DRY,  # safe default; overridden by recommend_drying
-        estimated_cost_yuan=round(wash_cost, 2),
-        estimated_duration_minutes=wash_duration,
+        estimated_cost_yuan=round(wash_cost, 2) if machine else None,
+        estimated_duration_minutes=wash_duration if machine else None,
         warnings=warnings,
     )
 
@@ -396,6 +407,8 @@ def _wash_cost_breakdown(
     lines: list[LaundryChargeLine] = []
     for bucket in buckets:
         if bucket.wash_method != WashMethod.MACHINE_WASH:
+            continue
+        if not bucket.machine_id:
             continue
         program = bucket.program
         lines.append(
@@ -412,14 +425,22 @@ def _wash_cost_breakdown(
     return lines
 
 
-def _estimate_cost(cost_breakdown: list[LaundryChargeLine]) -> float:
+def _has_unassigned_machine_wash_bucket(buckets: list[LaundryBucket]) -> bool:
+    return any(bucket.wash_method == WashMethod.MACHINE_WASH and not bucket.machine_id for bucket in buckets)
+
+
+def _estimate_cost(cost_breakdown: list[LaundryChargeLine], buckets: list[LaundryBucket]) -> float | None:
+    if _has_unassigned_machine_wash_bucket(buckets):
+        return None
     total = 0.0
     for line in cost_breakdown:
         total += line.amount_yuan
     return round(total, 2)
 
 
-def _estimate_duration(cost_breakdown: list[LaundryChargeLine]) -> int:
+def _estimate_duration(cost_breakdown: list[LaundryChargeLine], buckets: list[LaundryBucket]) -> int | None:
+    if _has_unassigned_machine_wash_bucket(buckets):
+        return None
     return sum(line.duration_minutes for line in cost_breakdown)
 
 
@@ -429,11 +450,11 @@ def _estimate_duration(cost_breakdown: list[LaundryChargeLine]) -> int:
 def _global_warnings(
     buckets: list[LaundryBucket],
     constraints: LaundryConstraints,
-    estimated_cost: float,
+    estimated_cost: float | None,
     campus_context: CampusContext,
 ) -> list[str]:
     warnings: list[str] = []
-    if constraints.budget_yuan is not None and estimated_cost > constraints.budget_yuan:
+    if constraints.budget_yuan is not None and estimated_cost is not None and estimated_cost > constraints.budget_yuan:
         warnings.append(f"预计费用 {estimated_cost} 元超过预算 {constraints.budget_yuan} 元。")
         warnings.append("若需压低费用，可推迟非急用标准洗批次，并优先保留手洗、自然晾干和高卫生需求衣物。")
     warnings.extend(_wait_constraint_warnings(buckets, constraints, campus_context))
@@ -541,12 +562,12 @@ def _detergent_ml(bucket_id: str, items: list[WardrobeItem]) -> float | None:
 # ─── machine matching ──────────────────────────────────────────────────
 
 
-def _require_available_machine(
+def _reserve_available_machine(
     machines: list[MachineInfo],
     machine_type: MachineType,
     program: str,
     preferred_floor: int | None = None,
-) -> MachineInfo:
+) -> MachineInfo | None:
     candidates = [
         machine
         for machine in machines
@@ -554,9 +575,11 @@ def _require_available_machine(
         and machine.status == MachineStatus.AVAILABLE
         and (not machine.modes or program in machine.modes)
     ]
-    if candidates:
-        return _best_machine_for_floor(candidates, preferred_floor)
-    raise ValueError(f"no available machine for {machine_type.value} program {program}")
+    if not candidates:
+        return None
+    selected = _best_machine_for_floor(candidates, preferred_floor)
+    machines.remove(selected)
+    return selected
 
 
 def _best_machine_for_floor(machines: list[MachineInfo], preferred_floor: int | None) -> MachineInfo:

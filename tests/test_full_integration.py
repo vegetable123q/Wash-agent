@@ -62,6 +62,13 @@ class FullIntegrationTests(unittest.TestCase):
                             "modes": ["standard", "gentle"],
                         },
                         {
+                            "machine_id": "washer-standard-2",
+                            "location": "Dorm A 1F",
+                            "machine_type": "standard_washer",
+                            "status": "available",
+                            "modes": ["standard", "gentle"],
+                        },
+                        {
                             "machine_id": "washer-large-1",
                             "location": "Dorm A 1F",
                             "machine_type": "standard_washer",
@@ -133,7 +140,7 @@ class FullIntegrationTests(unittest.TestCase):
         self.assertIn("白色纯棉 T 恤", report.sections["洗衣步骤"])
         self.assertIn("洗衣液：", report.sections["洗衣步骤"])
         self.assertTrue(any("washer-large-1" in step for step in report.action_steps))
-        self.assertIn("当前可用机器记录 3 台", report.sections["机器环境"])
+        self.assertIn("当前可用机器记录 4 台", report.sections["机器环境"])
         self.assertIn("可用位置", report.sections["机器环境"])
         self.assertIn("排队估算", report.sections["机器环境"])
         self.assertIn("晾晒条件", report.sections["机器环境"])
@@ -151,6 +158,13 @@ class FullIntegrationTests(unittest.TestCase):
                     "machines": [
                         {
                             "machine_id": "washer-1",
+                            "location": "Dorm A 1F",
+                            "machine_type": "standard_washer",
+                            "status": "available",
+                            "modes": ["standard"],
+                        },
+                        {
+                            "machine_id": "washer-2",
                             "location": "Dorm A 1F",
                             "machine_type": "standard_washer",
                             "status": "available",

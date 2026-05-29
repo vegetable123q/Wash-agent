@@ -1,9 +1,13 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MobileSummary } from "../api/mobileSummary";
 import { PlanDetailScreen } from "./PlanDetailScreen";
 
 describe("PlanDetailScreen", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   it("renders machine types as user-facing labels", () => {
     const mobileSummary = {
       source: "backend",
@@ -81,5 +85,100 @@ describe("PlanDetailScreen", () => {
     render(<PlanDetailScreen onBack={vi.fn()} />);
 
     expect(screen.queryByText(/大件机/)).not.toBeInTheDocument();
+  });
+
+  it("labels manual buckets by method and blocked washer buckets by the missing machine", () => {
+    const mobileSummary = {
+      source: "backend",
+      selected_laundry_item_ids: ["silk-1", "tee-1"],
+      dirty_basket: {
+        item_count: 2,
+        load_percent: 40,
+        oldest_days: 0,
+        urgent_count: 0,
+        status_label: "可清洗",
+        recommendation: "分开处理。",
+        next_action: "查看本次方案",
+        items: [],
+      },
+      wardrobe: {
+        items: [
+          {
+            item_id: "silk-1",
+            name: "真丝衬衫",
+            user_note: "",
+            user_notes: [],
+            wear_count_since_wash: 1,
+            wash_count: 0,
+            material_ratios: { silk: 1 },
+            colors: ["white"],
+            risks: {},
+          },
+          {
+            item_id: "tee-1",
+            name: "白色棉 T 恤",
+            user_note: "",
+            user_notes: [],
+            wear_count_since_wash: 1,
+            wash_count: 0,
+            material_ratios: { cotton: 1 },
+            colors: ["white"],
+            risks: {},
+          },
+        ],
+      },
+      campus_context: {
+        all_machines: [],
+        available_machines: [],
+        queue_estimates: [],
+        weather: {},
+        drying_context: {},
+        pricing_rules: {},
+      },
+      plan: {
+        buckets: [
+          {
+            bucket_id: "hand-wash",
+            item_ids: ["silk-1"],
+            wash_method: "hand_wash",
+            machine_type: "unknown",
+            program: "hand_wash",
+            detergent_ml: 8,
+            use_laundry_bag: false,
+            dry_method: "air_dry",
+            warnings: [],
+          },
+          {
+            bucket_id: "light-standard-2",
+            item_ids: ["tee-1"],
+            wash_method: "machine_wash",
+            machine_type: "standard_washer",
+            program: "standard",
+            detergent_ml: 24,
+            use_laundry_bag: false,
+            dry_method: "air_dry",
+            warnings: ["没有空闲洗衣机"],
+          },
+        ],
+        estimated_cost_yuan: null,
+        estimated_duration_minutes: null,
+        summary: "手洗桶和缺洗衣机桶都保留。",
+        global_warnings: [],
+      },
+      report: {
+        title: "本次校园洗衣方案",
+        sections: {},
+        savings_notes: [],
+        risk_notes: [],
+      },
+    } as MobileSummary;
+
+    render(<PlanDetailScreen onBack={vi.fn()} mobileSummary={mobileSummary} />);
+
+    expect(screen.getAllByText("手洗").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("没有空闲洗衣机").length).toBeGreaterThan(0);
+    expect(screen.getByText(/白色棉 T 恤 · 机洗 · 自然晾干/)).toBeInTheDocument();
+    expect(screen.queryByText("设备待确认")).not.toBeInTheDocument();
+    expect(screen.queryByText("待机器")).not.toBeInTheDocument();
   });
 });

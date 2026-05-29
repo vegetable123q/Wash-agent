@@ -57,6 +57,13 @@ def _campus_context() -> CampusContext:
             modes=["standard", "gentle"],
         ),
         MachineInfo(
+            machine_id="washer-2",
+            location="Dorm A",
+            machine_type=MachineType.STANDARD_WASHER,
+            status=MachineStatus.AVAILABLE,
+            modes=["standard", "gentle"],
+        ),
+        MachineInfo(
             machine_id="washer-large-1",
             location="Dorm A",
             machine_type=MachineType.STANDARD_WASHER,
@@ -188,7 +195,8 @@ class EModuleTests(unittest.TestCase):
         self.assertEqual(buckets_by_id["hand-wash"].item_ids, ["wool-sweater"])
         self.assertEqual(buckets_by_id["large-bedding"].program, "large")
         self.assertEqual(buckets_by_id["hand-wash"].wash_method, WashMethod.HAND_WASH)
-        self.assertEqual(buckets_by_id["light-standard"].machine_id, "washer-1")
+        self.assertEqual(buckets_by_id["dark-standard"].machine_id, "washer-1")
+        self.assertEqual(buckets_by_id["light-standard"].machine_id, "washer-2")
         self.assertEqual(buckets_by_id["large-bedding"].machine_id, "washer-large-1")
         # Wash-phase costs only (no drying).
         self.assertEqual(buckets_by_id["light-standard"].estimated_cost_yuan, 4.0)
@@ -199,7 +207,7 @@ class EModuleTests(unittest.TestCase):
         self.assertEqual(buckets_by_id["hand-wash"].detergent_ml, 8.0)
         self.assertTrue(buckets_by_id["light-standard"].use_laundry_bag)
         self.assertTrue(buckets_by_id["dark-standard"].use_laundry_bag)
-        self.assertIn("推荐使用 washer-1", " ".join(buckets_by_id["light-standard"].warnings))
+        self.assertIn("推荐使用 washer-2", " ".join(buckets_by_id["light-standard"].warnings))
         self.assertIn("推荐使用 washer-large-1", " ".join(buckets_by_id["large-bedding"].warnings))
         # Wash plan defaults all to air_dry; dryer is assigned later.
         self.assertTrue(all(bucket.dry_method == DryMethod.AIR_DRY for bucket in plan.buckets))
@@ -370,15 +378,19 @@ class EModuleTests(unittest.TestCase):
                 _campus_context(),
             )
 
-    def test_missing_machine_or_pricing_data_is_explicit_error(self) -> None:
+    def test_missing_machine_keeps_bucket_and_pricing_data_is_explicit_error(self) -> None:
         items = [_item("white-tee", "白色纯棉 T 恤", colors=["white"], materials={"cotton": 1.0})]
 
-        with self.assertRaisesRegex(ValueError, "no available machine"):
-            plan_laundry(
-                items,
-                LaundryConstraints(selected_item_ids=["white-tee"]),
-                CampusContext(available_machines=[], pricing_rules=_campus_context().pricing_rules),
-            )
+        plan = plan_laundry(
+            items,
+            LaundryConstraints(selected_item_ids=["white-tee"]),
+            CampusContext(available_machines=[], pricing_rules=_campus_context().pricing_rules),
+        )
+        self.assertEqual(len(plan.buckets), 1)
+        self.assertEqual(plan.buckets[0].machine_id, "")
+        self.assertIn("没有空闲洗衣机", plan.buckets[0].warnings)
+        self.assertIsNone(plan.estimated_cost_yuan)
+        self.assertIsNone(plan.estimated_duration_minutes)
 
         with self.assertRaisesRegex(ValueError, "missing wash program pricing"):
             plan_laundry(

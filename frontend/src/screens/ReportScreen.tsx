@@ -220,7 +220,7 @@ function buildDryingRouteCards(
         detergent: "",
         dry: step.dryer_machine_id ? `烘干机 ${step.dryer_machine_id}` : "",
         priceLine: step.estimated_cost_yuan != null ? formatPrice(step.estimated_cost_yuan) : "费用待确认",
-        tone: "amber" as const,
+        tone: "orange" as const,
       };
     });
 }
