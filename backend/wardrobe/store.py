@@ -48,6 +48,7 @@ class WardrobeStore:
     def delete_item(self, item_id: str) -> None:
         """Delete one wardrobe item by id."""
 
+        item_id = _required_text(item_id, "item_id")
         items = self._read_items()
         kept: list[dict[str, Any]] = []
         for index, item in enumerate(items):

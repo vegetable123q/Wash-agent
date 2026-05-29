@@ -72,6 +72,13 @@ class CModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "item_ids"):
                     self.store.select_items(item_ids)  # type: ignore[arg-type]
 
+    def test_delete_item_requires_string_item_id(self) -> None:
+        invalid_item_ids: list[object] = [True, 123, "", " "]
+        for item_id in invalid_item_ids:
+            with self.subTest(item_id=item_id):
+                with self.assertRaisesRegex(ValueError, "item_id"):
+                    self.store.delete_item(item_id)  # type: ignore[arg-type]
+
     def test_store_mutations_reject_malformed_existing_item_ids(self) -> None:
         new_item = WardrobeItem(
             profile=ClothingProfile(
