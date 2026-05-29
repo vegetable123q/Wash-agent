@@ -132,6 +132,15 @@ def _profile_from_dict(data: dict[str, Any]) -> ClothingProfile:
     cleaned["item_id"] = _required_text(cleaned["item_id"], "item_id")
     cleaned["name"] = _required_text(cleaned["name"], "name")
     cleaned["colors"] = _string_list(cleaned.get("colors", []), "colors")
+    for field_name in (
+        "care_forbidden",
+        "care_warnings",
+        "care_recommendations",
+        "source_notes",
+        "missing_fields",
+        "agent_trace",
+    ):
+        cleaned[field_name] = _string_list(cleaned.get(field_name, []), field_name)
     cleaned["risks"] = _risk_map(cleaned.get("risks"))
     return ClothingProfile(**cleaned)
 

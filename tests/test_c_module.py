@@ -229,6 +229,29 @@ class CModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "colors"):
                     self.store.list_items()
 
+    def test_store_rejects_invalid_profile_text_lists(self) -> None:
+        fields = [
+            "care_forbidden",
+            "care_warnings",
+            "care_recommendations",
+            "source_notes",
+            "missing_fields",
+            "agent_trace",
+        ]
+        invalid_values: list[object] = ["note", [True], [123]]
+        for field_name in fields:
+            for value in invalid_values:
+                with self.subTest(field_name=field_name, value=value):
+                    payload = json.loads((ROOT / "data" / "wardrobe_sample.json").read_text(encoding="utf-8"))
+                    payload["items"][0]["profile"][field_name] = value
+                    self.path.write_text(
+                        json.dumps(payload, ensure_ascii=False),
+                        encoding="utf-8",
+                    )
+
+                    with self.assertRaisesRegex(ValueError, field_name):
+                        self.store.list_items()
+
     def test_store_rejects_invalid_profile_risks(self) -> None:
         invalid_risks: list[object] = [
             True,
