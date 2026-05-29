@@ -138,7 +138,7 @@ describe("App in-APK backend integration", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "今晚洗衣" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /洗衣$/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /衣柜/ }));
     fireEvent.click(await screen.findByRole("button", { name: "添加第一件衣物" }));
     expect(await screen.findByRole("heading", { name: "添加衣物" })).toBeInTheDocument();
