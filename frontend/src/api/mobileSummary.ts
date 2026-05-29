@@ -260,11 +260,7 @@ async function buildIntegratedMobileSummary(profile?: Pick<UserProfile, "dormNam
       queue_estimates: campusContext.queue_estimates.map(toBackendQueueEstimate),
       weather: campusContext.weather,
       drying_context: campusContext.drying_context,
-      pricing_rules: {
-        wash_programs: campusContext.pricing_rules.wash_programs,
-        dryer_programs: campusContext.pricing_rules.dryer_programs,
-        source: "integrated",
-      },
+      pricing_rules: { ...campusContext.pricing_rules, source: "integrated" },
     },
     plan: {
       buckets: plan.buckets.map((b) => ({
@@ -299,10 +295,7 @@ function emptyCampusContext(weather: WeatherSnapshot): CampusContext {
 }
 
 function campusPricingRules(): CampusContext["pricing_rules"] {
-  return {
-    wash_programs: PRICING_RULES.wash_programs,
-    dryer_programs: PRICING_RULES.dryer_programs,
-  };
+  return PRICING_RULES;
 }
 
 // ─── local storage ──────────────────────────────────────────────────────
@@ -361,7 +354,6 @@ function toBackendMachine(m: MachineInfo): BackendMachine {
     location: m.location,
     machine_type: m.machine_type,
     status: m.status,
-    capacity_kg: m.capacity_kg,
     remaining_minutes: m.remaining_minutes,
     price_yuan: m.price_yuan,
     modes: m.modes,

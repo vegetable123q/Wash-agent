@@ -169,7 +169,6 @@ class MachineInfo:
     location: str
     machine_type: MachineType
     status: MachineStatus
-    capacity_kg: float | None = None
     remaining_minutes: int | None = None
     price_yuan: float | None = None
     modes: list[str] = field(default_factory=list)

@@ -100,9 +100,7 @@ export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate, onVi
                   <span className={`status-dot status-${toneForMachineStatus(machine.status)}`} />
                   <h3>{machineCardTitle(machine)}</h3>
                 </div>
-                <p>
-                  <span>{capacityText(machine)}</span> · <span>{priceText(machine)}</span>
-                </p>
+                <p>{priceText(machine)}</p>
                 <p className="machine-submeta">设备编号 {machine.machine_id}</p>
               </div>
               <Chip tone={toneForMachineStatus(machine.status)}>{statusText(machine.status)}</Chip>
@@ -198,10 +196,6 @@ function statusText(status: string) {
     return "故障";
   }
   return "未知";
-}
-
-function capacityText(machine: BackendMachine) {
-  return machine.capacity_kg === null ? "容量：接口未提供" : `容量：${machine.capacity_kg}kg`;
 }
 
 function priceText(machine: BackendMachine) {

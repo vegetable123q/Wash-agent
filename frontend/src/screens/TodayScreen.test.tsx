@@ -11,5 +11,6 @@ describe("TodayScreen", () => {
     expect(screen.getByText("预计 ¥24")).toBeInTheDocument();
     expect(screen.getByText("机器占用约 154 分钟")).toBeInTheDocument();
     expect(screen.getByText("高风险衣物已单独处理")).toBeInTheDocument();
+    expect(screen.queryByText(/大件机/)).not.toBeInTheDocument();
   });
 });

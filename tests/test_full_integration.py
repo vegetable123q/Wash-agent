@@ -38,10 +38,10 @@ class FullIntegrationTests(unittest.TestCase):
         plan = plan_laundry(items, constraints, campus_context)
         report = generate_report(plan, items, campus_context)
 
-        self.assertEqual(plan.estimated_cost_yuan, 14.0)
-        self.assertEqual([line.amount_yuan for line in plan.cost_breakdown], [6.0, 4.0, 4.0])
+        self.assertEqual(plan.estimated_cost_yuan, 11.0)
+        self.assertEqual([line.amount_yuan for line in plan.cost_breakdown], [4.0, 3.5, 3.5])
         self.assertIn("本次校园洗衣方案", report.title)
-        self.assertEqual([line.amount_yuan for line in report.cost_breakdown], [6.0, 4.0, 4.0])
+        self.assertEqual([line.amount_yuan for line in report.cost_breakdown], [4.0, 3.5, 3.5])
 
     def test_sample_wardrobe_campus_planner_and_report_work_together(self) -> None:
         root = Path(__file__).resolve().parents[1]

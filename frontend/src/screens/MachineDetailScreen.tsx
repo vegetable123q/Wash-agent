@@ -37,7 +37,7 @@ export function MachineDetailScreen({ onBack, backendMachine, staticMachine }: M
         <div className="hero-number-row">
           <div>
             <strong className="hero-number">{machine.status}</strong>
-            <p><span>{machine.capacity}</span> {machine.typeLabel} · {machine.location}</p>
+            <p>{machine.typeLabel} · {machine.location}</p>
           </div>
           <div className="panel-metrics">
             <span>{machine.price} 参考价</span>
@@ -155,7 +155,6 @@ function detailFromBackend(machine: BackendMachine) {
     location: machine.location,
     backendType: machine.machine_type,
     typeLabel,
-    capacity: capacityText(machine),
     status: statusText(machine.status),
     backendStatus: statusText(machine.status),
     remaining: machine.remaining_minutes === null ? "等待未知" : `${machine.remaining_minutes} 分钟`,
@@ -171,7 +170,6 @@ function detailFromStatic(machine: MachineView) {
     location: machine.location,
     backendType: machine.backendType,
     typeLabel: machineTypeLabel(machine.backendType),
-    capacity: machine.capacity,
     status: machine.status,
     backendStatus: machine.status,
     remaining: machine.remaining,
@@ -200,10 +198,6 @@ function machineTypeLabel(machineType: string) {
   return "未知设备";
 }
 
-function capacityText(machine: BackendMachine) {
-  return machine.capacity_kg === null ? "容量：接口未提供" : `容量：${machine.capacity_kg}kg`;
-}
-
 function priceText(machine: BackendMachine) {
   return machine.price_yuan === null ? "价格：接口未提供" : `价格：¥${machine.price_yuan}`;
 }
@@ -211,14 +205,27 @@ function priceText(machine: BackendMachine) {
 function modeLabel(mode: string) {
   if (mode === "quick") return "快洗";
   if (mode === "standard") return "标准";
-  if (mode === "heavy") return "强力";
+  if (mode === "large") return "大物";
+  if (mode === "spin") return "单脱";
+  if (mode === "tub_clean") return "桶自洁";
+  if (mode === "standard_40c") return "标准+40度";
+  if (mode === "standard_60c_uv") return "标准+60度+紫外";
+  if (mode === "high") return "高温";
+  if (mode === "medium") return "中温";
   if (mode === "low") return "低温";
   return mode;
 }
 
 function modeDescription(mode: string) {
-  if (mode === "quick") return "34 分 · 轻薄";
-  if (mode === "heavy") return "58 分 · 厚衣";
-  if (mode === "low") return "低温烘干";
-  return "45 分 · 日常";
+  if (mode === "quick") return "30 分 · 轻薄";
+  if (mode === "standard") return "40 分 · 常规衣物";
+  if (mode === "large") return "50 分 · 大物";
+  if (mode === "spin") return "6 分 · 单脱";
+  if (mode === "tub_clean") return "桶清洁";
+  if (mode === "standard_40c") return "60 分 · 温水";
+  if (mode === "standard_60c_uv") return "70 分 · 高温紫外";
+  if (mode === "high") return "90 分 · 高温烘干";
+  if (mode === "medium") return "60 分 · 中温烘干";
+  if (mode === "low") return "50 分 · 低温烘干";
+  return "海乐扫码价格规则";
 }

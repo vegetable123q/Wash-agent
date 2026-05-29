@@ -297,7 +297,7 @@ function machineBucketWarnings(bucketId: string, items: WardrobeItemForPlan[]): 
     warnings.push("深色或高掉色风险衣物已单独成桶，减少串色和返洗。");
   }
   if (bucketId === "large-bedding") {
-    warnings.push("床品使用大件批次，避免普通筒过载导致洗不净。");
+    warnings.push("床品已单独成桶，使用标准洗衣机时不要与衣物混洗，避免过载导致洗不净。");
   }
   for (const item of items) {
     if (hasHighRisk(item, new Set(["color_bleed"]))) {

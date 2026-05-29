@@ -103,7 +103,7 @@ function savingsNotes(plan: LaundryPlan): string[] {
     notes.push("高风险衣物分开处理，能减少串色、返洗和重复用水。");
   }
   if (plan.buckets.some((b) => b.bucket_id === "large-bedding")) {
-    notes.push("床品使用大件批次，减少普通筒过载造成的洗不净和返洗。");
+    notes.push("床品单独成桶，减少过载造成的洗不净和返洗。");
   }
   return dedupe(notes);
 }
@@ -129,7 +129,7 @@ function bucketReason(bucket: LaundryBucket): string {
     "do-not-wash": "洗护标签或用户偏好提示不可水洗",
     "dry-clean": "该批次需要专业干洗",
     "hand-wash": "材质或风险提示不适合共享洗衣机",
-    "large-bedding": "床品体积大，使用大件批次减少过载和返洗",
+    "large-bedding": "床品体积大，单独占用洗衣机减少过载和返洗",
     "dark-standard": "深色或高掉色风险衣物单独处理，避免串色",
     "light-standard": "浅色普通机洗衣物集中标准洗",
   };

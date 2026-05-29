@@ -356,7 +356,6 @@ def _machine_from_mock_dict(data: object) -> MachineInfo:
         "location",
         "machine_type",
         "status",
-        "capacity_kg",
         "remaining_minutes",
         "price_yuan",
         "modes",
@@ -379,7 +378,6 @@ def _machine_from_mock_dict(data: object) -> MachineInfo:
         location=str(data["location"]),
         machine_type=_machine_type_from_value(data["machine_type"]),
         status=_machine_status_from_value(data["status"]),
-        capacity_kg=_optional_number(data.get("capacity_kg"), "capacity_kg"),
         remaining_minutes=_optional_int(data.get("remaining_minutes"), "remaining_minutes"),
         price_yuan=_optional_number(data.get("price_yuan"), "price_yuan"),
         modes=[str(mode) for mode in modes],
@@ -494,7 +492,6 @@ def _machine_info_from_payload(
         location=f"{tower} {floor}",
         machine_type=machine_type,
         status=_machine_status(status_text),
-        capacity_kg=_optional_float(rule_details.get("capacity_kg"), "capacity_kg"),
         remaining_minutes=_remaining_minutes(status_text),
         price_yuan=_optional_float(
             rule_details.get("default_price_yuan"),

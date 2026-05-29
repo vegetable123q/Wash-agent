@@ -40,7 +40,6 @@ def _write_rules(tmp_dir: str) -> Path:
                 },
                 "washer_types": {
                     "standard_washer": {
-                        "capacity_kg": 7.0,
                         "default_price_yuan": 3.0,
                         "modes": ["quick", "standard", "heavy"],
                     }
@@ -200,7 +199,7 @@ class CampusMachineApiTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "provider"):
             client.list_machines("nq21")
 
-    def test_list_machines_parses_status_capacity_price_and_modes(self) -> None:
+    def test_list_machines_parses_status_price_and_modes_without_capacity(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             rules_path = _write_rules(tmp_dir)
             transport = FakeCleverSchoolTransport(
@@ -241,7 +240,7 @@ class CampusMachineApiTests(unittest.TestCase):
         self.assertEqual(machines[0].machine_type, MachineType.STANDARD_WASHER)
         self.assertEqual(machines[0].status, MachineStatus.RUNNING)
         self.assertEqual(machines[0].remaining_minutes, 10)
-        self.assertEqual(machines[0].capacity_kg, 7.0)
+        self.assertFalse(hasattr(machines[0], "capacity_kg"))
         self.assertEqual(machines[0].price_yuan, 3.0)
         self.assertEqual(machines[0].modes, ["quick", "standard", "heavy"])
         self.assertEqual(machines[1].status, MachineStatus.AVAILABLE)

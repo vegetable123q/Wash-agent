@@ -40,9 +40,9 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
   const bucketRows = hasBackendBuckets
     ? backendBuckets.map((bucket) => ({
         id: bucket.bucket_id,
-        title: `${methodLabel(bucket.wash_method)} · ${bucket.program || bucketLabel(bucket.bucket_id)}`,
-        machine: bucket.machine_type,
-        detail: `${bucket.item_ids.map((id) => nameMap.get(id) || id).join("、") || "未列出衣物"} · ${dryLabel(bucket.dry_method)}`,
+        title: `${methodLabel(bucket.wash_method)} · ${programLabel(bucket.program || bucketLabel(bucket.bucket_id))}`,
+        machine: machineTypeLabel(bucket.machine_type),
+        detail: `${bucket.item_ids.map((id) => nameMap.get(id) || id).join("、") || "未列出衣物"} · ${dryMethodLabel(bucket.dry_method)}`,
         tags: bucket.warnings.length
           ? bucket.warnings.map((warning) => ({ label: warning, tone: "orange" as const }))
           : [{ label: "后端批次", tone: "teal" as const }],
@@ -122,7 +122,7 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
       <Card accent="purple" className="summary-card">
         <div>
           <h2>{hasBackendBuckets ? `${backendBuckets.length} 个后端批次` : "3 桶分开洗"}</h2>
-          <p>{llmSummary ?? mobileSummary?.plan.summary ?? "先开两台标准筒，床单等大件机 12 分钟。"}</p>
+          <p>{llmSummary ?? mobileSummary?.plan.summary ?? "床品单独占用标准筒，不和普通衣物混洗。"}</p>
         </div>
         <Chip tone="teal">{hasBackendBuckets ? "LaundryPlan" : "可执行"}</Chip>
       </Card>
@@ -200,9 +200,22 @@ function methodLabel(method: string) {
   return method;
 }
 
-function dryLabel(method: string) {
+function programLabel(program: string) {
+  if (program === "standard") return "标准";
+  if (program === "quick") return "快洗";
+  if (program === "large") return "大物";
+  if (program === "spin") return "单脱";
+  if (program === "tub_clean") return "桶自洁";
+  if (program === "standard_40c") return "标准+40度";
+  if (program === "standard_60c_uv") return "标准+60度+紫外";
+  if (!program) return "未定";
+  return program;
+}
+
+function dryMethodLabel(method: string) {
   if (method === "air_dry") return "自然晾干";
   if (method === "low_heat_dryer") return "低温烘干";
+  if (method === "normal_dryer") return "普通烘干";
   if (method === "do_not_dry") return "不烘干";
   return method;
 }
@@ -224,4 +237,11 @@ function defaultPreparationSteps(): PreparationStep[] {
 
 function defaultExclusionItems(): ExclusionItem[] {
   return [{ title: "羊毛开衫不进共享机", description: "材质易缩水变形，本次从机洗分桶中排除。", method: "手洗/干洗" }];
+}
+
+function machineTypeLabel(machineType: string) {
+  if (machineType === "standard_washer") return "洗衣机";
+  if (machineType === "shoe_washer") return "洗鞋机";
+  if (machineType === "dryer") return "烘干机";
+  return "未知设备";
 }

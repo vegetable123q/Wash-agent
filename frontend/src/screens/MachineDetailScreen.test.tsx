@@ -17,7 +17,6 @@ describe("MachineDetailScreen", () => {
           location: "南区21号楼 一层",
           machine_type: "standard_washer",
           status: "available",
-          capacity_kg: null,
           remaining_minutes: null,
           price_yuan: null,
           modes: [],
@@ -28,7 +27,7 @@ describe("MachineDetailScreen", () => {
     expect(screen.getByRole("heading", { name: "洗衣机 · 南区21号楼 一层" })).toBeInTheDocument();
     expect(screen.getByText("设备编号")).toBeInTheDocument();
     expect(screen.getByText("455514")).toBeInTheDocument();
-    expect(screen.getByText("容量：接口未提供")).toBeInTheDocument();
+    expect(screen.queryByText(/容量/)).not.toBeInTheDocument();
     expect(screen.getAllByText("价格：接口未提供").length).toBeGreaterThan(0);
     expect(screen.queryByText("价格待定")).not.toBeInTheDocument();
   });
@@ -40,11 +39,11 @@ describe("MachineDetailScreen", () => {
     expect(screen.getByText("设备编号")).toBeInTheDocument();
     expect(screen.getByText("washer-standard-2")).toBeInTheDocument();
     expect(screen.getByText("洗衣机")).toBeInTheDocument();
-    expect(screen.getByText("快洗 / 标准 / 强力")).toBeInTheDocument();
+    expect(screen.getByText("快洗 / 标准 / 大物")).toBeInTheDocument();
     expect(screen.queryByText("machine_id")).not.toBeInTheDocument();
     expect(screen.queryByText("machine_type")).not.toBeInTheDocument();
     expect(screen.queryByText("standard_washer")).not.toBeInTheDocument();
-    expect(screen.queryByText("quick / standard / heavy")).not.toBeInTheDocument();
+    expect(screen.queryByText("quick / standard / large")).not.toBeInTheDocument();
     expect(screen.queryByText("washer_types.standard_washer")).not.toBeInTheDocument();
   });
 

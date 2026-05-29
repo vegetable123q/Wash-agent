@@ -51,10 +51,10 @@ describe("campusMachineApi", () => {
       "shoe_washer",
     ]);
     expect(context.all_machines[0]).toMatchObject({
-      capacity_kg: null,
       price_yuan: null,
       modes: [],
     });
+    expect(context.all_machines[0]).not.toHaveProperty("capacity_kg");
     expect(context.queue_estimates.map((estimate) => estimate.machine_type)).toEqual([
       "standard_washer",
       "dryer",

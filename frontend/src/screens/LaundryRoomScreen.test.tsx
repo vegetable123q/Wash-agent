@@ -34,7 +34,6 @@ describe("LaundryRoomScreen", () => {
                 location: "南区21号楼 一层",
                 machine_type: "standard_washer",
                 status: "available",
-                capacity_kg: null,
                 remaining_minutes: null,
                 price_yuan: null,
                 modes: [],
@@ -44,7 +43,6 @@ describe("LaundryRoomScreen", () => {
                 location: "南区21号楼 一层",
                 machine_type: "shoe_washer",
                 status: "available",
-                capacity_kg: null,
                 remaining_minutes: null,
                 price_yuan: null,
                 modes: [],
@@ -54,7 +52,6 @@ describe("LaundryRoomScreen", () => {
                 location: "南区21号楼 六层",
                 machine_type: "dryer",
                 status: "running",
-                capacity_kg: null,
                 remaining_minutes: 18,
                 price_yuan: null,
                 modes: [],
@@ -66,7 +63,6 @@ describe("LaundryRoomScreen", () => {
                 location: "南区21号楼 一层",
                 machine_type: "standard_washer",
                 status: "available",
-                capacity_kg: null,
                 remaining_minutes: null,
                 price_yuan: null,
                 modes: [],
@@ -127,8 +123,8 @@ describe("LaundryRoomScreen", () => {
     expect(screen.getByText("洗衣机")).toBeInTheDocument();
     expect(screen.getByText("洗鞋机")).toBeInTheDocument();
     expect(screen.getByText("烘干机")).toBeInTheDocument();
-    expect(screen.getAllByText("容量：接口未提供").length).toBeGreaterThan(0);
     expect(screen.getAllByText("价格：接口未提供").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/容量/)).not.toBeInTheDocument();
     expect(screen.queryByText("容量未知")).not.toBeInTheDocument();
     expect(screen.queryByText("价格待定")).not.toBeInTheDocument();
     expect(screen.queryByText("tower_key")).not.toBeInTheDocument();

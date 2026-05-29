@@ -123,7 +123,6 @@ def _write_rules(tmp_dir: str) -> Path:
                 },
                 "washer_types": {
                     "standard_washer": {
-                        "capacity_kg": 7.0,
                         "default_price_yuan": 3.0,
                         "modes": ["quick", "standard", "heavy"],
                     }

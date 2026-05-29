@@ -185,7 +185,7 @@ CleverSchool 状态文本中的“待机”会映射为可用，“工作/运转
 
 `CampusContext.queue_estimates` 按机器类型给出排队/等待摘要：总数、可用数、运行中数、异常数、未知数，以及 `estimated_wait_minutes`。如果该类型已有可用机器，等待时间为 `0`；如果没有可用机器但运行中机器提供剩余时间，则取最短剩余时间；如果接口没有足够信息，则保持 `None`，不猜测。
 
-容量、价格和模式只从 `config/machine_rules.json` 读取；接口缺失字段不会被猜测。离线测试可使用 `backend.campus.machine_api.mock_transport_from_file("data/machines_mock.json")` 读取交付 mock 文件。
+价格和模式只从 `config/machine_rules.json` 读取；接口缺失字段不会被猜测。机器容量当前不进入 D/E 契约。离线测试可使用 `backend.campus.machine_api.mock_transport_from_file("data/machines_mock.json")` 读取交付 mock 文件。
 
 ### 大模型 API 配置
 
@@ -269,12 +269,39 @@ E 模块负责把已选择的衣柜衣物和校园上下文转换成可执行洗
 ```python
 pricing_rules = {
     "wash_programs": {
-        "standard": {"price_yuan": 4.0, "duration_minutes": 35},
-        "large": {"price_yuan": 6.0, "duration_minutes": 45},
-        "gentle": {"price_yuan": 4.0, "duration_minutes": 30},
+        "quick": {"price_yuan": 3.0, "duration_minutes": 30},
+        "standard": {"price_yuan": 3.5, "duration_minutes": 40},
+        "large": {"price_yuan": 4.0, "duration_minutes": 50},
     },
     "dryer_programs": {
-        "low": {"price_yuan": 2.0, "duration_minutes": 25},
+        "high": {"price_yuan": 4.0, "duration_minutes": 90},
+        "medium": {"price_yuan": 3.0, "duration_minutes": 60},
+        "low": {"price_yuan": 2.0, "duration_minutes": 50},
+    },
+    "shoe_washer_programs": {
+        "two_pairs": {"price_yuan": 4.0, "duration_minutes": 35},
+        "single_pair_standard": {"price_yuan": 3.0, "duration_minutes": 31},
+        "single_pair": {"price_yuan": 2.5, "duration_minutes": 29},
+    },
+    "provider_programs": {
+        "haier": {
+            "wash_programs": {
+                "standard_40c": {"label": "标准+40度", "price_yuan": 4.5, "duration_minutes": 60},
+                "standard_60c_uv": {"label": "标准+60度+紫外", "price_yuan": 5.0, "duration_minutes": 70},
+            },
+            "shoe_washer_programs": {
+                "spin": {"label": "单脱", "price_yuan": 1.0, "duration_minutes": 7},
+                "tub_clean": {"label": "桶清洁", "price_yuan": 0.0, "duration_minutes": 2},
+            },
+        },
+        "cleverschool": {
+            "dryer_programs": {
+                "strong": {"label": "强力烘", "price_yuan": 4.0, "duration_minutes": 90},
+                "standard": {"label": "标准烘", "price_yuan": 3.0, "duration_minutes": 60},
+                "gentle": {"label": "轻柔烘", "price_yuan": 2.0, "duration_minutes": 50},
+                "air": {"label": "晾干烘", "price_yuan": 2.0, "duration_minutes": 50},
+            },
+        },
     },
 }
 ```
@@ -313,7 +340,7 @@ report = generate_report(plan, items, campus_context)
 校园上下文模块当前支持本地 mock 机器数据和显式规则文件：
 
 - `data/machines_mock.json`：`machines` 列表，每条记录必须包含 `machine_id`、`location`、`machine_type` 和 `status`。
-- `config/machine_rules.json`：必须包含 `pricing_rules["wash_programs"]`，需要烘干时还要包含对应的 `pricing_rules["dryer_programs"]`。
+- `config/machine_rules.json`：必须包含 `pricing_rules["wash_programs"]`，需要烘干时还要包含对应的 `pricing_rules["dryer_programs"]`；洗鞋机价格可通过 `pricing_rules["shoe_washer_programs"]` 提供。
 - `build_campus_context()` 不会猜测规则路径；调用方必须传入 `machine_rules_path`。
 
 ### 本地验证

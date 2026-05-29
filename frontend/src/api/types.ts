@@ -15,7 +15,6 @@ export interface MachineInfo {
   location: string;
   machine_type: MachineType;
   status: MachineStatus;
-  capacity_kg: number | null;
   remaining_minutes: number | null;
   price_yuan: number | null;
   modes: string[];
@@ -45,6 +44,8 @@ export interface CampusContext {
 export interface PricingRules {
   wash_programs: Record<string, ProgramPricing>;
   dryer_programs: Record<string, ProgramPricing>;
+  shoe_washer_programs?: Record<string, ProgramPricing>;
+  provider_programs?: Record<string, ProviderPricingRules>;
   washer_types?: Record<string, unknown>;
   dryer_modes?: Record<string, unknown>;
 }
@@ -52,6 +53,16 @@ export interface PricingRules {
 export interface ProgramPricing {
   price_yuan: number;
   duration_minutes: number;
+}
+
+export interface LabeledProgramPricing extends ProgramPricing {
+  label: string;
+}
+
+export interface ProviderPricingRules {
+  wash_programs: Record<string, LabeledProgramPricing>;
+  dryer_programs: Record<string, LabeledProgramPricing>;
+  shoe_washer_programs?: Record<string, LabeledProgramPricing>;
 }
 
 /** Clothing profile enriched enough for the planner and frequency advisor. */
@@ -191,7 +202,6 @@ export interface BackendMachine {
   location: string;
   machine_type: string;
   status: string;
-  capacity_kg: number | null;
   remaining_minutes: number | null;
   price_yuan: number | null;
   modes: string[];

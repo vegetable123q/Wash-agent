@@ -61,15 +61,12 @@ export interface MachineView {
   location: string;
   type: string;
   backendType: "standard_washer" | "shoe_washer" | "dryer";
-  capacity: string;
   status: "空闲" | "等待" | "故障";
   backendStatus: "available" | "running" | "out_of_service";
   remaining: string;
   detail: string;
   price: string;
   modes: string[];
-  provider: "cleverschool" | "haier";
-  ruleKey: string;
   tone: Tone;
 }
 
@@ -93,7 +90,7 @@ export const todaySummary = {
   constraints: ["今晚必须干", "无阳台", "高湿 89%", "最晚 22:30"],
   stats: [
     { value: "2 台", label: "标准筒空闲，可先开洗" },
-    { value: "12 分", label: "大件机等待后洗床单" },
+    { value: "单独洗", label: "床品占用标准筒，不和衣物混洗" },
   ],
   items: [
     {
@@ -125,31 +122,31 @@ export const bucketPlans: BucketPlan[] = [
     id: "bucket-light",
     title: "浅色快速洗",
     machine: "A01",
-    detail: "白 T、运动 T 恤 · 34 分钟 · 洗衣液 1 瓶盖",
+    detail: "白 T、运动 T 恤 · 30 分钟 · 洗衣液 1 瓶盖",
     accent: "blue",
     tags: [
       { label: "洗衣袋", tone: "teal" },
-      { label: "短时烘干 30 分", tone: "amber" },
+      { label: "低温烘干 50 分", tone: "amber" },
     ],
   },
   {
     id: "bucket-dark",
     title: "深色标准洗",
     machine: "A02",
-    detail: "灰卫衣、黑牛仔裤 · 45 分钟 · 翻面洗",
+    detail: "灰卫衣、黑牛仔裤 · 40 分钟 · 翻面洗",
     accent: "purple",
     tags: [
       { label: "不混白色", tone: "orange" },
-      { label: "低温烘干 60 分", tone: "amber" },
+      { label: "中温烘干 60 分", tone: "amber" },
     ],
   },
   {
     id: "bucket-bedding",
-    title: "床单大件洗",
-    machine: "C01",
-    detail: "大件机 C01 · 1.5 瓶盖 · 不和衣物混洗",
+    title: "床品单独洗",
+    machine: "A02",
+    detail: "标准筒 A02 · 1.5 瓶盖 · 不和衣物混洗",
     accent: "orange",
-    tags: [{ label: "等 12 分", tone: "amber" }],
+    tags: [{ label: "单独占筒", tone: "amber" }],
   },
 ];
 
@@ -162,17 +159,11 @@ export const backendPlanSummary = {
 };
 
 export const campusContext = {
-  towerName: "紫荆 1 号楼",
-  providerLabel: "CleverSchool + 海乐生活",
-  towerKey: "ncrkiz1",
-  towerKeys: [
-    ["cleverschool", "ncrkiz1"],
-    ["haier", "440"],
-  ],
+  towerName: "南区21号楼",
   weather: "雨天 · 湿度 89%",
   dryingContext: "无阳台优先低温烘干",
   updatedAt: "更新 1 分钟前",
-  recommendation: "标准筒 A02 当前可用；大件机预计 12 分钟后释放，烘干机可作为低温后续档。",
+  recommendation: "标准筒当前可用；床品建议单独占用标准筒，烘干机可作为低温后续档。",
 };
 
 export const wardrobeItems: WardrobeItemView[] = [
@@ -249,13 +240,13 @@ export const wardrobeItems: WardrobeItemView[] = [
     name: "床单被套",
     art: "bedding",
     material: "棉 100%",
-    description: "大件机 · 单独洗",
+    description: "床品 · 单独洗",
     wearCount: 1,
     washCount: 4,
     tags: [{ label: "大件", tone: "blue" }],
-    riskTitle: "容量风险",
+    riskTitle: "单独洗护风险",
     riskLevel: "中",
-    recommendation: "等 C01 大件机，避免塞入标准筒。",
+    recommendation: "单独使用标准洗衣机，不和普通衣物混洗。",
   },
 ];
 
@@ -267,15 +258,12 @@ export const machines: MachineView[] = [
     location: "紫荆 1 号楼 一层",
     type: "快速/标准",
     backendType: "standard_washer",
-    capacity: "8kg",
     status: "空闲",
     backendStatus: "available",
     remaining: "0 分钟",
     detail: "适合浅色快洗 · 距宿舍 2 分钟",
-    price: "¥4",
+    price: "¥3起",
     modes: ["quick", "standard"],
-    provider: "cleverschool",
-    ruleKey: "washer_types.standard_washer",
     tone: "teal",
   },
   {
@@ -283,36 +271,15 @@ export const machines: MachineView[] = [
     backendId: "washer-standard-2",
     name: "标准筒 A02",
     location: "紫荆 1 号楼 二层",
-    type: "标准/加强",
+    type: "标准/大物",
     backendType: "standard_washer",
-    capacity: "8kg",
     status: "空闲",
     backendStatus: "available",
     remaining: "0 分钟",
     detail: "适合深色厚衣物 · 推荐本次使用",
-    price: "¥4",
-    modes: ["quick", "standard", "heavy"],
-    provider: "cleverschool",
-    ruleKey: "washer_types.standard_washer",
+    price: "¥3起",
+    modes: ["quick", "standard", "large"],
     tone: "teal",
-  },
-  {
-    id: "C01",
-    backendId: "washer-large-1",
-    name: "大件机 C01",
-    location: "紫荆 1 号楼 一层",
-    type: "大件洗",
-    backendType: "standard_washer",
-    capacity: "12kg",
-    status: "等待",
-    backendStatus: "running",
-    remaining: "12 分钟",
-    detail: "床单被套 · 还需等待 12 分钟",
-    price: "¥6",
-    modes: ["standard", "heavy"],
-    provider: "haier",
-    ruleKey: "washer_types.standard_washer",
-    tone: "amber",
   },
   {
     id: "A04",
@@ -321,15 +288,12 @@ export const machines: MachineView[] = [
     location: "紫荆 1 号楼 三层",
     type: "门锁异常",
     backendType: "standard_washer",
-    capacity: "8kg",
     status: "故障",
     backendStatus: "out_of_service",
     remaining: "不可用",
     detail: "暂不可用，避开本次方案",
     price: "--",
     modes: [],
-    provider: "cleverschool",
-    ruleKey: "washer_types.standard_washer",
     tone: "red",
   },
   {
@@ -339,15 +303,12 @@ export const machines: MachineView[] = [
     location: "紫荆 1 号楼 一层",
     type: "低温烘干",
     backendType: "dryer",
-    capacity: "8kg",
     status: "空闲",
     backendStatus: "available",
     remaining: "0 分钟",
     detail: "适合卫衣低温后续 · 避免高温缩水",
-    price: "¥2/25分",
+    price: "¥2/50分",
     modes: ["low"],
-    provider: "haier",
-    ruleKey: "dryer_modes.low",
     tone: "purple",
   },
 ];
@@ -364,16 +325,6 @@ export const queueEstimates: QueueEstimateView[] = [
     tone: "teal",
   },
   {
-    machineType: "standard_washer",
-    label: "大件机",
-    total: 1,
-    available: 0,
-    running: 1,
-    outOfService: 0,
-    wait: "12 分钟",
-    tone: "amber",
-  },
-  {
     machineType: "dryer",
     label: "烘干机",
     total: 1,
@@ -386,9 +337,9 @@ export const queueEstimates: QueueEstimateView[] = [
 ];
 
 export const dryerOptions = [
-  { minutes: "30'", label: "薄衣短烘", price: "¥3" },
-  { minutes: "60'", label: "厚衣低温", price: "¥5" },
-  { minutes: "90'", label: "大件增量", price: "¥7" },
+  { minutes: "50'", label: "低温", price: "¥2" },
+  { minutes: "60'", label: "中温", price: "¥3" },
+  { minutes: "90'", label: "高温", price: "¥4" },
 ];
 
 export const report = {

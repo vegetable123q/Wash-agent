@@ -5,7 +5,6 @@
       "location": "Dorm A 1F",
       "machine_type": "standard_washer",
       "status": "available",
-      "capacity_kg": 7.0,
       "remaining_minutes": null,
       "price_yuan": 4.0,
       "modes": ["standard", "gentle"]
@@ -15,7 +14,6 @@
       "location": "Dorm A 1F",
       "machine_type": "standard_washer",
       "status": "available",
-      "capacity_kg": 12.0,
       "remaining_minutes": null,
       "price_yuan": 6.0,
       "modes": ["large"]
@@ -25,7 +23,6 @@
       "location": "Dorm A 1F",
       "machine_type": "dryer",
       "status": "available",
-      "capacity_kg": 8.0,
       "remaining_minutes": null,
       "price_yuan": 2.0,
       "modes": ["low"]

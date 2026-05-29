@@ -27,7 +27,6 @@ class DModuleTests(unittest.TestCase):
                             "location": "Dorm A 1F",
                             "machine_type": "standard_washer",
                             "status": "available",
-                            "capacity_kg": 7.0,
                             "remaining_minutes": None,
                             "price_yuan": 4.0,
                             "modes": ["standard", "gentle"],
