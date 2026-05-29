@@ -722,7 +722,10 @@ function dirtyBasketWarningLabel(item: WardrobeSummaryItem, daysInBasket: number
 
 function isUrgentItem(item: WardrobeSummaryItem): boolean {
   const text = itemSearchText(item);
-  return text.includes("明天要穿") || text.includes("急");
+  if (["不急", "不用急", "不着急", "not urgent"].some((term) => text.includes(term))) {
+    return false;
+  }
+  return text.includes("明天要穿") || text.includes("急") || text.includes("urgent");
 }
 
 function isHygieneSensitiveItem(item: WardrobeSummaryItem): boolean {
