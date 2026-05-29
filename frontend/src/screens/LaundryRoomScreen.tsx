@@ -1,4 +1,4 @@
-import { Clock3, MapPin } from "lucide-react";
+import { Clock3, MapPin, RefreshCw } from "lucide-react";
 import { machinePriceText } from "../api/machinePricing";
 import type { BackendMachine, BackendQueueEstimate, MobileSummary } from "../api/mobileSummary";
 import { Card, Chip, Page, Section } from "../components/AppChrome";
@@ -8,11 +8,22 @@ import type { UserProfile } from "../userProfile";
 interface LaundryRoomScreenProps {
   mobileSummary?: MobileSummary | null;
   userProfile?: UserProfile;
+  isRefreshing?: boolean;
+  refreshError?: string | null;
   onNavigate: (screen: ScreenId) => void;
   onViewMachine?: (machineId: string) => void;
+  onRefresh?: () => void;
 }
 
-export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate, onViewMachine }: LaundryRoomScreenProps) {
+export function LaundryRoomScreen({
+  mobileSummary,
+  userProfile,
+  isRefreshing = false,
+  refreshError,
+  onNavigate,
+  onViewMachine,
+  onRefresh,
+}: LaundryRoomScreenProps) {
   const backendMachines = mobileSummary?.campus_context.all_machines ?? [];
   const backendQueues = mobileSummary?.campus_context.queue_estimates ?? [];
   const campusStatus = mobileSummary?.campus_status;
@@ -22,6 +33,18 @@ export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate, onVi
   const availableCount = mobileSummary?.campus_context.available_machines.length ?? 0;
   const queueRows = backendQueues.map(queueFromBackend);
   const pricingRules = mobileSummary?.campus_context.pricing_rules;
+  const refreshAction = onRefresh ? (
+    <button
+      className="icon-button refresh-button"
+      type="button"
+      onClick={onRefresh}
+      disabled={isRefreshing}
+      aria-label="刷新天气和洗衣机状态"
+      title="刷新天气和洗衣机状态"
+    >
+      <RefreshCw size={17} className={isRefreshing ? "refresh-icon-spinning" : undefined} />
+    </button>
+  ) : null;
 
   return (
     <Page>
@@ -43,11 +66,15 @@ export function LaundryRoomScreen({ mobileSummary, userProfile, onNavigate, onVi
           <h2>推荐现在开洗</h2>
           <p>{campusStatus?.message ?? "请先在“我的”保存宿舍楼，洗衣房不会再默认紫荆 1 号楼"}</p>
         </div>
-        <Chip tone="blue">
-          <Clock3 size={14} />
-          {campusStatus?.updated_at ? `更新于 ${formatUpdateTime(campusStatus.updated_at)}` : "待刷新"}
-        </Chip>
+        <div className="summary-actions">
+          <Chip tone="blue">
+            <Clock3 size={14} />
+            {campusStatus?.updated_at ? `更新于 ${formatUpdateTime(campusStatus.updated_at)}` : "待刷新"}
+          </Chip>
+          {refreshAction}
+        </div>
       </Card>
+      {refreshError ? <p className="refresh-error" role="status">{refreshError}</p> : null}
 
       <Section title="楼栋与实时状态" action={<Chip tone={statusTone(campusStatus?.state)}>{statusLabel(campusStatus?.state)}</Chip>}>
         <Card accent="purple" className="context-card">

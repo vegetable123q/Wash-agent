@@ -102,6 +102,7 @@ Wash-agent/
 - 保存仅限当前设备的界面偏好和个人洗衣上下文，例如宿舍楼、最晚取衣时间和烘干偏好；后续接入账号系统后再迁移到后端 profile API。
 - 宿舍楼下拉菜单使用前端本地产品目录；目录只向页面暴露宿舍楼名称，CleverSchool `towerKey` 和海乐 `positionId` 只能留在 API 配置层。
 - 用户保存宿舍楼后，移动端洗衣房通过真实 CleverSchool / 海乐生活接口读取机器状态；未选择宿舍楼时必须显示待配置状态，不请求机器接口，也不使用旧机器 mock。
+- 今日页天气和洗衣房机器状态的手动刷新共用 `fetchMobileSummary(userProfile)`；一次刷新会重新读取天气、机器上下文、方案和报告。刷新失败时页面保留上一次成功的摘要并显式提示错误，不清空旧天气或旧机器状态，也不新增自动轮询。
 - 本地浏览器预览通过 Vite 代理访问 CleverSchool 和海乐生活接口，避免 `localhost` 直接跨域请求失败；Android/Capacitor 环境继续使用 Capacitor HTTP。
 - 洗衣房、个人信息、方案和机器详情页面只能展示宿舍楼名称、机器类型中文名、状态、价格和模式等用户可理解信息；机器容量当前不进入 D/E 契约，也不在前端展示；实时接口未提供价格和模式时，前端必须从显式 `pricing_rules` 生成用户可见的价格区间和模式价格，不展示 `tower_key`、provider key、`machine_type`、规则 key 等内部字段。
 - 床品仍单独成桶，但移动端规划器不再假设存在 `large_washer` 或“大件机”；当前只使用真实存在的 `standard_washer` 和显式配置的 `large` 大物洗衣程序。

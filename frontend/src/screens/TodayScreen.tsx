@@ -1,4 +1,4 @@
-import { ArrowRight, Clock3, CloudRain, Sparkles } from "lucide-react";
+import { ArrowRight, Clock3, CloudRain, RefreshCw, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { ModelHubConfig } from "../api/modelHubConfig";
 import { computeRecommendedStartTime, generateTodayAdvice } from "../api/llmSummary";
@@ -12,10 +12,22 @@ interface TodayScreenProps {
   mobileSummary?: MobileSummary | null;
   userProfile?: UserProfile;
   modelHubConfig?: ModelHubConfig;
+  isRefreshing?: boolean;
+  refreshError?: string | null;
   onNavigate: (screen: ScreenId) => void;
+  onRefresh?: () => void;
 }
 
-export function TodayScreen({ backendStatus = "offline", mobileSummary, userProfile, modelHubConfig, onNavigate }: TodayScreenProps) {
+export function TodayScreen({
+  backendStatus = "offline",
+  mobileSummary,
+  userProfile,
+  modelHubConfig,
+  isRefreshing = false,
+  refreshError,
+  onNavigate,
+  onRefresh,
+}: TodayScreenProps) {
   const connected = backendStatus === "connected" && mobileSummary;
   const weather = connected ? liveWeather(mobileSummary) : null;
   const hasPersonalContext = Boolean(
@@ -181,6 +193,18 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
       { value: minWait != null ? `${minWait} 分` : "0 分", label: minWait != null && minWait > 0 ? "最短等待后可用" : "无需等待" },
     ];
   }, [connected, mobileSummary]);
+  const refreshAction = onRefresh ? (
+    <button
+      className="icon-button refresh-button"
+      type="button"
+      onClick={onRefresh}
+      disabled={isRefreshing}
+      aria-label="刷新天气和洗衣机状态"
+      title="刷新天气和洗衣机状态"
+    >
+      <RefreshCw size={17} className={isRefreshing ? "refresh-icon-spinning" : undefined} />
+    </button>
+  ) : null;
 
   return (
     <Page>
@@ -218,18 +242,28 @@ export function TodayScreen({ backendStatus = "offline", mobileSummary, userProf
         ))}
       </div>
 
-      {weather ? (
-        <Section title="实时天气">
-          <Card className="weather-card" accent="teal">
-            <div>
-              <strong>{weather.temperature}</strong>
-              <span>清华园当前</span>
-            </div>
-            <div className="chip-row">
-              <Chip tone="teal">{weather.humidity}</Chip>
-              <Chip tone="blue">{weather.precipitation}</Chip>
-            </div>
-          </Card>
+      {connected ? (
+        <Section title="实时天气" action={refreshAction}>
+          {weather ? (
+            <Card className="weather-card" accent="teal">
+              <div>
+                <strong>{weather.temperature}</strong>
+                <span>清华园当前</span>
+              </div>
+              <div className="chip-row">
+                <Chip tone="teal">{weather.humidity}</Chip>
+                <Chip tone="blue">{weather.precipitation}</Chip>
+              </div>
+            </Card>
+          ) : (
+            <Card className="weather-card" accent="amber">
+              <div>
+                <strong>天气数据不可用</strong>
+                <span>请稍后刷新</span>
+              </div>
+            </Card>
+          )}
+          {refreshError ? <p className="refresh-error" role="status">{refreshError}</p> : null}
         </Section>
       ) : null}
 

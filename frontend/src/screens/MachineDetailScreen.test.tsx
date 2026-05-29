@@ -28,6 +28,7 @@ describe("MachineDetailScreen", () => {
     );
 
     expect(screen.getByRole("heading", { name: "洗衣机 · 南区21号楼 一层" })).toBeInTheDocument();
+    expect(screen.queryByText("详情")).not.toBeInTheDocument();
     expect(screen.getByText("设备编号")).toBeInTheDocument();
     expect(screen.getByText("455514")).toBeInTheDocument();
     expect(screen.queryByText(/容量/)).not.toBeInTheDocument();

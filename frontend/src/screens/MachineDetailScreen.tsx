@@ -49,7 +49,7 @@ export function MachineDetailScreen({ onBack, backendMachine, staticMachine, pri
         </div>
       </PrimaryPanel>
 
-      <Section title="机器信息" action={<Chip tone="purple">详情</Chip>}>
+      <Section title="机器信息">
         <Card accent="purple" className="contract-list">
           <div className="contract-row">
             <span>设备编号</span>

@@ -1,9 +1,13 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PRICING_RULES } from "../api/pricingRules";
 import { LaundryRoomScreen } from "./LaundryRoomScreen";
 
 describe("LaundryRoomScreen", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   it("hides internal provider keys and raw machine enum values", () => {
     render(
       <LaundryRoomScreen
@@ -150,5 +154,121 @@ describe("LaundryRoomScreen", () => {
     expect(screen.queryByText("large_washer")).not.toBeInTheDocument();
     expect(screen.queryByText("大件机")).not.toBeInTheDocument();
     expect(document.querySelectorAll(".machine-card.machine-card-equal")).toHaveLength(3);
+  });
+
+  it("requests a unified refresh from the laundry room status area", () => {
+    const onRefresh = vi.fn();
+    render(
+      <LaundryRoomScreen
+        onNavigate={vi.fn()}
+        onRefresh={onRefresh}
+        userProfile={{
+          displayName: "小徐",
+          dormName: "南区21号楼",
+          latestPickupTime: "22:30",
+          allowDryer: false,
+        }}
+        mobileSummary={{
+          source: "backend",
+          selected_laundry_item_ids: [],
+          dirty_basket: {
+            item_count: 0,
+            load_percent: 0,
+            oldest_days: 0,
+            urgent_count: 0,
+            status_label: "空篮",
+            recommendation: "先选择衣物。",
+            next_action: "去衣柜选择这批要洗的衣物",
+            items: [],
+          },
+          campus_status: {
+            state: "live",
+            dorm_name: "南区21号楼",
+            message: "已读取 0 台实时机器记录。",
+            updated_at: "2026-05-29T14:30:00.000Z",
+          },
+          wardrobe: { items: [] },
+          campus_context: {
+            all_machines: [],
+            available_machines: [],
+            queue_estimates: [],
+            weather: {},
+            drying_context: {},
+            pricing_rules: { ...PRICING_RULES },
+          },
+          plan: {
+            buckets: [],
+            estimated_cost_yuan: 0,
+            estimated_duration_minutes: 0,
+            summary: "",
+            global_warnings: [],
+          },
+          report: {
+            title: "",
+            sections: {},
+            savings_notes: [],
+            risk_notes: [],
+          },
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "刷新天气和洗衣机状态" }));
+
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables the laundry room refresh button while refreshing", () => {
+    render(
+      <LaundryRoomScreen
+        onNavigate={vi.fn()}
+        onRefresh={vi.fn()}
+        isRefreshing={true}
+        mobileSummary={{
+          source: "backend",
+          selected_laundry_item_ids: [],
+          dirty_basket: {
+            item_count: 0,
+            load_percent: 0,
+            oldest_days: 0,
+            urgent_count: 0,
+            status_label: "空篮",
+            recommendation: "先选择衣物。",
+            next_action: "去衣柜选择这批要洗的衣物",
+            items: [],
+          },
+          campus_status: {
+            state: "unconfigured",
+            dorm_name: "",
+            message: "请先在“我的”选择宿舍楼。",
+            updated_at: "2026-05-29T14:30:00.000Z",
+          },
+          wardrobe: { items: [] },
+          campus_context: {
+            all_machines: [],
+            available_machines: [],
+            queue_estimates: [],
+            weather: {},
+            drying_context: {},
+            pricing_rules: { ...PRICING_RULES },
+          },
+          plan: {
+            buckets: [],
+            estimated_cost_yuan: 0,
+            estimated_duration_minutes: 0,
+            summary: "",
+            global_warnings: [],
+          },
+          report: {
+            title: "",
+            sections: {},
+            savings_notes: [],
+            risk_notes: [],
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "刷新天气和洗衣机状态" })).toBeDisabled();
   });
 });
