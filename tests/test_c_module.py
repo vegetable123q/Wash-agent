@@ -178,6 +178,18 @@ class CModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, field_name):
                     advise_frequency(item, constraints)
 
+    def test_frequency_requires_valid_wear_count(self) -> None:
+        invalid_counts: list[object] = [True, -1, 1.5, "2"]
+
+        for count in invalid_counts:
+            with self.subTest(count=count):
+                item = self.store.get_item("wm-white-tee-001")
+                assert item is not None
+                item.wear_count_since_wash = count  # type: ignore[assignment]
+
+                with self.assertRaisesRegex(ValueError, "wear_count_since_wash"):
+                    advise_frequency(item, LaundryConstraints())
+
     def test_advise_all_requires_items_and_constraints(self) -> None:
         invalid_items: list[object] = ["items", [object()]]
         for items in invalid_items:

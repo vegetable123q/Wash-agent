@@ -144,6 +144,7 @@ def _threshold_for(text: str) -> int:
 def _validate_item(value: object) -> None:
     if not isinstance(value, WardrobeItem):
         raise ValueError("item must be a WardrobeItem")
+    _non_negative_int(value.wear_count_since_wash, "wear_count_since_wash")
 
 
 def _validate_items(value: object) -> None:
@@ -178,6 +179,13 @@ def _item_id_list(value: object, field_name: str) -> None:
 def _boolean(value: object, field_name: str) -> None:
     if not isinstance(value, bool):
         raise ValueError(f"{field_name} must be a boolean")
+
+
+def _non_negative_int(value: object, field_name: str) -> None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{field_name} must be a non-negative integer")
+    if value < 0:
+        raise ValueError(f"{field_name} must be a non-negative integer")
 
 
 def _search_text(item: WardrobeItem) -> str:
