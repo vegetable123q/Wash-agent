@@ -171,4 +171,23 @@ describe("TodayScreen", () => {
     expect(screen.getByText("约 30% 桶")).toBeInTheDocument();
     expect(screen.getByText("最久 2 天")).toBeInTheDocument();
   });
+
+  it("shows configured budget and maximum wait in the constraint row", () => {
+    render(
+      <TodayScreen
+        onNavigate={vi.fn()}
+        userProfile={{
+          displayName: "",
+          dormName: "",
+          latestPickupTime: "22:30",
+          allowDryer: false,
+          budgetYuan: 12.5,
+          maxWaitMinutes: 8,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("预算 ¥12.5")).toBeInTheDocument();
+    expect(screen.getByText("最长等待 8 分钟")).toBeInTheDocument();
+  });
 });

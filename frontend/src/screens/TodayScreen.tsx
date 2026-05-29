@@ -34,6 +34,8 @@ export function TodayScreen({
     userProfile?.displayName ||
       userProfile?.dormName ||
       userProfile?.allowDryer ||
+      userProfile?.budgetYuan != null ||
+      userProfile?.maxWaitMinutes != null ||
       (userProfile?.latestPickupTime && userProfile.latestPickupTime !== "22:30"),
   );
   const subtitle = userProfile?.dormName
@@ -44,7 +46,9 @@ export function TodayScreen({
         userProfile.dormName || "请选择宿舍楼",
         userProfile.allowDryer ? "允许烘干" : "优先低温/晾干",
         `最晚 ${userProfile.latestPickupTime}`,
-      ]
+        userProfile.budgetYuan != null ? `预算 ¥${formatPreferenceNumber(userProfile.budgetYuan)}` : null,
+        userProfile.maxWaitMinutes != null ? `最长等待 ${formatPreferenceNumber(userProfile.maxWaitMinutes)} 分钟` : null,
+      ].filter((item): item is string => item !== null)
     : ["请先配置宿舍楼", "可在「我的」设置偏好"];
   const panelMetrics = connected && mobileSummary
     ? {
@@ -400,6 +404,10 @@ function formatNumber(value: number | undefined) {
   if (typeof value !== "number" || Number.isNaN(value)) {
     return "--";
   }
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function formatPreferenceNumber(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
