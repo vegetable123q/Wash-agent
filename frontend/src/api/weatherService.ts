@@ -39,7 +39,7 @@ export async function fetchTsinghuaWeather(): Promise<WeatherSnapshot> {
       status: "live",
       location: "Tsinghua University",
       current: current as WeatherSnapshot["current"],
-      units: typeof units === "object" && units ? (units as Record<string, string>) : {},
+      units: unitStrings(units),
     };
   } catch (error) {
     return {
@@ -56,5 +56,14 @@ function isValidCurrentWeather(value: unknown): value is WeatherSnapshot["curren
   const current = value as Record<string, unknown>;
   return [current.temperature_2m, current.relative_humidity_2m, current.precipitation].every(
     (item) => typeof item === "number" && Number.isFinite(item),
+  );
+}
+
+function unitStrings(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    ),
   );
 }
