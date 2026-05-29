@@ -1,12 +1,56 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { emptyModelHubConfig } from "../api/modelHubConfig";
+import { generateTodayAdvice } from "../api/llmSummary";
 import type { MobileSummary } from "../api/mobileSummary";
 import { TodayScreen } from "./TodayScreen";
 
+vi.mock("../api/llmSummary", async () => {
+  const actual = await vi.importActual<typeof import("../api/llmSummary")>("../api/llmSummary");
+  return {
+    ...actual,
+    generateTodayAdvice: vi.fn(),
+  };
+});
+
 describe("TodayScreen", () => {
+  beforeEach(() => {
+    vi.mocked(generateTodayAdvice).mockReset();
+  });
+
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
+  });
+
+  it("clears the previous LLM advice when switching connected summaries", async () => {
+    vi.mocked(generateTodayAdvice)
+      .mockResolvedValueOnce({ source: "llm", text: "first AI today advice" })
+      .mockResolvedValueOnce({ source: "fallback", text: "second fallback today advice" });
+
+    const { rerender } = render(
+      <TodayScreen
+        backendStatus="connected"
+        mobileSummary={mobileSummaryWithPlanNote("first deterministic today note", "light-standard")}
+        modelHubConfig={configuredModelHub}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText("first AI today advice")).toBeInTheDocument();
+
+    rerender(
+      <TodayScreen
+        backendStatus="connected"
+        mobileSummary={mobileSummaryWithPlanNote("second deterministic today note", "dark-standard")}
+        modelHubConfig={configuredModelHub}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(generateTodayAdvice).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText("first AI today advice")).not.toBeInTheDocument();
+    expect(screen.getByText("second deterministic today note")).toBeInTheDocument();
   });
 
   it("shows a user-facing plan summary on the dashboard", () => {
@@ -191,3 +235,73 @@ describe("TodayScreen", () => {
     expect(screen.getByText("最长等待 8 分钟")).toBeInTheDocument();
   });
 });
+
+const configuredModelHub = {
+  ...emptyModelHubConfig,
+  apikey: "test-modelhub-key",
+};
+
+function mobileSummaryWithPlanNote(summary: string, bucketId: string): MobileSummary {
+  return {
+    source: "backend",
+    selected_laundry_item_ids: ["tee-1"],
+    dirty_basket: {
+      item_count: 1,
+      load_percent: 30,
+      oldest_days: 1,
+      urgent_count: 0,
+      status_label: "ready",
+      recommendation: "wash soon",
+      next_action: "view plan",
+      items: [],
+    },
+    wardrobe: {
+      items: [
+        {
+          item_id: "tee-1",
+          name: "Test tee",
+          user_note: "",
+          user_notes: [],
+          wear_count_since_wash: 1,
+          wash_count: 0,
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          risks: {},
+        },
+      ],
+    },
+    campus_context: {
+      all_machines: [],
+      available_machines: [],
+      queue_estimates: [],
+      weather: {},
+      drying_context: {},
+      pricing_rules: {},
+    },
+    plan: {
+      buckets: [
+        {
+          bucket_id: bucketId,
+          item_ids: ["tee-1"],
+          wash_method: "machine_wash",
+          machine_type: "standard_washer",
+          program: "standard",
+          detergent_ml: 24,
+          use_laundry_bag: false,
+          dry_method: "air_dry",
+          warnings: [],
+        },
+      ],
+      estimated_cost_yuan: 3.5,
+      estimated_duration_minutes: 40,
+      summary,
+      global_warnings: [],
+    },
+    report: {
+      title: "report",
+      sections: {},
+      savings_notes: [],
+      risk_notes: [],
+    },
+  };
+}

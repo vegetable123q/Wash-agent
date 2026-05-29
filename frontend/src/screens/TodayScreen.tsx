@@ -105,6 +105,7 @@ export function TodayScreen({
   // LLM-enhanced today advice
   const [llmAdvice, setLlmAdvice] = useState<string | null>(null);
   useEffect(() => {
+    setLlmAdvice(null);
     if (!mobileSummary?.plan || !modelHubConfig) return;
     let cancelled = false;
     generateTodayAdvice(
