@@ -87,6 +87,18 @@ class CModuleTests(unittest.TestCase):
                     else:
                         self.store.delete_item("missing-item")
 
+    def test_upsert_rejects_invalid_item_input(self) -> None:
+        invalid_items: list[object] = [
+            object(),
+            "item",
+            WardrobeItem(profile="profile"),  # type: ignore[arg-type]
+        ]
+
+        for item in invalid_items:
+            with self.subTest(item=item):
+                with self.assertRaisesRegex(ValueError, "item|profile"):
+                    self.store.upsert_item(item)  # type: ignore[arg-type]
+
     def test_frequency_raises_priority_for_sports_and_urgent_items(self) -> None:
         items = self.store.list_items()
         constraints = LaundryConstraints(urgent_item_ids=["wm-white-tee-001"])

@@ -34,10 +34,11 @@ class WardrobeStore:
     def upsert_item(self, item: WardrobeItem) -> None:
         """Create or update one wardrobe item."""
 
+        item_dict = _validated_item_dict(item)
+        item_id = item_dict["profile"]["item_id"]
         items = self._read_items()
-        item_dict = _to_jsonable(item)
         for index, existing in enumerate(items):
-            if _stored_item_id(existing, index) == item.profile.item_id:
+            if _stored_item_id(existing, index) == item_id:
                 items[index] = item_dict
                 self._write_items(items)
                 return
@@ -133,6 +134,16 @@ def _stored_item_id(data: dict[str, Any], index: int) -> str:
     if "item_id" not in profile:
         raise ValueError(f"items[{index}].profile missing required fields: item_id")
     return _required_text(profile["item_id"], f"items[{index}].profile.item_id")
+
+
+def _validated_item_dict(value: Any) -> dict[str, Any]:
+    if not isinstance(value, WardrobeItem):
+        raise ValueError("item must be a WardrobeItem")
+    item_dict = _to_jsonable(value)
+    if not isinstance(item_dict, dict):
+        raise ValueError("item must serialize to an object")
+    validated_item = _wardrobe_item_from_dict(item_dict)
+    return _to_jsonable(validated_item)
 
 
 def _profile_from_dict(data: dict[str, Any]) -> ClothingProfile:
