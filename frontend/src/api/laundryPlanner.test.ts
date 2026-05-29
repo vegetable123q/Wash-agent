@@ -115,4 +115,43 @@ describe("planLaundry", () => {
     expect(plan.buckets.every((bucket) => bucket.item_ids.length <= 7)).toBe(true);
     expect(plan.summary).toContain("2 个洗护批次");
   });
+
+  it("falls back to air dry when dryer is allowed but no dryer is available", () => {
+    const item = standardItem("tee-1", "白色棉 T 恤");
+    const plan = planLaundry([item], {
+      selected_item_ids: ["tee-1"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: true,
+      hygiene_sensitive: true,
+      max_wait_minutes: 10,
+      budget_yuan: null,
+    }, context);
+
+    expect(plan.buckets[0]).toMatchObject({
+      dry_method: "air_dry",
+    });
+    expect(plan.global_warnings.some((warning) => warning.includes("没有可用烘干机"))).toBe(true);
+  });
 });
+
+function standardItem(itemId: string, name: string): WardrobeItemForPlan {
+  return {
+    profile: {
+      item_id: itemId,
+      name,
+      user_note: "",
+      material_ratios: { cotton: 1 },
+      colors: ["white"],
+      care_warnings: [],
+      care_recommendations: [],
+      care_forbidden: [],
+      care_symbols: {},
+      risks: {},
+      recommended_wash: "machine_wash",
+    },
+    wear_count_since_wash: 1,
+    preferred_method: "machine_wash",
+    user_notes: [],
+  };
+}

@@ -217,7 +217,10 @@ function dryingDecision(
     ];
   }
 
-  const dryer = requireAvailableMachine(context.available_machines, "dryer", "low");
+  const dryer = findAvailableMachine(context.available_machines, "dryer", "low");
+  if (!dryer) {
+    return ["air_dry", ["当前没有可用烘干机，改为自然晾干。", ...airDryContextWarnings(context)]];
+  }
   requireDryerProgram(context, "low");
   return ["low_heat_dryer", [machineRecommendationWarning(dryer, "low")]];
 }
@@ -372,13 +375,21 @@ function requireAvailableMachine(
   machineType: MachineType,
   program: string,
 ): MachineInfo {
-  const match = available.find(
-    (m) => m.machine_type === machineType && m.status === "available" && (!m.modes.length || m.modes.includes(program)),
-  );
+  const match = findAvailableMachine(available, machineType, program);
   if (!match) {
     throw new Error(`no available machine for ${machineType} program ${program}`);
   }
   return match;
+}
+
+function findAvailableMachine(
+  available: MachineInfo[],
+  machineType: MachineType,
+  program: string,
+): MachineInfo | null {
+  return available.find(
+    (m) => m.machine_type === machineType && m.status === "available" && (!m.modes.length || m.modes.includes(program)),
+  ) ?? null;
 }
 
 function machineRecommendationWarning(machine: MachineInfo, program: string): string {
