@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import urllib.error
 import urllib.request
@@ -405,7 +406,10 @@ def _optional_number(value: object, field_name: str) -> float | None:
         return None
     if not isinstance(value, int | float):
         raise ValueError(f"machine {field_name} must be numeric")
-    return float(value)
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"machine {field_name} must be finite")
+    return number
 
 
 def _optional_int(value: object, field_name: str) -> int | None:
@@ -615,9 +619,12 @@ def _optional_float(value: Any, field_name: str) -> float | None:
     if value is None:
         return None
     try:
-        return float(value)
+        number = float(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"machine_rules {field_name} must be numeric") from exc
+    if not math.isfinite(number):
+        raise ValueError(f"machine_rules {field_name} must be finite")
+    return number
 
 
 def _string_list(value: Any, field_name: str) -> list[str]:
