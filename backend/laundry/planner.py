@@ -45,6 +45,7 @@ def plan_laundry(
 ) -> LaundryPlan:
     """Create wash buckets, machine modes, drying advice, and risk warnings."""
 
+    _validate_items(items)
     _validate_constraints(constraints)
     selected_items = _selected_items(items, constraints.selected_item_ids)
     _validate_urgent_items(constraints)
@@ -67,6 +68,14 @@ def plan_laundry(
         cost_breakdown=cost_breakdown,
         global_warnings=global_warnings,
     )
+
+
+def _validate_items(value: object) -> None:
+    if not isinstance(value, list):
+        raise ValueError("items must be a list")
+    for index, item in enumerate(value):
+        if not isinstance(item, WardrobeItem):
+            raise ValueError(f"items[{index}] must be a WardrobeItem")
 
 
 def _validate_constraints(constraints: LaundryConstraints) -> None:
