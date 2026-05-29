@@ -47,6 +47,7 @@ def plan_laundry(
 
     _validate_items(items)
     _validate_constraints(constraints)
+    _validate_campus_context(campus_context)
     selected_items = _selected_items(items, constraints.selected_item_ids)
     _validate_urgent_items(constraints)
     bucket_inputs = _split_bucket_inputs(selected_items, constraints)
@@ -86,6 +87,11 @@ def _validate_constraints(constraints: LaundryConstraints) -> None:
     _boolean(constraints.hygiene_sensitive, "hygiene_sensitive")
     _optional_non_negative_number(constraints.budget_yuan, "budget_yuan")
     _optional_non_negative_int(constraints.max_wait_minutes, "max_wait_minutes")
+
+
+def _validate_campus_context(value: object) -> None:
+    if not isinstance(value, CampusContext):
+        raise ValueError("campus_context must be a CampusContext")
 
 
 def _item_id_list(value: object, field_name: str) -> list[str]:

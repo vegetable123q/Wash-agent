@@ -311,6 +311,19 @@ class EModuleTests(unittest.TestCase):
                         _campus_context(),
                     )
 
+    def test_plan_requires_campus_context(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        invalid_contexts: list[object] = [None, object(), {"available_machines": []}]
+
+        for campus_context in invalid_contexts:
+            with self.subTest(campus_context=campus_context):
+                with self.assertRaisesRegex(ValueError, "campus_context"):
+                    plan_laundry(
+                        items,
+                        LaundryConstraints(selected_item_ids=["white-tee"]),
+                        campus_context,  # type: ignore[arg-type]
+                    )
+
     def test_air_dry_and_budget_warnings_use_explicit_context(self) -> None:
         context = _campus_context()
         context.drying_context = {"balcony_available": False, "ventilation": "poor"}
