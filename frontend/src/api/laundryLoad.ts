@@ -17,6 +17,7 @@ export function estimateLaundryLoadUnits(item: LoadEstimateItem): number {
   if (containsAny(text, ["羽绒", "棉服", "大衣", "coat", "down"])) return 36;
   if (containsAny(text, ["外套", "夹克", "jacket"])) return 28;
   if (containsAny(text, ["卫衣", "hoodie", "sweatshirt"])) return 22;
+  if (containsAny(text, ["连衣裙", "dress"])) return 18;
   if (containsAny(text, ["牛仔", "长裤", "裤", "jeans", "pants", "trousers"])) return 18;
   if (containsAny(text, ["毛巾", "浴巾", "towel"])) return 18;
   if (containsAny(text, ["内衣", "袜", "underwear", "socks", "sock"])) return 5;
