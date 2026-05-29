@@ -364,6 +364,8 @@ def _number(value: object, field_name: str) -> float:
     number = float(value)
     if not math.isfinite(number):
         raise ValueError(f"{field_name} must be finite")
+    if number < 0:
+        raise ValueError(f"{field_name} must be non-negative")
     return number
 
 
