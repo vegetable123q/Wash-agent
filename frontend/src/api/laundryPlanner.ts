@@ -263,8 +263,9 @@ function buildGlobalWarnings(
   context: CampusContext,
 ): string[] {
   const warnings: string[] = [];
-  if (constraints.budget_yuan != null && estimatedCost > constraints.budget_yuan) {
-    warnings.push(`预计费用 ${estimatedCost} 元超过预算 ${constraints.budget_yuan} 元。`);
+  const budgetYuan = positiveConstraintNumber(constraints.budget_yuan);
+  if (budgetYuan != null && estimatedCost > budgetYuan) {
+    warnings.push(`预计费用 ${estimatedCost} 元超过预算 ${budgetYuan} 元。`);
     warnings.push("若需压低费用，可推迟非急用标准洗批次，并优先保留手洗、自然晾干和高卫生需求衣物。");
   }
   warnings.push(...waitConstraintWarnings(buckets, constraints, context));
@@ -279,26 +280,31 @@ function waitConstraintWarnings(
   constraints: LaundryConstraints,
   context: CampusContext,
 ): string[] {
-  if (constraints.max_wait_minutes == null) return [];
+  const maxWaitMinutes = positiveConstraintNumber(constraints.max_wait_minutes);
+  if (maxWaitMinutes == null) return [];
   const queueByType = new Map(context.queue_estimates.map((e) => [e.machine_type, e]));
   const warnings: string[] = [];
 
   for (const machineType of requiredMachineTypes(buckets)) {
     const estimate = queueByType.get(machineType);
     if (!estimate) {
-      warnings.push(`缺少 ${machineType} 等待时间估算，无法确认是否满足最大等待 ${constraints.max_wait_minutes} 分钟。`);
+      warnings.push(`缺少 ${machineType} 等待时间估算，无法确认是否满足最大等待 ${maxWaitMinutes} 分钟。`);
       continue;
     }
     const wait = estimate.estimated_wait_minutes;
     if (wait == null) {
-      warnings.push(`${machineType} 等待时间未知，无法确认是否满足最大等待 ${constraints.max_wait_minutes} 分钟。`);
+      warnings.push(`${machineType} 等待时间未知，无法确认是否满足最大等待 ${maxWaitMinutes} 分钟。`);
       continue;
     }
-    if (wait > constraints.max_wait_minutes) {
-      warnings.push(`${machineType} 预计等待 ${wait} 分钟超过最大等待 ${constraints.max_wait_minutes} 分钟。`);
+    if (wait > maxWaitMinutes) {
+      warnings.push(`${machineType} 预计等待 ${wait} 分钟超过最大等待 ${maxWaitMinutes} 分钟。`);
     }
   }
   return warnings;
+}
+
+function positiveConstraintNumber(value: number | null): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
 }
 
 function requiredMachineTypes(buckets: LaundryBucket[]): MachineType[] {

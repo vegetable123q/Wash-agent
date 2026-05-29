@@ -202,6 +202,22 @@ describe("planLaundry", () => {
       budget_yuan: null,
     }, invalidContext)).toThrow("invalid wash program price_yuan: standard");
   });
+
+  it("ignores invalid budget and wait constraints", () => {
+    const plan = planLaundry([standardItem("tee-1", "white tee")], {
+      selected_item_ids: ["tee-1"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: -1,
+      budget_yuan: -5,
+    }, context);
+
+    const warningText = plan.global_warnings.join("\n");
+    expect(warningText).not.toContain("-1");
+    expect(warningText).not.toContain("-5");
+  });
 });
 
 function standardItem(itemId: string, name: string): WardrobeItemForPlan {
