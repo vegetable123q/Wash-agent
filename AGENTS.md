@@ -17,10 +17,10 @@ This file is the first reference for any agent working in this repository. Follo
 
 Use:
 
-- `app.py`
-- `main.py`
+- `app.py` — legacy Streamlit entry point, no longer the primary UI.
+- `main.py` — minimal CLI entry point.
 
-Put Streamlit UI, user input collection, page state, and orchestration here. Do not put LLM prompts, extraction rules, machine parsing, wardrobe persistence, planning rules, or report generation here.
+The primary UI is the React/Capacitor mobile frontend in `frontend/`. Do not put LLM prompts, extraction rules, machine parsing, wardrobe persistence, planning rules, or report generation in app.py or main.py.
 
 ### Shared Contracts
 
@@ -64,11 +64,7 @@ Put laundry machine status parsing, machine configuration, price/time/capacity r
 
 ### Local Mobile API
 
-Use:
-
-- `backend/api/server.py`
-
-Put local HTTP endpoints for the mobile frontend here. This layer may orchestrate existing backend modules and convert dataclasses into JSON responses for the frontend. Do not put clothing extraction rules, wardrobe persistence details, machine parsing, laundry planning rules, report wording, or weather parsing logic here.
+The mobile frontend (frontend/) is self-contained: wardrobe management, campus context, laundry planning, report generation, and frequency advice all run as TypeScript services within the APK. Only ModelHub image recognition requires user-provided API credentials. The Python backend modules serve as the reference implementation and test oracle.
 
 ### Laundry Planning
 

@@ -33,17 +33,10 @@ const parentTab: Record<ScreenId, TabId> = {
   machineDetail: "laundryRoom",
 };
 
-const screenTime: Record<ScreenId, string> = {
-  today: "21:08",
-  planDetail: "21:09",
-  wardrobe: "21:10",
-  addClothing: "21:11",
-  clothingDetail: "21:12",
-  laundryRoom: "21:13",
-  machineDetail: "21:14",
-  report: "21:15",
-  profile: "21:16",
-};
+function currentTimeString(): string {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+}
 
 export default function App() {
   const [screen, setScreen] = useState<ScreenId>("today");
@@ -185,7 +178,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <div className="phone-frame">
-        <StatusBar time={screenTime[screen]} />
+        <StatusBar time={currentTimeString()} />
         {content}
         {isTabScreen ? <BottomNav active={activeTab} onNavigate={navigateTab} /> : null}
       </div>

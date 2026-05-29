@@ -9,15 +9,23 @@ describe("App in-APK backend integration", () => {
     vi.unstubAllGlobals();
   });
 
-  it("loads the mobile summary from the in-APK backend without a separate HTTP service", async () => {
-    const fetchMock = vi.fn();
+  it("loads the mobile summary from the in-APK backend with real planner and report", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({}),
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
 
     expect(await screen.findByText("APK 内置")).toBeInTheDocument();
-    expect(screen.getByText("预计 ¥14")).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    // The real planner calculates cost from actual pricing rules and machine availability
+    expect(screen.getByText(/预计 ¥\d+/)).toBeInTheDocument();
+    // Only Open-Meteo weather fetch is allowed — no private backend service
+    for (const call of fetchMock.mock.calls) {
+      expect(call[0]).toContain("open-meteo");
+    }
   });
 
   it("keeps ModelHub settings in memory and exposes only the allowed model", async () => {
@@ -40,8 +48,12 @@ describe("App in-APK backend integration", () => {
     expect(allLocalStorageValues()).not.toContain("sk-test-key");
   });
 
-  it("adds and deletes wardrobe items through the in-APK backend without network requests", async () => {
-    const fetchMock = vi.fn();
+  it("adds and deletes wardrobe items through the in-APK backend without private backend requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({}),
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
@@ -62,7 +74,10 @@ describe("App in-APK backend integration", () => {
     fireEvent.click(screen.getByRole("button", { name: /删除 清华紫连帽卫衣/ }));
     expect(await screen.findByText("已删除 清华紫连帽卫衣")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText("清华紫连帽卫衣")).not.toBeInTheDocument());
-    expect(fetchMock).not.toHaveBeenCalled();
+    // Only weather fetch calls are expected — no private backend API calls
+    for (const call of fetchMock.mock.calls) {
+      expect(call[0]).toContain("open-meteo");
+    }
   });
 });
 

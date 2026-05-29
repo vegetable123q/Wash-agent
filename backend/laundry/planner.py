@@ -15,6 +15,7 @@ from backend.shared.models import (
     WardrobeItem,
     WashMethod,
 )
+from backend.shared.utils import contains_any, dedupe
 
 
 _DARK_COLOR_TERMS = {"black", "dark", "navy", "indigo", "深色", "黑", "藏青", "靛蓝"}
@@ -82,22 +83,22 @@ def _split_bucket_inputs(items: list[WardrobeItem]) -> list[tuple[str, list[Ward
 
 def _bucket_id_for(item: WardrobeItem) -> str:
     search_text = _search_text(item)
-    if item.preferred_method == WashMethod.DO_NOT_WASH or _contains_any(search_text, _DO_NOT_WASH_TERMS):
+    if item.preferred_method == WashMethod.DO_NOT_WASH or contains_any(search_text, _DO_NOT_WASH_TERMS):
         return "do-not-wash"
-    if item.preferred_method == WashMethod.DRY_CLEAN or _contains_any(search_text, _DRY_CLEAN_TERMS):
+    if item.preferred_method == WashMethod.DRY_CLEAN or contains_any(search_text, _DRY_CLEAN_TERMS):
         return "dry-clean"
     if (
         item.preferred_method == WashMethod.HAND_WASH
-        or _contains_any(search_text, _HAND_WASH_TERMS)
+        or contains_any(search_text, _HAND_WASH_TERMS)
         or _has_material(item, _WOOL_TERMS)
         or _has_high_risk(item, {"shrink", "deform"})
     ):
         return "hand-wash"
-    if _contains_any(search_text, _BEDDING_TERMS):
+    if contains_any(search_text, _BEDDING_TERMS):
         return "large-bedding"
-    if _contains_any(search_text, _DARK_COLOR_TERMS) or _has_high_risk(item, {"color_bleed"}):
+    if contains_any(search_text, _DARK_COLOR_TERMS) or _has_high_risk(item, {"color_bleed"}):
         return "dark-standard"
-    if _contains_any(search_text, _LIGHT_COLOR_TERMS):
+    if contains_any(search_text, _LIGHT_COLOR_TERMS):
         return "light-standard"
     raise ValueError(f"cannot assign laundry bucket from item data: {item.profile.item_id}")
 
@@ -210,7 +211,7 @@ def _global_warnings(
     warnings.extend(_wait_constraint_warnings(buckets, constraints, campus_context))
     for bucket in buckets:
         warnings.extend(bucket.warnings)
-    return _dedupe(warnings)
+    return dedupe(warnings)
 
 
 def _wait_constraint_warnings(
@@ -302,16 +303,16 @@ def _machine_bucket_warnings(bucket_id: str, items: list[WardrobeItem]) -> list[
     for item in items:
         if _has_high_risk(item, {"color_bleed"}):
             warnings.append(f"{item.profile.name} 掉色风险高，避免与浅色衣物混洗。")
-    return _dedupe(warnings)
+    return dedupe(warnings)
 
 
 def _hand_wash_warnings(items: list[WardrobeItem], campus_context: CampusContext) -> list[str]:
     warnings = ["该批次不进入共享洗衣机，建议冷水轻柔手洗并自然晾干。"]
     for item in items:
-        if _contains_any(_search_text(item), _DO_NOT_DRY_TERMS) or _dryer_unsafe(item):
+        if contains_any(_search_text(item), _DO_NOT_DRY_TERMS) or _dryer_unsafe(item):
             warnings.append(f"{item.profile.name} 不可烘干或高温风险较高。")
     warnings.extend(_air_dry_context_warnings(campus_context))
-    return _dedupe(warnings)
+    return dedupe(warnings)
 
 
 def _detergent_ml(bucket_id: str, items: list[WardrobeItem]) -> float | None:
@@ -345,7 +346,7 @@ def _air_dry_context_warnings(campus_context: CampusContext) -> list[str]:
 def _dryer_unsafe(item: WardrobeItem) -> bool:
     search_text = _search_text(item)
     return (
-        _contains_any(search_text, _DO_NOT_DRY_TERMS)
+        contains_any(search_text, _DO_NOT_DRY_TERMS)
         or _has_material(item, _WOOL_TERMS)
         or _has_high_risk(item, _HIGH_DRY_RISK_KEYS)
     )
@@ -357,7 +358,7 @@ def _any_recommends_bag(items: list[WardrobeItem]) -> bool:
 
 def _has_material(item: WardrobeItem, terms: set[str]) -> bool:
     materials = " ".join(item.profile.material_ratios.keys()).lower()
-    return _contains_any(materials, terms)
+    return contains_any(materials, terms)
 
 
 def _has_high_risk(item: WardrobeItem, keys: set[str]) -> bool:
@@ -381,13 +382,5 @@ def _search_text(item: WardrobeItem) -> str:
     ).lower()
 
 
-def _contains_any(text: str, terms: set[str]) -> bool:
-    return any(term in text for term in terms)
-
-
 def _item_ids(items: list[WardrobeItem]) -> list[str]:
     return [item.profile.item_id for item in items]
-
-
-def _dedupe(items: list[str]) -> list[str]:
-    return list(dict.fromkeys(items))

@@ -85,12 +85,37 @@ function parseGeminiJsonText(raw: unknown): Record<string, unknown> {
 }
 
 function normalizeRecognitionPayload(payload: Record<string, unknown>): ClothingRecognitionResult {
+  const careWarnings = extractCareWarnings(payload);
+  const careNote = careWarnings.length ? careWarnings.join("、") : "";
+  const recommendedWash = stringValue(payload.recommended_wash);
+  const note = [recommendedWash, careNote].filter(Boolean).join("；");
+
   return {
     name: stringValue(payload.name),
     material: materialText(payload.material_ratios),
     colors: Array.isArray(payload.colors) ? payload.colors.map(String).join(", ") : stringValue(payload.colors),
-    note: stringValue(payload.recommended_wash),
+    note,
   };
+}
+
+/** Extract care warnings from LLM payload for richer risk inference. */
+function extractCareWarnings(payload: Record<string, unknown>): string[] {
+  const warnings: string[] = [];
+  const careForbidden = payload.care_forbidden;
+  if (Array.isArray(careForbidden)) {
+    for (const item of careForbidden) {
+      const text = String(item).trim();
+      if (text) warnings.push(text);
+    }
+  }
+  const careWarnings = payload.care_warnings;
+  if (Array.isArray(careWarnings)) {
+    for (const item of careWarnings) {
+      const text = String(item).trim();
+      if (text) warnings.push(text);
+    }
+  }
+  return [...new Set(warnings)];
 }
 
 function materialText(value: unknown): string {

@@ -13,10 +13,10 @@ interface AddClothingScreenProps {
 
 export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothingScreenProps) {
   const [mode, setMode] = useState<"photo" | "text">("photo");
-  const [name, setName] = useState("优衣库灰色连帽卫衣");
-  const [material, setMaterial] = useState("棉混纺");
-  const [colors, setColors] = useState("深色");
-  const [note, setNote] = useState("之前高温烘干后有点缩水，今晚想穿干净的。");
+  const [name, setName] = useState("");
+  const [material, setMaterial] = useState("");
+  const [colors, setColors] = useState("");
+  const [note, setNote] = useState("");
   const [imageFilename, setImageFilename] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");

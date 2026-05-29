@@ -14,6 +14,7 @@ from backend.shared.models import (
     WashMethod,
     WashReport,
 )
+from backend.shared.utils import dedupe
 
 
 def generate_report(
@@ -96,7 +97,7 @@ def _campus_section(campus_context: CampusContext) -> str:
 
 
 def _risk_section(plan: LaundryPlan) -> str:
-    warnings = _dedupe([warning for bucket in plan.buckets for warning in bucket.warnings] + plan.global_warnings)
+    warnings = dedupe([warning for bucket in plan.buckets for warning in bucket.warnings] + plan.global_warnings)
     if not warnings:
         return "本次计划没有额外风险提醒。"
     return "\n".join(f"- {warning}" for warning in warnings)
@@ -110,7 +111,7 @@ def _savings_notes(plan: LaundryPlan) -> list[str]:
         notes.append("高风险衣物分开处理，能减少串色、返洗和重复用水。")
     if any(bucket.bucket_id == "large-bedding" for bucket in plan.buckets):
         notes.append("床品使用大件批次，减少普通筒过载造成的洗不净和返洗。")
-    return _dedupe(notes)
+    return dedupe(notes)
 
 
 def _risk_notes(plan: LaundryPlan) -> list[str]:
@@ -121,7 +122,7 @@ def _risk_notes(plan: LaundryPlan) -> list[str]:
         if bucket.wash_method in {WashMethod.HAND_WASH, WashMethod.DRY_CLEAN, WashMethod.DO_NOT_WASH}:
             notes.append("非普通机洗衣物应按单独批次处理，不进入共享洗衣机。")
         notes.extend(bucket.warnings)
-    return _dedupe(notes)
+    return dedupe(notes)
 
 
 def _bucket_reason(bucket: LaundryBucket) -> str:
@@ -221,7 +222,3 @@ def _machine_type_text(machine_type: MachineType) -> str:
         MachineType.UNKNOWN: "未知机器",
     }
     return labels[machine_type]
-
-
-def _dedupe(items: list[str]) -> list[str]:
-    return list(dict.fromkeys(items))
