@@ -83,9 +83,18 @@ describe("PlanDetailScreen", () => {
   });
 
   it("does not mention a large washer in the static fallback", () => {
-    render(<PlanDetailScreen onBack={vi.fn()} />);
+    const { container } = render(<PlanDetailScreen onBack={vi.fn()} />);
 
+    expect(screen.getByText("等待生成方案")).toBeInTheDocument();
+    expect(screen.getByText("加载中")).toBeInTheDocument();
+    expect(screen.getByText("选择衣物并读取机器状态后，这里会显示真实分桶、费用和执行提醒。")).toBeInTheDocument();
+    expect(screen.getByText("等待本次方案")).toBeInTheDocument();
     expect(screen.queryByText(/大件机/)).not.toBeInTheDocument();
+    expect(container.textContent).not.toContain("可执行");
+    expect(container.textContent).not.toContain("3 桶分开洗");
+    expect(container.textContent).not.toContain("床品单独占用标准筒");
+    expect(container.textContent).not.toContain("羊毛开衫不进共享机");
+    expect(container.textContent).not.toContain("浅色 1 瓶盖");
   });
 
   it("labels manual buckets by method and blocked washer buckets by the missing machine", () => {

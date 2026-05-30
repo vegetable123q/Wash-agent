@@ -9,13 +9,15 @@ describe("ReportScreen", () => {
   });
 
   it("shows a visual report structure without technical labels", () => {
-    render(<ReportScreen />);
+    const { container } = render(<ReportScreen />);
 
     expect(screen.getByRole("heading", { name: "本次结论" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "环境速览" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "洗护路线" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "重点提醒" })).toBeInTheDocument();
+    expect(screen.getAllByText("待确认").length).toBeGreaterThan(0);
     expect(screen.queryByText(/后端|WashReport|LaundryPlan/)).not.toBeInTheDocument();
+    expect(container.textContent).not.toContain("¥24");
   });
 
   it("uses friendly bucket and program names in the price breakdown", () => {
@@ -273,6 +275,204 @@ describe("ReportScreen", () => {
 
     expect(screen.getAllByText("待确认").length).toBeGreaterThan(0);
     expect(container.textContent).not.toContain("¥24");
+  });
+
+  it("shows campus setup status instead of claiming no wait when machines are not configured", () => {
+    const mobileSummary = {
+      source: "backend",
+      selected_laundry_item_ids: [],
+      dirty_basket: {
+        item_count: 0,
+        load_percent: 0,
+        oldest_days: 0,
+        urgent_count: 0,
+        status_label: "空篮",
+        recommendation: "请选择本次衣物。",
+        next_action: "去选择",
+        items: [],
+      },
+      campus_status: {
+        state: "unconfigured",
+        dorm_name: "",
+        message: "请先在“我的”选择宿舍楼。",
+        updated_at: "2026-05-30T00:00:00.000Z",
+      },
+      wardrobe: { items: [] },
+      campus_context: {
+        all_machines: [],
+        available_machines: [],
+        queue_estimates: [],
+        weather: {},
+        drying_context: {},
+        pricing_rules: { wash_programs: {}, dryer_programs: {} },
+      },
+      plan: {
+        buckets: [],
+        estimated_cost_yuan: null,
+        estimated_duration_minutes: null,
+        summary: "请选择本次要清洗的衣物后生成洗护安排。",
+        global_warnings: [],
+      },
+      report: {
+        title: "本次洗护报告",
+        sections: {},
+        savings_notes: [],
+        risk_notes: [],
+      },
+    } satisfies MobileSummary;
+
+    const { container } = render(<ReportScreen mobileSummary={mobileSummary} />);
+
+    expect(screen.getAllByText("待配置").length).toBeGreaterThan(0);
+    expect(screen.getByText("请先在我的页面选择宿舍楼，系统读取机器状态后再生成路线。")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("无需等待");
+  });
+
+  it("marks retained buckets without assigned washers as blocked instead of executable", () => {
+    const mobileSummary = {
+      source: "backend",
+      selected_laundry_item_ids: ["tee-1"],
+      dirty_basket: {
+        item_count: 1,
+        load_percent: 20,
+        oldest_days: 0,
+        urgent_count: 0,
+        status_label: "可清洗",
+        recommendation: "等待机器。",
+        next_action: "查看报告",
+        items: [],
+      },
+      campus_status: {
+        state: "live",
+        dorm_name: "紫荆1号楼",
+        message: "已读取 1 台实时机器记录。",
+        updated_at: "2026-05-30T00:00:00.000Z",
+      },
+      wardrobe: { items: [wardrobeItem("tee-1", "白色棉 T 恤")] },
+      campus_context: {
+        all_machines: [
+          {
+            machine_id: "washer-1",
+            location: "紫荆1号楼",
+            machine_type: "standard_washer",
+            status: "running",
+            remaining_minutes: null,
+            price_yuan: null,
+            modes: ["standard"],
+          },
+        ],
+        available_machines: [],
+        queue_estimates: [
+          {
+            machine_type: "standard_washer",
+            total_count: 1,
+            available_count: 0,
+            running_count: 1,
+            out_of_service_count: 0,
+            unknown_count: 0,
+            estimated_wait_minutes: null,
+          },
+        ],
+        weather: {},
+        drying_context: {},
+        pricing_rules: { wash_programs: { standard: { price_yuan: 3.5, duration_minutes: 40 } }, dryer_programs: {} },
+      },
+      plan: {
+        buckets: [
+          {
+            bucket_id: "light-standard",
+            item_ids: ["tee-1"],
+            wash_method: "machine_wash",
+            machine_type: "standard_washer",
+            program: "standard",
+            detergent_ml: 24,
+            use_laundry_bag: false,
+            dry_method: "air_dry",
+            estimated_cost_yuan: null,
+            estimated_duration_minutes: null,
+            warnings: ["没有空闲洗衣机"],
+          },
+        ],
+        estimated_cost_yuan: null,
+        estimated_duration_minutes: null,
+        summary: "已保留分桶，等待机器空闲。",
+        global_warnings: [],
+      },
+      report: {
+        title: "本次校园洗衣报告",
+        sections: {},
+        savings_notes: [],
+        risk_notes: [],
+      },
+    } satisfies MobileSummary;
+
+    const { container } = render(<ReportScreen mobileSummary={mobileSummary} />);
+
+    expect(screen.getAllByText("待机器空闲").length).toBeGreaterThan(0);
+    expect(screen.getByText("费用待确认")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("可执行");
+    expect(container.textContent).not.toContain("无需机洗计费");
+  });
+
+  it("uses bucket cost on route cards instead of recalculating from pricing rules", () => {
+    const mobileSummary = {
+      source: "backend",
+      selected_laundry_item_ids: ["tee-1"],
+      dirty_basket: {
+        item_count: 1,
+        load_percent: 20,
+        oldest_days: 0,
+        urgent_count: 0,
+        status_label: "可清洗",
+        recommendation: "今晚处理。",
+        next_action: "查看报告",
+        items: [],
+      },
+      wardrobe: { items: [wardrobeItem("tee-1", "白色棉 T 恤")] },
+      campus_context: {
+        all_machines: [],
+        available_machines: [],
+        queue_estimates: [],
+        weather: {},
+        drying_context: {},
+        pricing_rules: { wash_programs: { standard: { price_yuan: 99, duration_minutes: 40 } }, dryer_programs: {} },
+      },
+      plan: {
+        buckets: [
+          {
+            bucket_id: "light-standard",
+            item_ids: ["tee-1"],
+            wash_method: "machine_wash",
+            machine_type: "standard_washer",
+            machine_id: "washer-1",
+            machine_location: "紫荆1号楼",
+            program: "standard",
+            detergent_ml: 24,
+            use_laundry_bag: false,
+            dry_method: "air_dry",
+            estimated_cost_yuan: 3.5,
+            estimated_duration_minutes: 40,
+            warnings: [],
+          },
+        ],
+        estimated_cost_yuan: 3.5,
+        estimated_duration_minutes: 40,
+        summary: "浅色标准洗。",
+        global_warnings: [],
+      },
+      report: {
+        title: "本次校园洗衣报告",
+        sections: {},
+        savings_notes: [],
+        risk_notes: [],
+      },
+    } satisfies MobileSummary;
+
+    const { container } = render(<ReportScreen mobileSummary={mobileSummary} />);
+
+    expect(screen.getAllByText("¥3.5").length).toBeGreaterThan(0);
+    expect(container.textContent).not.toContain("¥99");
+    expect(screen.getByText("费用按校园机器规则配置估算，实际以设备页面为准。")).toBeInTheDocument();
   });
 
   it("splits total cost and cost breakdown into readable text", () => {

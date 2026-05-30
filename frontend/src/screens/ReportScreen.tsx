@@ -3,9 +3,8 @@ import { machineDisplayLabel } from "../api/machineDisplay";
 import type { MobileSummary } from "../api/mobileSummary";
 import type { LaundryBucket, DryingStep } from "../api/types";
 import { Card, Chip, Page, PrimaryPanel, Section } from "../components/AppChrome";
-import { report } from "../data/washMateContent";
 
-type PriceRuleMap = Record<string, Record<string, { price_yuan?: number }>>;
+type ReportStatus = "loading" | "unconfigured" | "empty" | "blocked" | "ready";
 
 interface RouteCard {
   id: string;
@@ -29,8 +28,9 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
   const dryingPlan = mobileSummary?.drying_plan;
   const planReport = mobileSummary?.report;
   const hasPlan = Boolean(plan?.buckets.length);
-  const hasSummary = Boolean(mobileSummary);
-  const pricingRules = mobileSummary?.campus_context.pricing_rules as PriceRuleMap | undefined;
+  const reportStatus = reportStatusFor(mobileSummary);
+  const isReady = reportStatus === "ready";
+  const isBlocked = reportStatus === "blocked";
   const nameMap = new Map(mobileSummary?.wardrobe.items.map((item) => [item.item_id, item.name]) ?? []);
 
   // Wash-phase cost only.
@@ -45,16 +45,17 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
       : dryCost && hasValidDryCost
         ? { main: `¥${formatMoney(totalCost)}`, breakdown: `洗 ¥${formatMoney(washCost)} + 烘 ¥${formatMoney(dryCost)}` }
         : { main: `¥${formatMoney(washCost)}`, breakdown: null as string | null }
-    : { main: report.total, breakdown: null as string | null };
+    : { main: "待确认", breakdown: null as string | null };
   const durationCopy = durationSummary(plan?.estimated_duration_minutes, dryingPlan?.estimated_duration_minutes);
   const bucketCountText = plan ? `${plan.buckets.length} 个批次` : "待生成";
-  const routeCards = hasPlan && plan ? buildRouteCards(plan.buckets, nameMap, pricingRules) : [];
+  const routeCards = hasPlan && plan ? buildRouteCards(plan.buckets, nameMap) : [];
   const reminders = conciseReminders(planReport?.risk_notes, plan?.global_warnings, plan?.buckets.flatMap((bucket) => bucket.warnings));
   const overview = environmentOverview(mobileSummary);
+  const statusCopy = reportStatusCopy(reportStatus);
 
   // Drying route cards.
   const dryRouteCards = dryingPlan
-    ? buildDryingRouteCards(dryingPlan.steps, nameMap, pricingRules)
+    ? buildDryingRouteCards(dryingPlan.steps, nameMap)
     : [];
 
   return (
@@ -65,7 +66,7 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
           <h1>{planReport?.title ?? "本次洗护报告"}</h1>
           <p>用几眼看完花费、路线和风险，不再读长段报告。</p>
         </div>
-        <Chip tone={hasPlan ? "teal" : "orange"}>{hasPlan ? "已生成" : "待选择"}</Chip>
+        <Chip tone={statusCopy.tone}>{statusCopy.label}</Chip>
       </header>
 
       <PrimaryPanel className="report-hero-panel">
@@ -95,6 +96,7 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
           </div>
         </div>
         <p className="report-verdict">{plan?.summary ?? "选择本次要清洗的衣物后，这里会生成费用、路线和风险摘要。"}</p>
+        {plan ? <p className="report-cost-source">费用按校园机器规则配置估算，实际以设备页面为准。</p> : null}
       </PrimaryPanel>
 
       <Section title="环境速览">
@@ -117,7 +119,7 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
         </div>
       </Section>
 
-      <Section title="洗护路线" action={<Chip tone={hasPlan ? "teal" : "orange"}>{hasPlan ? "可执行" : "待生成"}</Chip>}>
+      <Section title="洗护路线" action={<Chip tone={statusCopy.tone}>{isReady ? "可执行" : isBlocked ? "待机器空闲" : "待生成"}</Chip>}>
         {routeCards.length ? (
           <div className="report-route-list">
             {routeCards.map((route, index) => (
@@ -142,7 +144,7 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
         ) : (
           <Card accent="blue" className="report-empty-card">
             <h3>还没有路线</h3>
-            <p>{hasSummary ? "先在脏衣篮选择本次要洗的衣物，报告会自动变成可执行路线。" : "加载完成后会显示本次洗护路线。"}</p>
+            <p>{emptyRouteText(reportStatus)}</p>
           </Card>
         )}
       </Section>
@@ -190,16 +192,9 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
   );
 }
 
-function buildRouteCards(
-  buckets: LaundryBucket[],
-  nameMap: Map<string, string>,
-  pricingRules?: PriceRuleMap,
-): RouteCard[] {
+function buildRouteCards(buckets: LaundryBucket[], nameMap: Map<string, string>): RouteCard[] {
   return buckets.map((bucket) => {
     const itemNames = bucket.item_ids.map((id) => nameMap.get(id) ?? "本批衣物");
-    const washPrice = bucket.wash_method === "machine_wash"
-      ? pricingRules?.wash_programs?.[bucket.program]?.price_yuan
-      : undefined;
     return {
       id: bucket.bucket_id,
       title: bucketTitle(bucket),
@@ -209,7 +204,7 @@ function buildRouteCards(
       machine: bucketMachineLabel(bucket),
       detergent: bucket.detergent_ml == null ? "洗衣液按需" : `洗衣液 ${bucket.detergent_ml} ml`,
       dry: dryLabel(bucket.dry_method),
-      priceLine: washPrice ? formatPrice(washPrice) : "无需机洗计费",
+      priceLine: bucketPriceLine(bucket),
       tone: bucketTone(bucket),
     };
   });
@@ -218,7 +213,6 @@ function buildRouteCards(
 function buildDryingRouteCards(
   steps: DryingStep[],
   nameMap: Map<string, string>,
-  _pricingRules?: PriceRuleMap,
 ): RouteCard[] {
   return steps
     .filter((step) => step.dry_method === "low_heat_dryer")
@@ -261,6 +255,12 @@ function environmentOverview(summary?: MobileSummary | null) {
   if (!summary) {
     return { machineAvailability: "待同步", waitTime: "待确认", drying: "待确认" };
   }
+  if (summary.campus_status?.state === "unconfigured") {
+    return { machineAvailability: "待配置", waitTime: "待确认", drying: dryingLabel(summary.campus_context.drying_context) };
+  }
+  if (summary.campus_status?.state === "unavailable") {
+    return { machineAvailability: "状态不可用", waitTime: "待确认", drying: dryingLabel(summary.campus_context.drying_context) };
+  }
   const total = summary.campus_context.all_machines.length;
   const available = summary.campus_context.available_machines.length;
   const waits = summary.campus_context.queue_estimates
@@ -269,7 +269,7 @@ function environmentOverview(summary?: MobileSummary | null) {
     .sort((a, b) => a - b);
   return {
     machineAvailability: total ? `可用 ${available}/${total}` : "暂无设备",
-    waitTime: waits.length ? `${waits[0]} 分钟` : "无需等待",
+    waitTime: waits.length ? `${waits[0]} 分钟` : total ? "等待待确认" : "待确认",
     drying: dryingLabel(summary.campus_context.drying_context),
   };
 }
@@ -335,6 +335,34 @@ function durationSummary(
 
 function formatMoney(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function reportStatusFor(summary?: MobileSummary | null): ReportStatus {
+  if (!summary) return "loading";
+  if (summary.campus_status?.state === "unconfigured" || summary.campus_status?.state === "unavailable") return "unconfigured";
+  if (!summary.selected_laundry_item_ids.length || !summary.plan.buckets.length) return "empty";
+  if (summary.plan.buckets.some((bucket) => bucket.wash_method === "machine_wash" && !bucket.machine_id)) return "blocked";
+  return "ready";
+}
+
+function reportStatusCopy(status: ReportStatus): { label: string; tone: "teal" | "orange" } {
+  if (status === "ready") return { label: "已生成", tone: "teal" };
+  if (status === "blocked") return { label: "待机器空闲", tone: "orange" };
+  if (status === "unconfigured") return { label: "待配置", tone: "orange" };
+  if (status === "empty") return { label: "待选择", tone: "orange" };
+  return { label: "加载中", tone: "orange" };
+}
+
+function emptyRouteText(status: ReportStatus): string {
+  if (status === "unconfigured") return "请先在我的页面选择宿舍楼，系统读取机器状态后再生成路线。";
+  if (status === "empty") return "先在脏衣篮选择本次要洗的衣物，报告会自动生成路线。";
+  return "加载完成后会显示本次洗护路线。";
+}
+
+function bucketPriceLine(bucket: LaundryBucket): string {
+  if (bucket.wash_method !== "machine_wash") return "无需机洗计费";
+  if (!bucket.machine_id) return "待机器空闲";
+  return formatPrice(bucket.estimated_cost_yuan);
 }
 
 function bucketTitle(bucket: LaundryBucket): string {

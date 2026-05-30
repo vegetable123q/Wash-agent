@@ -5,7 +5,6 @@ import type { ModelHubConfig } from "../api/modelHubConfig";
 import { generatePlanSummary } from "../api/llmSummary";
 import type { MobileSummary } from "../api/mobileSummary";
 import { Card, Chip, Page, Section, TopBar } from "../components/AppChrome";
-import { bucketPlans } from "../data/washMateContent";
 
 interface PlanDetailScreenProps {
   onBack: () => void;
@@ -64,8 +63,8 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig, onComp
           accent: missingWasher || isManual ? ("orange" as const) : ("purple" as const),
         };
       })
-    : hasSummary
-      ? [{
+      : hasSummary
+        ? [{
           id: "empty-plan",
           title: hasSelectedEmptyPlan ? "暂无可执行分桶" : "暂无本次分桶",
           machine: hasSelectedEmptyPlan ? "待处理" : "待选择",
@@ -75,10 +74,17 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig, onComp
           tags: emptyPlanTags,
           accent: "purple" as const,
         }]
-      : bucketPlans;
+      : [{
+          id: "loading-plan",
+          title: "等待本次方案",
+          machine: "待生成",
+          detail: "选择衣物并读取机器状态后，这里会显示真实洗衣顺序。",
+          tags: [{ label: "等待数据", tone: "orange" as const }],
+          accent: "purple" as const,
+        }];
 
   const preparationSteps: PreparationStep[] = useMemo(() => {
-    if (!hasSummary) return defaultPreparationSteps();
+    if (!hasSummary) return [{ icon: "blue", title: "等待数据", description: "本地衣柜和机器状态加载完成后，再生成执行准备。" }];
     if (!hasBuckets) {
       if (hasSelectedItems) {
         return [{ icon: "amber", title: "查看机器状态", description: "当前衣物已选中，但还没有可执行分桶；请刷新机器状态或手动确认可用洗衣机。" }];
@@ -104,7 +110,9 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig, onComp
       });
     }
 
-    return steps.length > 0 ? steps : defaultPreparationSteps();
+    return steps.length > 0
+      ? steps
+      : [{ icon: "teal", title: "按桶核对衣物", description: `${planBuckets.map((b) => bucketDisplayName(b.bucket_id)).join("、")}已生成，执行前核对衣物和机器状态。` }];
   }, [planBuckets, hasBuckets, hasSummary, hasSelectedItems]);
 
   // Drying-phase preparation steps.
@@ -131,7 +139,7 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig, onComp
   }, [dryingPlan]);
 
   const exclusionItems: ExclusionItem[] = useMemo(() => {
-    if (!hasSummary) return defaultExclusionItems();
+    if (!hasSummary) return [];
     if (!hasBuckets) return [];
     const items = planBuckets
       .filter((b) => b.wash_method !== "machine_wash")
@@ -168,10 +176,10 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig, onComp
 
       <Card accent="purple" className="summary-card">
         <div>
-          <h2>{hasBuckets ? `${planBuckets.length} 个洗护批次` : hasSelectedEmptyPlan ? "方案暂未生成" : hasSummary ? "暂无本次方案" : "3 桶分开洗"}</h2>
-          <p>{llmSummary ?? mobileSummary?.plan.summary ?? "床品单独占用标准筒，不和普通衣物混洗。"}</p>
+          <h2>{hasBuckets ? `${planBuckets.length} 个洗护批次` : hasSelectedEmptyPlan ? "方案暂未生成" : hasSummary ? "暂无本次方案" : "等待生成方案"}</h2>
+          <p>{llmSummary ?? mobileSummary?.plan.summary ?? "选择衣物并读取机器状态后，这里会显示真实分桶、费用和执行提醒。"}</p>
         </div>
-        <Chip tone={hasBuckets ? "teal" : "orange"}>{hasBuckets ? "已生成" : hasSelectedEmptyPlan ? "待确认" : hasSummary ? "待选择" : "可执行"}</Chip>
+        <Chip tone={hasBuckets ? "teal" : "orange"}>{hasBuckets ? "已生成" : hasSelectedEmptyPlan ? "待确认" : hasSummary ? "待选择" : "加载中"}</Chip>
       </Card>
 
       {hasBuckets && hasSelectedItems ? (
@@ -300,17 +308,6 @@ function exclusionReason(bucket: { wash_method: string; warnings: string[] }) {
   if (bucket.wash_method === "dry_clean") return "该批次需要专业干洗，不进入共享洗衣机。";
   if (bucket.wash_method === "do_not_wash") return "洗护标签提示不可水洗。";
   return "建议单独处理。";
-}
-
-function defaultPreparationSteps(): PreparationStep[] {
-  return [
-    { icon: "teal", title: "洗衣液按桶分配", description: "浅色 1 瓶盖，深色 1 瓶盖，床单 1.5 瓶盖。" },
-    { icon: "blue", title: "贴身衣物装袋", description: "白 T 和运动衣进入浅色桶，降低摩擦和公共卫生顾虑。" },
-  ];
-}
-
-function defaultExclusionItems(): ExclusionItem[] {
-  return [{ title: "羊毛开衫不进共享机", description: "材质易缩水变形，本次从机洗分桶中排除。", method: "手洗/干洗" }];
 }
 
 function machineTypeLabel(machineType: string) {
