@@ -182,6 +182,28 @@ class CModuleTests(unittest.TestCase):
 
         self.assertEqual(advice.priority_score, 0)
 
+    def test_frequency_uses_common_english_alias_thresholds(self) -> None:
+        cases = [
+            ("white cotton tee", 2, 45),
+            ("cotton bed sheet", 1, 45),
+        ]
+
+        for name, wear_count, min_score in cases:
+            with self.subTest(name=name):
+                item = WardrobeItem(
+                    profile=ClothingProfile(
+                        item_id=f"alias-{wear_count}",
+                        name=name,
+                        material_ratios={"cotton": 1.0},
+                        colors=["white"],
+                    ),
+                    wear_count_since_wash=wear_count,
+                )
+
+                advice = advise_frequency(item, LaundryConstraints())
+
+                self.assertGreaterEqual(advice.priority_score, min_score)
+
     def test_frequency_requires_item_and_constraints(self) -> None:
         item = self.store.get_item("wm-white-tee-001")
         assert item is not None
