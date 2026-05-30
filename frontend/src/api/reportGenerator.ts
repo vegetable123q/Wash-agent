@@ -63,10 +63,12 @@ function stepsSection(plan: LaundryPlan, itemNames: Map<string, string>): string
 function costTimeSection(plan: LaundryPlan): string {
   if (plan.estimated_cost_yuan == null) throw new Error("plan estimated_cost_yuan is required for report");
   if (plan.estimated_duration_minutes == null) throw new Error("plan estimated_duration_minutes is required for report");
+  const estimatedCost = requiredNonNegativeNumber(plan.estimated_cost_yuan, "plan.estimated_cost_yuan");
+  const estimatedDuration = requiredNonNegativeInteger(plan.estimated_duration_minutes, "plan.estimated_duration_minutes");
   const charged = chargedBatches(plan);
   const batchText = charged.length ? charged.join("；") : "本次没有共享洗衣机或烘干机计费批次";
   return (
-    `预计费用 ${plan.estimated_cost_yuan} 元，预计机器占用时间 ${plan.estimated_duration_minutes} 分钟。` +
+    `预计费用 ${estimatedCost} 元，预计机器占用时间 ${estimatedDuration} 分钟。` +
     `计费批次：${batchText}。`
   );
 }
@@ -306,4 +308,18 @@ function machineTypeText(type: MachineType): string {
 
 function dedupe(items: string[]): string[] {
   return [...new Set(items)];
+}
+
+function requiredNonNegativeNumber(value: number, fieldName: string): number {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${fieldName} must be a non-negative finite number`);
+  }
+  return value;
+}
+
+function requiredNonNegativeInteger(value: number, fieldName: string): number {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`${fieldName} must be a non-negative integer`);
+  }
+  return value;
 }

@@ -124,6 +124,20 @@ describe("generateReport", () => {
 
     expect(() => generateReport(plan, minimalItems(), minimalCampusContext())).toThrow(/missing-a.*missing-b/);
   });
+
+  it("rejects invalid report totals before rendering", () => {
+    expect(() => generateReport(
+      { ...minimalPlan(), estimated_cost_yuan: -1 },
+      minimalItems(),
+      minimalCampusContext(),
+    )).toThrow(/estimated_cost_yuan/);
+
+    expect(() => generateReport(
+      { ...minimalPlan(), estimated_duration_minutes: 1.5 },
+      minimalItems(),
+      minimalCampusContext(),
+    )).toThrow(/estimated_duration_minutes/);
+  });
 });
 
 function minimalPlan(): LaundryPlan {
