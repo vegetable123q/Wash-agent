@@ -203,6 +203,48 @@ class CampusContextTests(unittest.TestCase):
             {"has_balcony": False, "balcony_available": False},
         )
 
+    def test_build_campus_context_prefers_balcony_available_over_alias(self) -> None:
+        client = FakeMachineClient([])
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            context = build_campus_context(
+                client,
+                {
+                    "tower_key": "ncrkiz1",
+                    "tower_provider": "cleverschool",
+                    "drying_context": {
+                        "balcony_available": True,
+                        "has_balcony": False,
+                    },
+                },
+                machine_rules_path=_write_rules(tmp_dir),
+            )
+
+        self.assertEqual(context.drying_context["balcony_available"], True)
+        self.assertEqual(context.drying_context["has_balcony"], False)
+
+    def test_build_campus_context_legacy_balcony_alias_overrides_rule_default(
+        self,
+    ) -> None:
+        client = FakeMachineClient([])
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            rules_path = _write_rules(tmp_dir)
+            rules = json.loads(rules_path.read_text(encoding="utf-8"))
+            rules["drying_context"] = {"balcony_available": True}
+            rules_path.write_text(json.dumps(rules, ensure_ascii=False), encoding="utf-8")
+
+            context = build_campus_context(
+                client,
+                {
+                    "tower_key": "ncrkiz1",
+                    "tower_provider": "cleverschool",
+                    "drying_context": {"has_balcony": False},
+                },
+                machine_rules_path=rules_path,
+            )
+
+        self.assertEqual(context.drying_context["balcony_available"], False)
+        self.assertEqual(context.drying_context["has_balcony"], False)
+
     def test_build_campus_context_from_user_input_merges_sources_for_same_building(
         self,
     ) -> None:

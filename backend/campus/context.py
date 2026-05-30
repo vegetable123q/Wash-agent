@@ -69,12 +69,11 @@ def build_campus_context(
     ).strip()
 
     weather = _optional_object(inputs, "weather")
-    drying_context = _normalize_drying_context(
-        {
-            **_rules_drying_context(rules_path),
-            **_optional_object(inputs, "drying_context"),
-        }
+    rules_drying_context = _normalize_drying_context(_rules_drying_context(rules_path))
+    input_drying_context = _normalize_drying_context(
+        _optional_object(inputs, "drying_context")
     )
+    drying_context = {**rules_drying_context, **input_drying_context}
     tower_keys = _optional_string_map(inputs, "tower_keys")
     if tower_keys:
         all_machines = []
@@ -123,7 +122,7 @@ def _optional_object(inputs: dict[str, object], key: str) -> dict[str, Any]:
 
 def _normalize_drying_context(value: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(value)
-    if "has_balcony" in normalized:
+    if "has_balcony" in normalized and "balcony_available" not in normalized:
         normalized["balcony_available"] = normalized["has_balcony"]
     return normalized
 
