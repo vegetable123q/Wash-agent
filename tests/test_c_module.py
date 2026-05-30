@@ -149,6 +149,24 @@ class CModuleTests(unittest.TestCase):
         self.assertGreaterEqual(advice["wm-white-tee-001"].priority_score, 45)
         self.assertIn("运动", " ".join(advice["wm-sports-tee-001"].reasons))
 
+    def test_frequency_trims_urgent_item_ids_before_matching(self) -> None:
+        item = WardrobeItem(
+            profile=ClothingProfile(
+                item_id="urgent-tee",
+                name="cotton t-shirt",
+                material_ratios={"cotton": 1.0},
+                colors=["white"],
+            ),
+            wear_count_since_wash=0,
+        )
+
+        advice = advise_frequency(
+            item,
+            LaundryConstraints(urgent_item_ids=[" urgent-tee ", " urgent-tee "]),
+        )
+
+        self.assertGreaterEqual(advice.priority_score, 25)
+
     def test_frequency_requires_item_and_constraints(self) -> None:
         item = self.store.get_item("wm-white-tee-001")
         assert item is not None

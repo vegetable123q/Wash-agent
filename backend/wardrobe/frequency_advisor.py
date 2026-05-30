@@ -57,6 +57,7 @@ def advise_frequency(
     _validate_constraints(constraints)
     search_text = _search_text(item)
     threshold = _threshold_for(search_text)
+    urgent_item_ids = set(_normalized_item_ids(constraints.urgent_item_ids))
     reasons: list[str] = []
     score = 0.0
 
@@ -66,7 +67,7 @@ def advise_frequency(
     else:
         reasons.append(f"已穿 {item.wear_count_since_wash} 次，未达到建议清洗阈值 {threshold} 次。")
 
-    if item.profile.item_id in constraints.urgent_item_ids:
+    if item.profile.item_id in urgent_item_ids:
         score += 25
         reasons.append("该衣物被标记为本次急用，优先级提高。")
 
@@ -185,6 +186,10 @@ def _item_id_list(value: object, field_name: str) -> None:
         raise ValueError(f"{field_name} must be a list of non-empty strings")
     if not all(isinstance(item, str) and item.strip() for item in value):
         raise ValueError(f"{field_name} must be a list of non-empty strings")
+
+
+def _normalized_item_ids(item_ids: list[str]) -> list[str]:
+    return dedupe([item_id.strip() for item_id in item_ids])
 
 
 def _boolean(value: object, field_name: str) -> None:
