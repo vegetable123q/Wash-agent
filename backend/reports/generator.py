@@ -181,6 +181,13 @@ def _machine_info_list(value: object, field_name: str) -> None:
     for index, machine in enumerate(value):
         if not isinstance(machine, MachineInfo):
             raise ValueError(f"campus_context.{field_name}[{index}] must be a MachineInfo")
+        _validate_machine_info(machine, f"campus_context.{field_name}[{index}]")
+
+
+def _validate_machine_info(machine: MachineInfo, field_name: str) -> None:
+    _non_empty_string(machine.machine_id, f"{field_name}.machine_id")
+    _non_empty_string(machine.location, f"{field_name}.location")
+    _enum_field(machine.machine_type, MachineType, f"{field_name}.machine_type")
 
 
 def _steps_section(plan: LaundryPlan, item_names: dict[str, str]) -> str:

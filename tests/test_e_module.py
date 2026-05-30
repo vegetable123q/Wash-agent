@@ -1138,6 +1138,35 @@ class EModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, field_name):
                     generate_report(plan, items, campus_context)
 
+    def test_report_requires_valid_campus_machine_fields(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        plan = plan_laundry(items, LaundryConstraints(selected_item_ids=["white-tee"]), _campus_context())
+
+        def invalid_context(**overrides: object) -> CampusContext:
+            machine_values = {
+                "machine_id": "washer-1",
+                "location": "Dorm 1F",
+                "machine_type": MachineType.STANDARD_WASHER,
+                "status": MachineStatus.AVAILABLE,
+            }
+            machine_values.update(overrides)
+            return CampusContext(
+                available_machines=[MachineInfo(**machine_values)],  # type: ignore[arg-type]
+            )
+
+        invalid_contexts = [
+            ("machine_id", invalid_context(machine_id=True)),
+            ("machine_id", invalid_context(machine_id="")),
+            ("location", invalid_context(location=True)),
+            ("location", invalid_context(location="")),
+            ("machine_type", invalid_context(machine_type="standard_washer")),
+        ]
+
+        for field_name, campus_context in invalid_contexts:
+            with self.subTest(field_name=field_name, campus_context=campus_context):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    generate_report(plan, items, campus_context)
+
     def test_report_describes_plan_without_mutating_it(self) -> None:
         items = [
             _item("white-tee", "白色纯棉 T 恤", colors=["white"], materials={"cotton": 1.0}),
