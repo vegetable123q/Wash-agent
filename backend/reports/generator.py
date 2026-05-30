@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import math
 
 from backend.shared.models import (
@@ -43,7 +44,7 @@ def generate_report(
         title="本次校园洗衣方案",
         sections=sections,
         action_steps=_action_steps(plan, item_names),
-        cost_breakdown=list(plan.cost_breakdown),
+        cost_breakdown=[replace(line) for line in plan.cost_breakdown],
         savings_notes=_savings_notes(plan),
         risk_notes=_risk_notes(plan),
     )

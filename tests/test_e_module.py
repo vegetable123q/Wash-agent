@@ -1274,6 +1274,15 @@ class EModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, field_name):
                     generate_report(plan, items, campus_context)
 
+    def test_report_cost_breakdown_lines_are_copied(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        plan = plan_laundry(items, LaundryConstraints(selected_item_ids=["white-tee"]), _campus_context())
+
+        report = generate_report(plan, items, _campus_context())
+        report.cost_breakdown[0].amount_yuan = 99.0
+
+        self.assertEqual(plan.cost_breakdown[0].amount_yuan, 4.0)
+
     def test_report_describes_plan_without_mutating_it(self) -> None:
         items = [
             _item("white-tee", "白色纯棉 T 恤", colors=["white"], materials={"cotton": 1.0}),
