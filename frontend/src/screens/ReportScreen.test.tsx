@@ -243,7 +243,7 @@ describe("ReportScreen", () => {
     expect(container.textContent).not.toContain("¥24");
   });
 
-  it("hides non-finite live report numbers", () => {
+  it("hides invalid live report numbers", () => {
     const mobileSummary = {
       source: "backend",
       selected_laundry_item_ids: ["tee-1"],
@@ -304,7 +304,7 @@ describe("ReportScreen", () => {
           },
         ],
         estimated_cost_yuan: Number.NaN,
-        estimated_duration_minutes: Number.POSITIVE_INFINITY,
+        estimated_duration_minutes: 1.5,
         summary: "浅色衣物标准洗。",
         global_warnings: [],
       },
@@ -319,6 +319,7 @@ describe("ReportScreen", () => {
     const { container } = render(<ReportScreen mobileSummary={mobileSummary} />);
 
     expect(container.textContent).not.toMatch(/NaN|Infinity/);
+    expect(container.textContent).not.toContain("1.5");
     expect(screen.getAllByText("待确认").length).toBeGreaterThan(0);
     expect(screen.getByText("费用待确认")).toBeInTheDocument();
   });

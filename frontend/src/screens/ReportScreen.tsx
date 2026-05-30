@@ -23,7 +23,7 @@ function formatPrice(price: number | null | undefined): string {
 }
 
 function formatDuration(minutes: number | null | undefined): string {
-  return isFiniteNonNegativeNumber(minutes) ? `${minutes} 分钟` : "待确认";
+  return isFiniteNonNegativeInteger(minutes) ? `${minutes} 分钟` : "待确认";
 }
 
 export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary | null }) {
@@ -202,6 +202,10 @@ function environmentOverview(summary?: MobileSummary | null) {
 
 function isFiniteNonNegativeNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function isFiniteNonNegativeInteger(value: unknown): value is number {
+  return isFiniteNonNegativeNumber(value) && Number.isInteger(value);
 }
 
 function conciseReminders(...groups: Array<string[] | undefined>): string[] {
