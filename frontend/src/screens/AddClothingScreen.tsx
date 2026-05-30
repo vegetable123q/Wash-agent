@@ -72,6 +72,7 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
   const canRecognizeText = hasModelHubConfig && textDescription.trim().length > 0 && recognitionStatus !== "recognizing";
   const canRecognizeBatch = hasModelHubConfig && batchFiles.length > 0 && recognitionStatus !== "recognizing";
   const canSaveBatch = batchDrafts.length > 0 && (status === "idle" || status === "error");
+  const showMissingModelHubConfig = !hasModelHubConfig && status !== "saved";
 
   const resultRows = [
     ["名称", draft.name.trim() || "待填写"],
@@ -385,7 +386,7 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
             </Card>
           </Section>
 
-          {!hasModelHubConfig ? <p className="form-status form-status-error">识图需要先在“我的”页面输入 ModelHub baseUrl 和 apikey</p> : null}
+          {showMissingModelHubConfig ? <p className="form-status form-status-error">识图需要先在“我的”页面输入 ModelHub baseUrl 和 apikey</p> : null}
           {recognitionStatus === "recognized" ? <p className="form-status form-status-ok">识别完成，已填入可编辑字段</p> : null}
           {recognitionStatus === "error" ? <p className="form-status form-status-error">{recognitionError}</p> : null}
           {status === "saved" ? <p className="form-status form-status-ok">保存成功，已加入衣柜</p> : null}

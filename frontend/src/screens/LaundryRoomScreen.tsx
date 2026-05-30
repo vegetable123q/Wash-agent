@@ -132,7 +132,7 @@ export function LaundryRoomScreen({
                   <h3>{machineCardTitle(machine)}</h3>
                 </div>
                 <p>{machinePriceText(machine, pricingRules)}</p>
-                <p className="machine-submeta">设备编号 {machine.machine_id}</p>
+                <p className="machine-submeta">{machineCardMeta(machine)}</p>
               </div>
               <Chip tone={toneForMachineStatus(machine.status)}>{statusText(machine.status)}</Chip>
             </Card>
@@ -239,6 +239,27 @@ function statusText(status: string) {
 
 function machineCardTitle(machine: BackendMachine) {
   return `${machineTypeLabel(machine.machine_type)} · ${machine.location}`;
+}
+
+function machineCardMeta(machine: BackendMachine) {
+  const parts = [statusText(machine.status)];
+  if (isFiniteNonNegativeInteger(machine.remaining_minutes)) {
+    parts.push(`剩余 ${machine.remaining_minutes} 分钟`);
+  }
+  parts.push(machine.modes.length ? machine.modes.map(programLabel).join(" / ") : "模式待同步");
+  return parts.join(" · ");
+}
+
+function programLabel(program: string) {
+  const labels: Record<string, string> = {
+    standard: "标准洗",
+    quick: "快洗",
+    large: "大件洗",
+    low: "低温",
+    medium: "中温",
+    high: "高温",
+  };
+  return labels[program] ?? program;
 }
 
 function formatUpdateTime(value: string) {

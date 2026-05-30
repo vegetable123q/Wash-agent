@@ -1,4 +1,5 @@
 import { AlertTriangle, BadgeCheck, Clock3, Leaf, Shirt, TrendingDown, WashingMachine } from "lucide-react";
+import { machineDisplayLabel } from "../api/machineDisplay";
 import type { MobileSummary } from "../api/mobileSummary";
 import type { LaundryBucket, DryingStep } from "../api/types";
 import { Card, Chip, Page, PrimaryPanel, Section } from "../components/AppChrome";
@@ -12,6 +13,7 @@ interface RouteCard {
   items: string;
   itemCount: string;
   method: string;
+  machine: string;
   detergent: string;
   dry: string;
   priceLine: string;
@@ -129,6 +131,7 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
                 </div>
                 <div className="report-route-facts">
                   <span>{route.method}</span>
+                  {route.machine ? <span>{route.machine}</span> : null}
                   <span>{route.detergent}</span>
                   <span>{route.priceLine}</span>
                 </div>
@@ -158,6 +161,7 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
                 </div>
                 <div className="report-route-facts">
                   <span>{route.method}</span>
+                  {route.machine ? <span>{route.machine}</span> : null}
                   <span>{route.priceLine}</span>
                 </div>
               </Card>
@@ -201,6 +205,7 @@ function buildRouteCards(
       items: itemNames.join("、") || "未列出衣物",
       itemCount: `${bucket.item_ids.length} 件衣物`,
       method: methodLabel(bucket),
+      machine: bucketMachineLabel(bucket),
       detergent: bucket.detergent_ml == null ? "洗衣液按需" : `洗衣液 ${bucket.detergent_ml} ml`,
       dry: dryLabel(bucket.dry_method),
       priceLine: washPrice ? formatPrice(washPrice) : "无需机洗计费",
@@ -224,12 +229,31 @@ function buildDryingRouteCards(
         items: itemNames.join("、"),
         itemCount: `${step.item_ids.length} 件`,
         method: dryLabel(step.dry_method),
+        machine: dryingMachineLabel(step),
         detergent: "",
         dry: step.dryer_machine_id ? `烘干机 ${step.dryer_machine_id}` : "",
         priceLine: step.estimated_cost_yuan != null ? formatPrice(step.estimated_cost_yuan) : "费用待确认",
         tone: "orange" as const,
       };
     });
+}
+
+function bucketMachineLabel(bucket: LaundryBucket): string {
+  if (!bucket.machine_id && !bucket.machine_location) return "";
+  return machineDisplayLabel({
+    machine_id: bucket.machine_id,
+    machine_location: bucket.machine_location,
+    machine_type: bucket.machine_type,
+  });
+}
+
+function dryingMachineLabel(step: DryingStep): string {
+  if (!step.dryer_machine_id && !step.dryer_machine_location) return "";
+  return machineDisplayLabel({
+    machine_id: step.dryer_machine_id,
+    machine_location: step.dryer_machine_location,
+    machine_type: "dryer",
+  });
 }
 
 function environmentOverview(summary?: MobileSummary | null) {

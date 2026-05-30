@@ -147,6 +147,8 @@ describe("ReportScreen", () => {
             item_ids: ["jeans", "coat", "scarf"],
             wash_method: "machine_wash",
             machine_type: "standard_washer",
+            machine_id: "clever-nq21-6",
+            machine_location: "南区21号楼 六层",
             program: "standard",
             detergent_ml: 36,
             use_laundry_bag: true,
@@ -214,6 +216,7 @@ describe("ReportScreen", () => {
     expect(screen.getByText("深色标准洗")).toBeInTheDocument();
     expect(screen.getByText("3 件衣物")).toBeInTheDocument();
     expect(screen.getByText("机洗 · 标准洗")).toBeInTheDocument();
+    expect(screen.getByText("南区21号楼六层6号洗衣机")).toBeInTheDocument();
     expect(screen.getByText("洗衣液 36 ml")).toBeInTheDocument();
     // Drying is now in a separate "烘干安排" section.
     expect(screen.getByText("低温烘干")).toBeInTheDocument();
@@ -221,6 +224,7 @@ describe("ReportScreen", () => {
     expect(container.textContent).not.toContain("1. 干洗衣物");
     expect(container.textContent).not.toContain("计费批次");
     expect(container.textContent).not.toContain("790781");
+    expect(container.textContent).not.toContain("clever-nq21-6");
   });
 
   it("does not show the static demo total when a live summary has no cost yet", () => {

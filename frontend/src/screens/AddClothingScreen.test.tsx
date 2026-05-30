@@ -51,6 +51,7 @@ describe("AddClothingScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: /保存到衣柜/ }));
 
     expect(await screen.findByText("保存成功，已加入衣柜")).toBeInTheDocument();
+    expect(screen.queryByText("识图需要先在“我的”页面输入 ModelHub baseUrl 和 apikey")).not.toBeInTheDocument();
     expect(onSaved).toHaveBeenCalledTimes(1);
     expect(fetchMock).not.toHaveBeenCalled();
   });

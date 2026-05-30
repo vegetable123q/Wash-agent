@@ -8,10 +8,13 @@ import {
 import {
   clearLaundrySelection,
   clearWardrobeItems,
+  completeLaundryPlan,
   deleteWardrobeItem,
   fetchMobileSummary,
   rebuildMobileSummaryForSelection,
+  recordWardrobeWear,
   setLaundrySelection,
+  setWardrobeWearCount,
   type BackendMachine,
   type MobileSummary,
   type WardrobeSummaryItem,
@@ -199,6 +202,30 @@ export default function App() {
     );
   };
 
+  const handleRecordWardrobeWear = async (itemId: string) => {
+    await recordWardrobeWear(itemId);
+    await refreshMobileSummary();
+  };
+
+  const handleSetWardrobeWearCount = async (itemId: string, wearCount: number) => {
+    await setWardrobeWearCount(itemId, wearCount);
+    await refreshMobileSummary();
+  };
+
+  const handleAddClothingToBasket = async (itemId: string) => {
+    const selected = new Set(mobileSummary?.selected_laundry_item_ids ?? []);
+    selected.add(itemId);
+    const result = await setLaundrySelection([...selected]);
+    setMobileSummary((current) =>
+      current ? rebuildMobileSummaryForSelection(current, result.selected_item_ids, userProfile) : current,
+    );
+  };
+
+  const handleCompleteLaundryPlan = async () => {
+    await completeLaundryPlan();
+    await refreshMobileSummary();
+  };
+
   useEffect(() => {
     screenRef.current = screen;
   }, [screen]);
@@ -266,7 +293,14 @@ export default function App() {
           />
         );
       case "planDetail":
-        return <PlanDetailScreen onBack={goBack} mobileSummary={mobileSummary} modelHubConfig={modelHubConfig} />;
+        return (
+          <PlanDetailScreen
+            onBack={goBack}
+            mobileSummary={mobileSummary}
+            modelHubConfig={modelHubConfig}
+            onCompletePlan={handleCompleteLaundryPlan}
+          />
+        );
       case "dirtyBasket":
         return (
           <DirtyBasketScreen
@@ -291,7 +325,18 @@ export default function App() {
       case "addClothing":
         return <AddClothingScreen modelHubConfig={modelHubConfig} onBack={goBack} onSaved={refreshMobileSummary} />;
       case "clothingDetail":
-        return <ClothingDetailScreen onBack={goBack} backendItem={selectedBackendItem} staticItem={selectedStaticItem} modelHubConfig={modelHubConfig} />;
+        return (
+          <ClothingDetailScreen
+            onBack={goBack}
+            backendItem={selectedBackendItem}
+            staticItem={selectedStaticItem}
+            modelHubConfig={modelHubConfig}
+            onRecordWear={handleRecordWardrobeWear}
+            onSetWearCount={handleSetWardrobeWearCount}
+            onAddToBasket={handleAddClothingToBasket}
+            isInDirtyBasket={Boolean(selectedBackendItem && mobileSummary?.selected_laundry_item_ids.includes(selectedBackendItem.item_id))}
+          />
+        );
       case "laundryRoom":
         return (
           <LaundryRoomScreen

@@ -483,7 +483,7 @@ function careLabelValueText(entry: unknown): string {
 }
 
 function withCareEvidenceMarker(text: string, entry: unknown): string {
-  if (!text || /（(?:推断|标签)）/.test(text)) return text;
+  if (!text || /[（(](?:推断|标签)[）)]/.test(text)) return text;
   const source = careEvidenceSource(entry);
   return `${text}（${source}）`;
 }

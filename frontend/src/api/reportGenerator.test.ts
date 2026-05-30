@@ -12,6 +12,8 @@ describe("generateReport", () => {
           wash_method: "machine_wash",
           machine_type: "standard_washer",
           program: "standard",
+          machine_id: "clever-nq21-6",
+          machine_location: "南区21号楼 六层",
           detergent_ml: 35,
           use_laundry_bag: false,
           dry_method: "air_dry",
@@ -89,9 +91,12 @@ describe("generateReport", () => {
     const text = JSON.stringify(report);
 
     expect(report.sections["洗衣步骤"]).toContain("床品单独洗：床单被套");
+    expect(report.sections["洗衣步骤"]).toContain("洗衣机：南区21号楼六层6号洗衣机");
     expect(report.sections["洗衣步骤"]).toContain("程序：标准洗");
     expect(report.sections["费用和时间"]).toContain("床品单独洗 · 标准洗");
     expect(text).toContain("洗衣机 等待时间未知");
+    expect(text).not.toContain("clever-nq21-6");
+    expect(text).not.toContain("推荐使用 455514");
     expect(text).not.toMatch(/large-bedding|standard_washer|程序 standard/);
   });
 

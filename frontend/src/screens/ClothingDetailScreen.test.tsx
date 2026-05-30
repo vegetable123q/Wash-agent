@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { emptyModelHubConfig } from "../api/modelHubConfig";
 import { generateRiskDescription } from "../api/llmSummary";
@@ -78,6 +78,75 @@ describe("ClothingDetailScreen", () => {
 
     expect(screen.queryByText("与深色衣物同桶")).not.toBeInTheDocument();
     expect(screen.getByText("按浅色衣物清洗")).toBeInTheDocument();
+  });
+
+  it("offers wardrobe-memory actions for backend items", () => {
+    const onRecordWear = vi.fn();
+    const onAddToBasket = vi.fn();
+
+    render(
+      <ClothingDetailScreen
+        onBack={vi.fn()}
+        backendItem={wardrobeItem({
+          item_id: "tee-1",
+          name: "白色 T 恤",
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          risks: {},
+        })}
+        onRecordWear={onRecordWear}
+        onAddToBasket={onAddToBasket}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "记录穿着" }));
+    fireEvent.click(screen.getByRole("button", { name: "加入脏衣篮" }));
+
+    expect(onRecordWear).toHaveBeenCalledWith("tee-1");
+    expect(onAddToBasket).toHaveBeenCalledWith("tee-1");
+  });
+
+  it("lets backend item wear count be edited manually", () => {
+    const onSetWearCount = vi.fn();
+
+    render(
+      <ClothingDetailScreen
+        onBack={vi.fn()}
+        backendItem={wardrobeItem({
+          item_id: "tee-1",
+          name: "白色 T 恤",
+          wear_count_since_wash: 2,
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          risks: {},
+        })}
+        onSetWearCount={onSetWearCount}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("手动修改穿着次数"), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存次数" }));
+
+    expect(onSetWearCount).toHaveBeenCalledWith("tee-1", 5);
+  });
+
+  it("disables the dirty-basket action when the item is already selected", () => {
+    render(
+      <ClothingDetailScreen
+        onBack={vi.fn()}
+        backendItem={wardrobeItem({
+          item_id: "tee-1",
+          name: "白色 T 恤",
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          risks: {},
+        })}
+        isInDirtyBasket={true}
+        onAddToBasket={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "已在脏衣篮" })).toBeDisabled();
   });
 
   it("filters invalid material ratios in backend detail text", () => {

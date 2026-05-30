@@ -19,6 +19,7 @@ import type {
   WardrobeItemForPlan,
 } from "./types";
 import { splitItemsByLaundryLoad } from "./laundryLoad";
+import { machineDisplayLabel } from "./machineDisplay";
 
 // ─── constants ──────────────────────────────────────────────────────────
 
@@ -28,8 +29,10 @@ const DARK_COLOR_TERMS = new Set([
 ]);
 const LIGHT_COLOR_TERMS = new Set([
   "white", "light", "gray", "grey", "light blue", "sky blue", "silver", "beige", "cream", "ivory", "pastel",
+  "pink", "rose", "mauve", "lavender", "lilac", "multicolor", "multi-color", "multi color", "patterned",
   "浅色", "白", "灰", "浅灰", "浅蓝", "淡蓝", "天蓝", "银色", "米色", "奶油色", "象牙白",
-  "浅粉", "浅黄", "浅绿", "浅紫", "浅卡其",
+  "粉", "粉色", "浅粉", "藕粉", "淡粉", "粉紫", "浅黄", "浅绿", "浅紫", "淡紫", "浅卡其",
+  "多色", "彩色", "花色", "浅色花纹",
 ]);
 const BEDDING_TERMS = new Set(["bedding", "sheet", "duvet", "床单", "被套", "床品"]);
 const WOOL_TERMS = new Set(["wool", "羊毛", "cashmere", "羊绒"]);
@@ -48,7 +51,7 @@ const DO_NOT_MACHINE_WASH_TERMS = new Set([
   "禁止机洗",
   "非机洗",
 ]);
-const DRY_CLEAN_TERMS = new Set(["dry_clean_only", "dry clean only", "只能干洗", "干洗"]);
+const DRY_CLEAN_TERMS = new Set(["dry_clean_only", "dry clean only", "只能干洗", "仅限干洗"]);
 const DO_NOT_WASH_TERMS = new Set(["do_not_wash", "不可水洗", "不能水洗"]);
 const DO_NOT_DRY_TERMS = new Set(["do_not_tumble_dry", "do_not_dry", "不可烘干", "不能烘干"]);
 const HIGH_DRY_RISK_KEYS = new Set(["shrink", "deform", "dryer_damage"]);
@@ -299,11 +302,12 @@ function bucketIdFor(item: WardrobeItemForPlan, constraints: LaundryConstraints)
   }
   if (containsAny(text, BEDDING_TERMS)) return "large-bedding";
   const hasColorBleedRisk = hasHighRisk(item, new Set(["color_bleed"]));
-  if (containsAny(text, DARK_COLOR_TERMS) || hasColorBleedRisk) {
+  const colorText = colorSearchText(item);
+  if (containsAny(colorText, DARK_COLOR_TERMS) || hasColorBleedRisk) {
     if (constraints.allow_mixed_colors && !hasColorBleedRisk) return "mixed-standard";
     return "dark-standard";
   }
-  if (containsAny(text, LIGHT_COLOR_TERMS)) {
+  if (containsAny(colorText, LIGHT_COLOR_TERMS)) {
     return constraints.allow_mixed_colors ? "mixed-standard" : "light-standard";
   }
   return "dark-standard"; // default: treat unknown as dark for safety
@@ -612,45 +616,7 @@ function machineFloorRank(machine: MachineInfo, preferredFloor: number): number 
 }
 
 function machineRecommendationWarning(machine: MachineInfo, program: string): string {
-  const location = machineRecommendationLocation(machine.location);
-  const machineLabel = locationHasPhysicalMachineNumber(location)
-    ? `${location}${machineTypeLabel(machine.machine_type)}`
-    : `${location}的 ${machine.machine_id} 号${machineTypeLabel(machine.machine_type)}`;
-  return `推荐使用${machineLabel}，程序${programLabel(program)}。`;
-}
-
-function machineRecommendationLocation(location: string): string {
-  const compactFloor = location.trim().replace(/\s+(?=[一二三四五六七八九十\d]+层)/g, "");
-  const parts = compactFloor.split(/\s+/).filter(Boolean);
-  if (parts.length <= 1) {
-    return compactFloor;
-  }
-  const withoutRepeatedBuilding = parts.filter((part, index) =>
-    !parts.some((other, otherIndex) =>
-      otherIndex !== index && /[楼栋]/.test(part) && other.includes(part),
-    ),
-  );
-  if (withoutRepeatedBuilding.length !== parts.length) {
-    return withoutRepeatedBuilding.join("");
-  }
-  if (/[楼栋层号]/.test(compactFloor)) {
-    return parts.join("");
-  }
-  return compactFloor;
-}
-
-function locationHasPhysicalMachineNumber(location: string): boolean {
-  return /[一二三四五六七八九十\d]+号$/.test(location);
-}
-
-function machineTypeLabel(machineType: MachineType): string {
-  const labels: Record<MachineType, string> = {
-    standard_washer: "洗衣机",
-    shoe_washer: "洗鞋机",
-    dryer: "烘干机",
-    unknown: "设备",
-  };
-  return labels[machineType];
+  return `推荐使用${machineDisplayLabel(machine)}，程序${programLabel(program)}。`;
 }
 
 function programLabel(program: string): string {
@@ -761,6 +727,11 @@ function searchText(item: WardrobeItemForPlan): string {
   ]
     .join(" ")
     .toLowerCase();
+}
+
+function colorSearchText(item: WardrobeItemForPlan): string {
+  const colors = item.profile.colors.map((color) => color.trim()).filter(Boolean);
+  return (colors.length ? colors : [item.profile.name]).join(" ").toLowerCase();
 }
 
 function containsAny(text: string, terms: Set<string>): boolean {

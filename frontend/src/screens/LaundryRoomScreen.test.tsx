@@ -156,6 +156,8 @@ describe("LaundryRoomScreen", () => {
     expect(screen.queryByText("shoe_washer")).not.toBeInTheDocument();
     expect(screen.queryByText("large_washer")).not.toBeInTheDocument();
     expect(screen.queryByText("大件机")).not.toBeInTheDocument();
+    expect(screen.queryByText(/455514|wm10003112|764255/)).not.toBeInTheDocument();
+    expect(screen.getAllByText("空闲 · 模式待同步").length).toBeGreaterThan(0);
     expect(container.textContent).not.toContain("18.5");
     expect(document.querySelectorAll(".machine-card.machine-card-equal")).toHaveLength(3);
   });

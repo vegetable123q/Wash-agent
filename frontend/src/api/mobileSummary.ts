@@ -147,6 +147,44 @@ export async function deleteWardrobeItem(itemId: string): Promise<{ status: stri
   return { status: "deleted", item_id: normalizedItemId };
 }
 
+export async function recordWardrobeWear(itemId: string): Promise<{ status: string; item_id: string; wear_count_since_wash: number }> {
+  const normalizedItemId = itemId.trim();
+  if (!normalizedItemId) throw new Error("item_id is required");
+  const items = readLocalWardrobeItems();
+  let nextWearCount: number | null = null;
+  const nextItems = items.map((item) => {
+    if (item.item_id !== normalizedItemId) {
+      return item;
+    }
+    nextWearCount = item.wear_count_since_wash + 1;
+    return { ...item, wear_count_since_wash: nextWearCount };
+  });
+  if (nextWearCount == null) throw new Error(`Unknown wardrobe item: ${normalizedItemId}`);
+  writeLocalWardrobeItems(nextItems);
+  return { status: "updated", item_id: normalizedItemId, wear_count_since_wash: nextWearCount };
+}
+
+export async function setWardrobeWearCount(
+  itemId: string,
+  wearCount: number,
+): Promise<{ status: string; item_id: string; wear_count_since_wash: number }> {
+  const normalizedItemId = itemId.trim();
+  if (!normalizedItemId) throw new Error("item_id is required");
+  const nextWearCount = manualWearCount(wearCount);
+  const items = readLocalWardrobeItems();
+  let found = false;
+  const nextItems = items.map((item) => {
+    if (item.item_id !== normalizedItemId) {
+      return item;
+    }
+    found = true;
+    return { ...item, wear_count_since_wash: nextWearCount };
+  });
+  if (!found) throw new Error(`Unknown wardrobe item: ${normalizedItemId}`);
+  writeLocalWardrobeItems(nextItems);
+  return { status: "updated", item_id: normalizedItemId, wear_count_since_wash: nextWearCount };
+}
+
 export async function clearWardrobeItems(): Promise<{ status: string; deleted_count: number }> {
   const deletedCount = readLocalWardrobeItems().length;
   writeLocalWardrobeItems([]);
@@ -171,6 +209,25 @@ export async function setLaundrySelection(itemIds: string[]): Promise<{ status: 
 export async function clearLaundrySelection(): Promise<{ status: string; selected_item_ids: string[] }> {
   writeDirtyBasketRecords([]);
   return { status: "cleared", selected_item_ids: [] };
+}
+
+export async function completeLaundryPlan(): Promise<{ status: string; completed_item_ids: string[] }> {
+  const items = readLocalWardrobeItems();
+  const dirtyBasketRecords = readDirtyBasketRecords(items);
+  const completedItemIds = dirtyBasketRecords.map((record) => record.item_id);
+  const completedSet = new Set(completedItemIds);
+
+  if (completedSet.size > 0) {
+    const nextItems = items.map((item) =>
+      completedSet.has(item.item_id)
+        ? { ...item, wear_count_since_wash: 0, wash_count: item.wash_count + 1 }
+        : item,
+    );
+    writeLocalWardrobeItems(nextItems);
+  }
+  writeDirtyBasketRecords([]);
+
+  return { status: "completed", completed_item_ids: completedItemIds };
 }
 
 // ─── integrated summary builder ─────────────────────────────────────────
@@ -492,6 +549,13 @@ function stringArray(value: unknown): string[] {
 function nonNegativeInteger(value: unknown): number {
   const numeric = typeof value === "string" && value.trim() ? Number(value) : value;
   return typeof numeric === "number" && Number.isFinite(numeric) && Number.isInteger(numeric) && numeric >= 0 ? numeric : 0;
+}
+
+function manualWearCount(value: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
+    throw new Error("wear_count_since_wash must be a non-negative integer");
+  }
+  return value;
 }
 
 function normalizeMaterialRatioRecord(value: unknown): Record<string, number> {

@@ -16,6 +16,7 @@ import type {
   WashMethod,
   WashReport,
 } from "./types";
+import { machineDisplayLabel } from "./machineDisplay";
 
 export function generateReport(
   plan: LaundryPlan,
@@ -53,11 +54,14 @@ function stepsSection(plan: LaundryPlan, itemNames: Map<string, string>): string
       `原因：${bucketReason(bucket)}`,
       `洗护方式：${washMethodText(bucket.wash_method)}`,
     ];
+    const machineLabel = bucketMachineLabel(bucket);
+    if (machineLabel) parts.push(`洗衣机：${machineLabel}`);
     if (bucket.program) parts.push(`程序：${programText(bucket.program)}`);
     if (bucket.detergent_ml != null) parts.push(`洗衣液：${bucket.detergent_ml} ml`);
     if (bucket.use_laundry_bag) parts.push("使用洗衣袋");
     parts.push(`干燥：${dryMethodText(bucket.dry_method)}`);
-    if (bucket.warnings.length) parts.push(`提醒：${bucket.warnings.map(userFacingWarning).join("；")}`);
+    const warnings = reportWarnings(bucket.warnings);
+    if (warnings.length) parts.push(`提醒：${warnings.join("；")}`);
     lines.push(parts.join("；") + "。");
   }
   return lines.join("\n");
@@ -75,6 +79,15 @@ function dryingSection(dryingPlan: DryingPlan, itemNames: Map<string, string>): 
     lines.push(parts.join("；") + "。");
   }
   return lines.length ? lines.join("\n") : "本次没有需要烘干机烘干的批次。";
+}
+
+function bucketMachineLabel(bucket: LaundryBucket): string {
+  if (!bucket.machine_id && !bucket.machine_location) return "";
+  return machineDisplayLabel({
+    machine_id: bucket.machine_id,
+    machine_location: bucket.machine_location,
+    machine_type: bucket.machine_type,
+  });
 }
 
 function costTimeSection(plan: LaundryPlan, dryingPlan?: DryingPlan): string {
@@ -122,7 +135,7 @@ function riskSection(plan: LaundryPlan): string {
   const warnings = dedupe([
     ...plan.buckets.flatMap((b) => b.warnings),
     ...plan.global_warnings,
-  ].map(userFacingWarning));
+  ].map(userFacingWarning).filter((warning) => !isMachineRecommendationWarning(warning)));
   if (!warnings.length) return "本次计划没有额外风险提醒。";
   return warnings.map((w) => `- ${w}`).join("\n");
 }
@@ -158,7 +171,7 @@ function riskNotes(plan: LaundryPlan, dryingPlan?: DryingPlan): string[] {
     if (["hand_wash", "dry_clean", "do_not_wash"].includes(bucket.wash_method)) {
       notes.push("非普通机洗衣物应按单独批次处理，不进入共享洗衣机。");
     }
-    notes.push(...bucket.warnings.map(userFacingWarning));
+    notes.push(...reportWarnings(bucket.warnings));
   }
   if (dryingPlan) {
     for (const step of dryingPlan.steps) {
@@ -264,6 +277,14 @@ function userFacingWarning(text: string): string {
     .replace(/程序\s+quick/g, "程序 快洗")
     .replace(/程序\s+large/g, "程序 大件洗")
     .replace(/程序\s+low/g, "程序 低温烘干");
+}
+
+function reportWarnings(warnings: string[]): string[] {
+  return warnings.map(userFacingWarning).filter((warning) => !isMachineRecommendationWarning(warning));
+}
+
+function isMachineRecommendationWarning(warning: string): boolean {
+  return warning.includes("推荐使用");
 }
 
 function itemName(id: string, names: Map<string, string>): string {

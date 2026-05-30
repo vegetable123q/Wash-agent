@@ -24,7 +24,7 @@ _LOAD_RULES: list[tuple[set[str], int]] = [
     ({"内衣", "袜", "underwear", "socks", "sock"}, 5),
 ]
 
-_DEFAULT_LOAD_UNITS = 12
+_DEFAULT_LOAD_UNITS = 10
 
 
 def estimate_load_units(item: WardrobeItem) -> int:

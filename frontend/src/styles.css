@@ -622,6 +622,40 @@ button.card {
   gap: 10px;
 }
 
+.detail-action-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  margin-top: 10px;
+}
+
+.detail-action-row .secondary-button {
+  width: 100%;
+  min-height: 46px;
+}
+
+.wear-count-editor {
+  display: grid;
+  gap: 7px;
+  margin-top: 11px;
+}
+
+.wear-count-editor label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.wear-count-editor-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.wear-count-editor-row .secondary-button {
+  min-width: 92px;
+}
+
 .api-config-form {
   margin-top: 18px;
 }
@@ -629,6 +663,15 @@ button.card {
 .primary-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.plan-execute-button {
+  margin-top: 12px;
 }
 
 .top-bar {

@@ -8,7 +8,7 @@ interface LoadEstimateItem {
 }
 
 export const WASHER_LOAD_UNITS = 100;
-export const TARGET_WASHER_LOAD_UNITS = 85;
+export const TARGET_WASHER_LOAD_UNITS = WASHER_LOAD_UNITS;
 
 export function estimateLaundryLoadUnits(item: LoadEstimateItem): number {
   const text = itemSearchText(item);
@@ -22,7 +22,7 @@ export function estimateLaundryLoadUnits(item: LoadEstimateItem): number {
   if (containsAny(text, ["毛巾", "浴巾", "towel"])) return 18;
   if (containsAny(text, ["内衣", "袜", "underwear", "socks", "sock"])) return 5;
 
-  return 12;
+  return 10;
 }
 
 export function loadPercentForItems(items: LoadEstimateItem[]): number {

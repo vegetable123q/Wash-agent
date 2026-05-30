@@ -11,6 +11,7 @@ interface PlanDetailScreenProps {
   onBack: () => void;
   mobileSummary?: MobileSummary | null;
   modelHubConfig?: ModelHubConfig;
+  onCompletePlan?: () => void | Promise<void>;
 }
 
 interface PreparationStep {
@@ -25,7 +26,7 @@ interface ExclusionItem {
   method: string;
 }
 
-export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: PlanDetailScreenProps) {
+export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig, onCompletePlan }: PlanDetailScreenProps) {
   const planBuckets = mobileSummary?.plan.buckets ?? [];
   const dryingPlan = mobileSummary?.drying_plan;
   const hasSummary = Boolean(mobileSummary);
@@ -164,6 +165,12 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
         </div>
         <Chip tone={hasBuckets ? "teal" : "orange"}>{hasBuckets ? "已生成" : hasSelectedEmptyPlan ? "待确认" : hasSummary ? "待选择" : "可执行"}</Chip>
       </Card>
+
+      {hasBuckets && hasSelectedItems ? (
+        <button className="primary-button plan-execute-button" type="button" onClick={() => void onCompletePlan?.()} disabled={!onCompletePlan}>
+          按此方案执行
+        </button>
+      ) : null}
 
       <Section title="洗衣顺序">
         <div className="timeline">

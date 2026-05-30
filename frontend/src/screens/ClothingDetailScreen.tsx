@@ -1,5 +1,5 @@
-import { Edit3 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Edit3, Footprints, ShoppingBasket } from "lucide-react";
+import { type FormEvent, useEffect, useState } from "react";
 import type { ModelHubConfig } from "../api/modelHubConfig";
 import { fallbackRiskDescription, generateRiskDescription, riskKeyLabel } from "../api/llmSummary";
 import type { WardrobeSummaryItem } from "../api/mobileSummary";
@@ -13,13 +13,36 @@ interface ClothingDetailScreenProps {
   backendItem?: WardrobeSummaryItem | null;
   staticItem?: WardrobeItemView | null;
   modelHubConfig?: ModelHubConfig;
+  onRecordWear?: (itemId: string) => void | Promise<void>;
+  onSetWearCount?: (itemId: string, wearCount: number) => void | Promise<void>;
+  onAddToBasket?: (itemId: string) => void | Promise<void>;
+  isInDirtyBasket?: boolean;
 }
 
-export function ClothingDetailScreen({ onBack, backendItem, staticItem, modelHubConfig }: ClothingDetailScreenProps) {
+export function ClothingDetailScreen({
+  onBack,
+  backendItem,
+  staticItem,
+  modelHubConfig,
+  onRecordWear,
+  onSetWearCount,
+  onAddToBasket,
+  isInDirtyBasket = false,
+}: ClothingDetailScreenProps) {
   // LLM-enhanced risk description (backend items only)
   const [llmRiskText, setLlmRiskText] = useState<string | null>(null);
+  const [wearCountDraft, setWearCountDraft] = useState(() => String(backendItem?.wear_count_since_wash ?? 0));
 
   const item = backendItem ? detailFromBackend(backendItem) : staticItem ? detailFromStatic(staticItem) : null;
+  const trimmedWearCountDraft = wearCountDraft.trim();
+  const manualWearCount = Number(trimmedWearCountDraft);
+  const isWearCountDraftValid = trimmedWearCountDraft !== "" && Number.isInteger(manualWearCount) && manualWearCount >= 0;
+  const canSaveWearCount = Boolean(
+    backendItem &&
+      onSetWearCount &&
+      isWearCountDraftValid &&
+      manualWearCount !== backendItem.wear_count_since_wash,
+  );
 
   useEffect(() => {
     setLlmRiskText(null);
@@ -30,6 +53,20 @@ export function ClothingDetailScreen({ onBack, backendItem, staticItem, modelHub
     });
     return () => { cancelled = true; };
   }, [backendItem, modelHubConfig]);
+
+  useEffect(() => {
+    if (backendItem) {
+      setWearCountDraft(String(backendItem.wear_count_since_wash));
+    }
+  }, [backendItem?.item_id, backendItem?.wear_count_since_wash]);
+
+  const handleWearCountSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!backendItem || !canSaveWearCount) {
+      return;
+    }
+    void onSetWearCount?.(backendItem.item_id, manualWearCount);
+  };
 
   if (!item) {
     return (
@@ -77,6 +114,44 @@ export function ClothingDetailScreen({ onBack, backendItem, staticItem, modelHub
           <MetricCard value={String(item.wearCount)} label="穿着次数" />
           <MetricCard value={String(item.washCount)} label="洗涤次数" />
         </div>
+        {backendItem ? (
+          <>
+            <form className="wear-count-editor" onSubmit={handleWearCountSubmit}>
+              <label htmlFor={`wear-count-${backendItem.item_id}`}>手动修改穿着次数</label>
+              <div className="wear-count-editor-row">
+                <input
+                  id={`wear-count-${backendItem.item_id}`}
+                  className="input-like"
+                  type="number"
+                  min="0"
+                  step="1"
+                  inputMode="numeric"
+                  value={wearCountDraft}
+                  onChange={(event) => setWearCountDraft(event.target.value)}
+                  aria-invalid={trimmedWearCountDraft !== "" && !isWearCountDraftValid}
+                />
+                <button className="secondary-button" type="submit" disabled={!canSaveWearCount}>
+                  保存次数
+                </button>
+              </div>
+            </form>
+            <div className="button-row detail-action-row">
+              <button className="secondary-button" type="button" onClick={() => void onRecordWear?.(backendItem.item_id)}>
+                <Footprints size={18} />
+                记录穿着
+              </button>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => void onAddToBasket?.(backendItem.item_id)}
+                disabled={isInDirtyBasket}
+              >
+                <ShoppingBasket size={18} />
+                {isInDirtyBasket ? "已在脏衣篮" : "加入脏衣篮"}
+              </button>
+            </div>
+          </>
+        ) : null}
       </Section>
 
       {item.careTags ? (

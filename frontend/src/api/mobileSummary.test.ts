@@ -22,10 +22,13 @@ vi.mock("@capacitor/filesystem", () => ({
 import {
   clearLaundrySelection,
   clearWardrobeItems,
+  completeLaundryPlan,
   createWardrobeItem,
   fetchMobileSummary,
   rebuildMobileSummaryForSelection,
+  recordWardrobeWear,
   setLaundrySelection,
+  setWardrobeWearCount,
   type MobileSummary,
 } from "./mobileSummary";
 import { PRICING_RULES } from "./pricingRules";
@@ -196,6 +199,137 @@ describe("mobileSummary wardrobe selection", () => {
     expect(summary.selected_laundry_item_ids).toEqual([]);
     expect(summary.dirty_basket.item_count).toBe(0);
     expect(summary.plan.buckets).toEqual([]);
+  });
+
+  it("records one more wear count for a local wardrobe item", async () => {
+    localStorage.setItem(
+      wardrobeStorageKey,
+      JSON.stringify([
+        {
+          item_id: "tee-1",
+          name: "白色棉 T 恤",
+          user_note: "",
+          user_notes: [],
+          wear_count_since_wash: 2,
+          wash_count: 0,
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          risks: {},
+        },
+      ]),
+    );
+
+    const result = await recordWardrobeWear("tee-1");
+    const summary = await fetchMobileSummary();
+
+    expect(result).toEqual({ status: "updated", item_id: "tee-1", wear_count_since_wash: 3 });
+    expect(summary.wardrobe.items[0].wear_count_since_wash).toBe(3);
+  });
+
+  it("sets a local wardrobe wear count to the exact manual value", async () => {
+    localStorage.setItem(
+      wardrobeStorageKey,
+      JSON.stringify([
+        {
+          item_id: "tee-1",
+          name: "白色棉 T 恤",
+          user_note: "",
+          user_notes: [],
+          wear_count_since_wash: 2,
+          wash_count: 0,
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          risks: {},
+        },
+      ]),
+    );
+
+    const result = await setWardrobeWearCount("tee-1", 5);
+    const summary = await fetchMobileSummary();
+
+    expect(result).toEqual({ status: "updated", item_id: "tee-1", wear_count_since_wash: 5 });
+    expect(summary.wardrobe.items[0].wear_count_since_wash).toBe(5);
+  });
+
+  it("rejects invalid manual wardrobe wear counts", async () => {
+    localStorage.setItem(
+      wardrobeStorageKey,
+      JSON.stringify([
+        {
+          item_id: "tee-1",
+          name: "白色棉 T 恤",
+          user_note: "",
+          user_notes: [],
+          wear_count_since_wash: 2,
+          wash_count: 0,
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          risks: {},
+        },
+      ]),
+    );
+
+    await expect(setWardrobeWearCount("tee-1", -1)).rejects.toThrow("wear_count_since_wash must be a non-negative integer");
+    await expect(setWardrobeWearCount("tee-1", 1.5)).rejects.toThrow("wear_count_since_wash must be a non-negative integer");
+  });
+
+  it("completes the laundry plan by clearing selected items and updating wash counters", async () => {
+    localStorage.setItem(
+      wardrobeStorageKey,
+      JSON.stringify([
+        {
+          item_id: "tee-1",
+          name: "白色棉 T 恤",
+          user_note: "",
+          user_notes: [],
+          wear_count_since_wash: 5,
+          wash_count: 1,
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          risks: {},
+        },
+        {
+          item_id: "pants-1",
+          name: "黑色长裤",
+          user_note: "",
+          user_notes: [],
+          wear_count_since_wash: 3,
+          wash_count: 2,
+          material_ratios: { cotton: 1 },
+          colors: ["black"],
+          risks: {},
+        },
+        {
+          item_id: "coat-1",
+          name: "灰色外套",
+          user_note: "",
+          user_notes: [],
+          wear_count_since_wash: 4,
+          wash_count: 0,
+          material_ratios: { polyester: 1 },
+          colors: ["gray"],
+          risks: {},
+        },
+      ]),
+    );
+    await setLaundrySelection(["tee-1", "pants-1"]);
+
+    const result = await completeLaundryPlan();
+    const summary = await fetchMobileSummary();
+    const itemsById = new Map(summary.wardrobe.items.map((item) => [item.item_id, item]));
+
+    expect(result).toEqual({ status: "completed", completed_item_ids: ["tee-1", "pants-1"] });
+    expect(summary.selected_laundry_item_ids).toEqual([]);
+    expect(summary.dirty_basket.item_count).toBe(0);
+    expect(itemsById.get("tee-1")).toMatchObject({ wear_count_since_wash: 0, wash_count: 2 });
+    expect(itemsById.get("pants-1")).toMatchObject({ wear_count_since_wash: 0, wash_count: 3 });
+    expect(itemsById.get("coat-1")).toMatchObject({ wear_count_since_wash: 4, wash_count: 0 });
+  });
+
+  it("rejects wear-count records for unknown wardrobe items", async () => {
+    localStorage.setItem(wardrobeStorageKey, JSON.stringify([]));
+
+    await expect(recordWardrobeWear("missing")).rejects.toThrow("Unknown wardrobe item: missing");
   });
 
   it("stores uploaded photo thumbnails as local file references outside wardrobe JSON", async () => {
@@ -688,7 +822,7 @@ describe("mobileSummary wardrobe selection", () => {
 
     expect(summary.dirty_basket).toMatchObject({
       item_count: 3,
-      load_percent: 36,
+      load_percent: 30,
       status_label: "还没满桶",
     });
     expect(summary.dirty_basket.recommendation).toContain("可继续攒");

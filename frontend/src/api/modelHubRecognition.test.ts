@@ -346,6 +346,31 @@ describe("ModelHub clothing recognition", () => {
     expect(result.suggestion).toContain("黑白拼色设计极易串色");
   });
 
+  it("does not duplicate existing inferred care markers with ASCII parentheses", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        modelHubResponse({
+          is_clothing: true,
+          name: "黑白拼色背心",
+          material_ratios: { cotton: 1 },
+          colors: ["black", "white"],
+          care_labels: {
+            wash_method: "常规机洗或手洗(推断)",
+            dry_clean: "不可干洗(推断)",
+          },
+        }),
+      ),
+    );
+
+    const result = await recognizeClothingText("黑白拼色背心 cotton 100%", modelHubConfig);
+
+    expect(result.careTags).toContain("洗涤方式：常规机洗或手洗(推断)");
+    expect(result.careTags).toContain("干洗：不可干洗(推断)");
+    expect(result.careTags).not.toContain("洗涤方式：常规机洗或手洗(推断)（推断）");
+    expect(result.careTags).not.toContain("干洗：不可干洗(推断)（推断）");
+  });
+
   it("normalizes string percent material ratios", async () => {
     vi.stubGlobal(
       "fetch",

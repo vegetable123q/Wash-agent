@@ -129,6 +129,46 @@ describe("planLaundry", () => {
     expect(plan.global_warnings).not.toContain("没有空闲洗衣机");
   });
 
+  it("does not treat dry-clean prohibitions as dry-clean-only advice", () => {
+    const item: WardrobeItemForPlan = {
+      profile: {
+        item_id: "printed-tee",
+        name: "印花短袖",
+        user_note: "干洗：不可干洗(推断)",
+        material_ratios: { cotton: 1 },
+        colors: ["white"],
+        care_warnings: ["不可干洗(推断)"],
+        care_recommendations: [],
+        care_forbidden: [],
+        care_symbols: {},
+        risks: {},
+        recommended_wash: "machine_wash",
+      },
+      wear_count_since_wash: 1,
+      preferred_method: "machine_wash",
+      user_notes: [],
+    };
+    const constraints: LaundryConstraints = {
+      selected_item_ids: ["printed-tee"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    };
+
+    const plan = planLaundry([item], constraints, context);
+
+    expect(plan.buckets).toHaveLength(1);
+    expect(plan.buckets[0]).toMatchObject({
+      bucket_id: "light-standard",
+      wash_method: "machine_wash",
+      machine_id: "455514",
+    });
+    expect(plan.buckets[0].warnings).not.toContain("该批次建议送专业干洗，不进入共享洗衣机。");
+  });
+
   it("keeps a bucket unassigned when machine modes are explicitly incompatible", () => {
     const largeOnlyWasher: MachineInfo = {
       ...standardWasher,
@@ -207,13 +247,57 @@ describe("planLaundry", () => {
 
     expect(plan.buckets).toHaveLength(2);
     expect(plan.buckets.map((bucket) => bucket.bucket_id)).toEqual(["light-standard-1", "light-standard-2"]);
-    expect(plan.buckets.every((bucket) => bucket.item_ids.length <= 7)).toBe(true);
+    expect(plan.buckets.map((bucket) => bucket.item_ids.length)).toEqual([10, 2]);
     expect(plan.buckets[0].machine_id).toBe("455514");
     expect(plan.buckets[1].machine_id).toBeUndefined();
     expect(plan.buckets[1].warnings).toContain("没有空闲洗衣机");
     expect(plan.estimated_cost_yuan).toBeNull();
     expect(plan.estimated_duration_minutes).toBeNull();
     expect(plan.summary).toContain("2 个洗护批次");
+  });
+
+  it("keeps a near-full dark washer load together instead of making a sock-only bucket", () => {
+    const items: WardrobeItemForPlan[] = [
+      "CHOCOOLATE黑白拼接短袖上衣",
+      "休闲短裤",
+      "赴云端连衣裙",
+      "黑色羽绒服/棉服",
+      "袜子",
+    ].map((name, index) => ({
+      profile: {
+        item_id: `dark-item-${index + 1}`,
+        name,
+        user_note: "",
+        material_ratios: { cotton: 1 },
+        colors: ["black"],
+        care_warnings: [],
+        care_recommendations: [],
+        care_forbidden: [],
+        care_symbols: {},
+        risks: {},
+        recommended_wash: "machine_wash",
+      },
+      wear_count_since_wash: 1,
+      preferred_method: "machine_wash",
+      user_notes: [],
+    }));
+
+    const plan = planLaundry(items, {
+      selected_item_ids: items.map((item) => item.profile.item_id),
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: 10,
+      budget_yuan: null,
+    }, context);
+
+    expect(plan.buckets).toHaveLength(1);
+    expect(plan.buckets[0]).toMatchObject({
+      bucket_id: "dark-standard",
+      item_ids: items.map((item) => item.profile.item_id),
+      machine_id: "455514",
+    });
   });
 
   it("keeps machine-wash buckets when no washer is available", () => {
@@ -317,7 +401,7 @@ describe("planLaundry", () => {
     };
     const sixthFloorWasher: MachineInfo = {
       machine_id: "sixth-floor",
-      location: "南区21号楼 六层",
+      location: "南区21号楼 六层 2号",
       machine_floor: 6,
       machine_type: "standard_washer",
       status: "available",
@@ -376,7 +460,69 @@ describe("planLaundry", () => {
       machine_id: "sixth-floor",
       machine_floor: 6,
     });
-    expect(plan.global_warnings.join("\n")).toContain("推荐使用南区21号楼六层的 sixth-floor 号洗衣机，程序标准洗。");
+    expect(plan.global_warnings.join("\n")).toContain("推荐使用南区21号楼六层2号洗衣机，程序标准洗。");
+    expect(plan.global_warnings.join("\n")).not.toContain("sixth-floor");
+  });
+
+  it("uses a short numeric machine suffix when location only has the floor", () => {
+    const washer: MachineInfo = {
+      machine_id: "clever-nq21-6",
+      location: "南区21号楼 六层",
+      machine_floor: 6,
+      machine_type: "standard_washer",
+      status: "available",
+      remaining_minutes: null,
+      price_yuan: null,
+      modes: ["standard"],
+    };
+    const contextWithFloorOnlyLocation: CampusContext = {
+      all_machines: [washer],
+      available_machines: [washer],
+      queue_estimates: [],
+      weather: {},
+      drying_context: {},
+      pricing_rules: {
+        wash_programs: {
+          standard: { price_yuan: 3.5, duration_minutes: 40 },
+        },
+        dryer_programs: {
+          low: { price_yuan: 2, duration_minutes: 50 },
+        },
+      },
+    };
+    const item: WardrobeItemForPlan = {
+      profile: {
+        item_id: "shirt",
+        name: "白色短袖",
+        user_note: "",
+        material_ratios: { cotton: 1 },
+        colors: ["white"],
+        care_warnings: [],
+        care_recommendations: [],
+        care_forbidden: [],
+        care_symbols: {},
+        risks: {},
+        recommended_wash: "machine_wash",
+      },
+      wear_count_since_wash: 1,
+      preferred_method: "machine_wash",
+      user_notes: [],
+    };
+
+    const plan = planLaundry([item], {
+      selected_item_ids: ["shirt"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+      preferred_machine_floor: null,
+    }, contextWithFloorOnlyLocation);
+
+    const warningText = plan.global_warnings.join("\n");
+    expect(warningText).toContain("推荐使用南区21号楼六层6号洗衣机，程序标准洗。");
+    expect(warningText).not.toContain("clever-nq21-6");
   });
 
   it("uses the physical washer number from location when it is present", () => {
@@ -718,6 +864,80 @@ describe("hand-wash classification (bug fix regressions)", () => {
     expect(plan.buckets).toHaveLength(1);
     expect(plan.buckets[0].bucket_id).toBe("light-standard");
     expect(plan.buckets[0].item_ids).toEqual(["light-blue-jeans", "silver-socks"]);
+  });
+
+  it("keeps explicit light colors out of dark buckets when notes mention separating from dark clothes", () => {
+    const baseWhiteTee = standardItem("white-print-tee", "Dickies白色印花短袖T恤", ["white"]);
+    const whiteTee: WardrobeItemForPlan = {
+      ...baseWhiteTee,
+      profile: {
+        ...baseWhiteTee.profile,
+        user_note: "建议冷水机洗，避免与深色衣物混洗。",
+        care_recommendations: ["深浅色分开洗"],
+      },
+      user_notes: ["避免与深色衣物混洗"],
+    };
+    const paleShorts: WardrobeItemForPlan = standardItem("pale-shorts", "浅灰休闲短裤", ["浅灰"]);
+    const blackJacket: WardrobeItemForPlan = standardItem("black-jacket", "黑色羽绒服", ["black"]);
+
+    const plan = planLaundry([whiteTee, paleShorts, blackJacket], {
+      selected_item_ids: ["white-print-tee", "pale-shorts", "black-jacket"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: false,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, context);
+
+    const lightBucket = plan.buckets.find((bucket) => bucket.bucket_id === "light-standard");
+    const darkBucket = plan.buckets.find((bucket) => bucket.bucket_id === "dark-standard");
+    expect(lightBucket?.item_ids).toEqual(["white-print-tee", "pale-shorts"]);
+    expect(darkBucket?.item_ids).toEqual(["black-jacket"]);
+  });
+
+  it("keeps pink and light-patterned garments out of the dark bucket in a nine-item outfit plan", () => {
+    const silverJacket: WardrobeItemForPlan = {
+      ...standardItem("silver-jacket", "银色机能风多口袋外套", ["银色"]),
+      profile: {
+        ...standardItem("silver-jacket", "银色机能风多口袋外套", ["银色"]).profile,
+        care_warnings: ["do_not_machine_wash"],
+        care_forbidden: ["do_not_machine_wash"],
+        recommended_wash: "hand_wash",
+      },
+    };
+    const items: WardrobeItemForPlan[] = [
+      standardItem("white-tee", "Dickies白色印花短袖T恤", ["white"]),
+      standardItem("black-white-tee", "CHOCOOLATE黑白拼接短袖上衣", ["black", "white"]),
+      standardItem("pink-shorts", "粉色休闲短裤", ["pink"]),
+      standardItem("light-blue-pants", "浅蓝色休闲长裤", ["light blue"]),
+      standardItem("gray-hoodie", "灰色短袖连帽卫衣", ["gray"]),
+      standardItem("pattern-dress", "赴云端连衣裙", ["多色"]),
+      standardItem("black-puffer", "黑色羽绒服/棉服", ["black"]),
+      silverJacket,
+      standardItem("socks", "袜子", ["black", "gray"]),
+    ];
+
+    const plan = planLaundry(items, {
+      selected_item_ids: items.map((item) => item.profile.item_id),
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: false,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, context);
+
+    const bucketsById = new Map(plan.buckets.map((bucket) => [bucket.bucket_id, bucket]));
+    expect(bucketsById.get("hand-wash")?.item_ids).toEqual(["silver-jacket"]);
+    expect(bucketsById.get("dark-standard")?.item_ids).toEqual(["black-white-tee", "black-puffer", "socks"]);
+    expect(bucketsById.get("light-standard")?.item_ids).toEqual([
+      "white-tee",
+      "pink-shorts",
+      "light-blue-pants",
+      "gray-hoodie",
+      "pattern-dress",
+    ]);
   });
 
   it("does NOT force hand-wash for a hoodie with shrink note and machine_wash preference", () => {

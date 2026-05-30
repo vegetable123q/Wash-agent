@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MobileSummary } from "../api/mobileSummary";
 import { PlanDetailScreen } from "./PlanDetailScreen";
@@ -313,5 +313,78 @@ describe("PlanDetailScreen", () => {
     expect(screen.getByText("1 个洗护批次")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "羊毛开衫不进共享机" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "排除与提醒" })).not.toBeInTheDocument();
+  });
+
+  it("offers an action to execute the generated live plan", () => {
+    const onCompletePlan = vi.fn();
+    const mobileSummary = {
+      source: "backend",
+      selected_laundry_item_ids: ["tee-1"],
+      dirty_basket: {
+        item_count: 1,
+        load_percent: 20,
+        oldest_days: 0,
+        urgent_count: 0,
+        status_label: "可清洗",
+        recommendation: "今晚处理。",
+        next_action: "查看本次方案",
+        items: [],
+      },
+      wardrobe: {
+        items: [
+          {
+            item_id: "tee-1",
+            name: "白色棉质T恤",
+            user_note: "",
+            user_notes: [],
+            wear_count_since_wash: 1,
+            wash_count: 0,
+            material_ratios: { cotton: 1 },
+            colors: ["white"],
+            risks: {},
+          },
+        ],
+      },
+      campus_context: {
+        all_machines: [],
+        available_machines: [],
+        queue_estimates: [],
+        weather: {},
+        drying_context: {},
+        pricing_rules: {},
+      },
+      plan: {
+        buckets: [
+          {
+            bucket_id: "light-standard",
+            item_ids: ["tee-1"],
+            wash_method: "machine_wash",
+            machine_type: "standard_washer",
+            machine_id: "washer-1",
+            program: "standard",
+            detergent_ml: 24,
+            use_laundry_bag: true,
+            dry_method: "air_dry",
+            warnings: [],
+          },
+        ],
+        estimated_cost_yuan: 3.5,
+        estimated_duration_minutes: 40,
+        summary: "白色 T 恤可机洗。",
+        global_warnings: [],
+      },
+      report: {
+        title: "本次校园洗衣方案",
+        sections: {},
+        savings_notes: [],
+        risk_notes: [],
+      },
+    } as MobileSummary;
+
+    render(<PlanDetailScreen onBack={vi.fn()} mobileSummary={mobileSummary} onCompletePlan={onCompletePlan} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "按此方案执行" }));
+
+    expect(onCompletePlan).toHaveBeenCalledTimes(1);
   });
 });
