@@ -1109,6 +1109,17 @@ class EModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, field_name):
                     generate_report(plan, report_items, _campus_context())
 
+    def test_report_requires_unique_item_ids(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        plan = plan_laundry(items, LaundryConstraints(selected_item_ids=["white-tee"]), _campus_context())
+        report_items = [
+            _item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0}),
+            _item("white-tee", "duplicate white tee", colors=["white"], materials={"cotton": 1.0}),
+        ]
+
+        with self.assertRaisesRegex(ValueError, "white-tee"):
+            generate_report(plan, report_items, _campus_context())
+
     def test_report_requires_campus_context(self) -> None:
         items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
         plan = plan_laundry(items, LaundryConstraints(selected_item_ids=["white-tee"]), _campus_context())
