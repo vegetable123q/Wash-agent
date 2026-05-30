@@ -62,6 +62,30 @@ class CurrentWeatherTests(unittest.TestCase):
         self.assertIn("invalid current weather", weather["error"])
         self.assertIn("temperature_2m", weather["error"])
 
+    def test_fetch_tsinghua_weather_trims_and_filters_units(self) -> None:
+        def fake_transport(url: str, timeout_seconds: float) -> dict[str, object]:
+            return {
+                "current": {
+                    "temperature_2m": 24.6,
+                    "relative_humidity_2m": 71,
+                    "precipitation": 0.0,
+                    "weather_code": 0,
+                },
+                "current_units": {
+                    "temperature_2m": " °C ",
+                    "relative_humidity_2m": "%",
+                    "precipitation": " ",
+                    "weather_code": 123,
+                },
+            }
+
+        weather = fetch_tsinghua_weather(transport=fake_transport)
+
+        self.assertEqual(
+            weather["units"],
+            {"temperature_2m": "°C", "relative_humidity_2m": "%"},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

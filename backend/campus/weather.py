@@ -50,7 +50,7 @@ def fetch_tsinghua_weather(
             "latitude": TSINGHUA_LOCATION["latitude"],
             "longitude": TSINGHUA_LOCATION["longitude"],
             "current": dict(current),
-            "units": dict(units),
+            "units": _normalize_units(units),
         }
     except Exception as exc:  # pragma: no cover - exact network errors are platform-specific.
         return {
@@ -87,6 +87,17 @@ def _validate_current_weather(current: dict[str, Any]) -> None:
             raise ValueError(f"Open-Meteo response invalid current weather: {field_name}")
         if not math.isfinite(float(value)):
             raise ValueError(f"Open-Meteo response invalid current weather: {field_name}")
+
+
+def _normalize_units(units: dict[str, Any]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    for key, value in units.items():
+        if not isinstance(value, str):
+            continue
+        unit = value.strip()
+        if unit:
+            normalized[str(key)] = unit
+    return normalized
 
 
 def _urllib_transport(url: str, timeout_seconds: float) -> dict[str, Any]:
