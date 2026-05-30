@@ -1,4 +1,6 @@
 import { Clock3, MapPin, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { machineDisplayLabel } from "../api/machineDisplay";
 import { machinePriceText } from "../api/machinePricing";
 import type { BackendMachine, BackendQueueEstimate, MobileSummary } from "../api/mobileSummary";
 import { Card, Chip, Page, Section } from "../components/AppChrome";
@@ -15,6 +17,16 @@ interface LaundryRoomScreenProps {
   onRefresh?: () => void;
 }
 
+type MachineFilter = "all" | "floor" | "available" | "washer" | "dryer";
+
+const machineFilters: Array<{ id: MachineFilter; label: string }> = [
+  { id: "all", label: "全部" },
+  { id: "floor", label: "本层" },
+  { id: "available", label: "空闲" },
+  { id: "washer", label: "洗衣机" },
+  { id: "dryer", label: "烘干机" },
+];
+
 export function LaundryRoomScreen({
   mobileSummary,
   userProfile,
@@ -24,17 +36,20 @@ export function LaundryRoomScreen({
   onViewMachine,
   onRefresh,
 }: LaundryRoomScreenProps) {
+  const [machineFilter, setMachineFilter] = useState<MachineFilter>("all");
   const backendMachines = mobileSummary?.campus_context.all_machines ?? [];
   const backendQueues = mobileSummary?.campus_context.queue_estimates ?? [];
   const campusStatus = mobileSummary?.campus_status;
   const hasBackend = campusStatus?.state === "live" && backendMachines.length > 0;
   const dormName = dormWithFloor(userProfile) || "请选择宿舍楼";
   const dormFloor = normalizeDormFloor(userProfile?.dormFloor);
+  const dormFloorNumber = dormFloor ? Number(dormFloor) : null;
   const dormFloorText = dormFloor ? `${dormFloor}层 · ` : "";
   const latestPickup = userProfile?.latestPickupTime || "22:30";
   const availableCount = mobileSummary?.campus_context.available_machines.length ?? 0;
   const queueRows = backendQueues.map(queueFromBackend);
   const pricingRules = mobileSummary?.campus_context.pricing_rules;
+  const displayedMachines = filterMachines(backendMachines, machineFilter, dormFloorNumber);
   const refreshAction = onRefresh ? (
     <button
       className="icon-button refresh-button"
@@ -117,9 +132,22 @@ export function LaundryRoomScreen({
         </div>
       </Section>
 
-      <Section title="机器列表">
+      <Section title="机器列表" action={<Chip tone="blue">{displayedMachines.length} 台</Chip>}>
+        <div className="segmented machine-filter" aria-label="机器筛选">
+          {machineFilters.map((filter) => (
+            <button
+              key={filter.id}
+              type="button"
+              className={machineFilter === filter.id ? "active" : ""}
+              aria-pressed={machineFilter === filter.id}
+              onClick={() => setMachineFilter(filter.id)}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
         <div className="machine-list">
-          {hasBackend ? backendMachines.map((machine) => (
+          {hasBackend && displayedMachines.length ? displayedMachines.map((machine) => (
             <Card
               key={machine.machine_id}
               className="machine-card machine-card-equal"
@@ -136,7 +164,17 @@ export function LaundryRoomScreen({
               </div>
               <Chip tone={toneForMachineStatus(machine.status)}>{statusText(machine.status)}</Chip>
             </Card>
-          )) : (
+          )) : hasBackend ? (
+            <Card className="machine-card" accent="amber">
+              <div>
+                <div className="machine-title">
+                  <span className="status-dot status-amber" />
+                  <h3>当前筛选下暂无机器</h3>
+                </div>
+                <p>切回全部，或刷新后再看本层和空闲机器。</p>
+              </div>
+            </Card>
+          ) : (
             <Card className="machine-card" accent="amber">
               <div>
                 <div className="machine-title">
@@ -176,6 +214,43 @@ function queueFromBackend(queue: BackendQueueEstimate) {
     wait: queueWaitText(queue.estimated_wait_minutes),
     tone: toneForMachineStatus(queue.available_count > 0 ? "available" : queue.running_count > 0 ? "running" : "out_of_service"),
   };
+}
+
+function filterMachines(machines: BackendMachine[], filter: MachineFilter, dormFloor: number | null): BackendMachine[] {
+  return machines
+    .filter((machine) => {
+      if (filter === "floor") return isOnDormFloor(machine, dormFloor);
+      if (filter === "available") return machine.status === "available";
+      if (filter === "washer") return machine.machine_type === "standard_washer";
+      if (filter === "dryer") return machine.machine_type === "dryer";
+      return true;
+    })
+    .sort((a, b) => machineSortScore(a, dormFloor) - machineSortScore(b, dormFloor));
+}
+
+function machineSortScore(machine: BackendMachine, dormFloor: number | null): number {
+  const floorScore = isOnDormFloor(machine, dormFloor) ? 0 : 100;
+  const statusScore = machine.status === "available" ? 0 : machine.status === "running" ? 20 : 40;
+  const remainingScore = isFiniteNonNegativeInteger(machine.remaining_minutes) ? machine.remaining_minutes : 0;
+  return floorScore + statusScore + remainingScore;
+}
+
+function isOnDormFloor(machine: BackendMachine, dormFloor: number | null): boolean {
+  if (dormFloor == null) return false;
+  if (machine.machine_floor === dormFloor) return true;
+  const location = machine.location ?? "";
+  return floorTextVariants(dormFloor).some((text) => location.includes(text));
+}
+
+function floorTextVariants(floor: number): string[] {
+  const chineseDigits = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
+  const chinese =
+    floor <= 10
+      ? chineseDigits[floor]
+      : floor < 20
+        ? `十${chineseDigits[floor - 10]}`
+        : `${chineseDigits[Math.floor(floor / 10)]}十${floor % 10 ? chineseDigits[floor % 10] : ""}`;
+  return [`${floor}层`, `${chinese}层`];
 }
 
 function queueWaitText(minutes: number | null): string {
@@ -238,6 +313,13 @@ function statusText(status: string) {
 }
 
 function machineCardTitle(machine: BackendMachine) {
+  if (machine.location.includes(machineTypeLabel(machine.machine_type))) {
+    return machineDisplayLabel({
+      machine_id: machine.machine_id,
+      machine_location: machine.location,
+      machine_type: machine.machine_type,
+    });
+  }
   return `${machineTypeLabel(machine.machine_type)} · ${machine.location}`;
 }
 

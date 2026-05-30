@@ -323,7 +323,14 @@ export default function App() {
           />
         );
       case "addClothing":
-        return <AddClothingScreen modelHubConfig={modelHubConfig} onBack={goBack} onSaved={refreshMobileSummary} />;
+        return (
+          <AddClothingScreen
+            modelHubConfig={modelHubConfig}
+            onBack={goBack}
+            onSaved={refreshMobileSummary}
+            onConfigureModelHub={() => navigate("profile")}
+          />
+        );
       case "clothingDetail":
         return (
           <ClothingDetailScreen

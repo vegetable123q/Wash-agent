@@ -10,6 +10,7 @@ interface AddClothingScreenProps {
   modelHubConfig: ModelHubConfig;
   onBack: () => void;
   onSaved?: () => void | Promise<void>;
+  onConfigureModelHub?: () => void;
 }
 
 type EntryMode = "single" | "batch" | "text";
@@ -52,9 +53,10 @@ const batchRecognitionTips = [
   "识别结果保存前都能再编辑，不用担心一次就定稿。",
 ];
 
-export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothingScreenProps) {
+export function AddClothingScreen({ modelHubConfig, onBack, onSaved, onConfigureModelHub }: AddClothingScreenProps) {
   const [mode, setMode] = useState<EntryMode>("single");
   const [draft, setDraft] = useState<ClothingDraft>(emptyDraft);
+  const [categoryTouched, setCategoryTouched] = useState(false);
   const [textDescription, setTextDescription] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [batchFiles, setBatchFiles] = useState<File[]>([]);
@@ -73,6 +75,8 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
   const canRecognizeBatch = hasModelHubConfig && batchFiles.length > 0 && recognitionStatus !== "recognizing";
   const canSaveBatch = batchDrafts.length > 0 && (status === "idle" || status === "error");
   const showMissingModelHubConfig = !hasModelHubConfig && status !== "saved";
+  const inferredCategory = !categoryTouched ? inferWardrobeCategory(draft) : null;
+  const showInferredCategory = inferredCategory != null && inferredCategory === draft.category;
 
   const resultRows = [
     ["名称", draft.name.trim() || "待填写"],
@@ -93,7 +97,16 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
   };
 
   const updateDraft = (patch: Partial<ClothingDraft>) => {
-    setDraft((current) => ({ ...current, ...patch }));
+    setDraft((current) => {
+      const next = { ...current, ...patch };
+      if (!("category" in patch) && !categoryTouched && current.category === "其他") {
+        const inferred = inferWardrobeCategory(next);
+        if (inferred) {
+          return { ...next, category: inferred };
+        }
+      }
+      return next;
+    });
     setStatus((current) => (current === "saved" ? "idle" : current));
     setError("");
   };
@@ -102,6 +115,7 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
     setDraft({ ...emptyDraft });
     setTextDescription("");
     setImageFile(null);
+    setCategoryTouched(false);
     setStatus("idle");
     setError("");
     setRecognitionStatus("idle");
@@ -356,7 +370,10 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
               className="input-like"
               aria-label="分类"
               value={draft.category}
-              onChange={(event) => updateDraft({ category: event.target.value as WardrobeCategory })}
+              onChange={(event) => {
+                setCategoryTouched(true);
+                updateDraft({ category: event.target.value as WardrobeCategory });
+              }}
             >
               {wardrobeCategoryOptions.map((category) => (
                 <option key={category} value={category}>{category}</option>
@@ -380,13 +397,23 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
               </div>
               <div className="chip-row">
                 <Chip tone="teal">{draft.material || draft.colors ? "用户补全" : "待补全"}</Chip>
+                {showInferredCategory ? <Chip tone="blue">已按名称建议分类</Chip> : null}
                 {draft.note.includes("缩水") ? <Chip tone="orange">有缩水史</Chip> : null}
                 {draft.image_filename ? <Chip tone="purple">已选图片</Chip> : null}
               </div>
             </Card>
           </Section>
 
-          {showMissingModelHubConfig ? <p className="form-status form-status-error">识图需要先在“我的”页面输入 ModelHub baseUrl 和 apikey</p> : null}
+          {showMissingModelHubConfig ? (
+            <div className="config-action-row">
+              <p className="form-status form-status-error">识图需要先在“我的”页面输入 ModelHub baseUrl 和 apikey</p>
+              {onConfigureModelHub ? (
+                <button className="secondary-button" type="button" onClick={onConfigureModelHub}>
+                  去配置识图模型
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {recognitionStatus === "recognized" ? <p className="form-status form-status-ok">识别完成，已填入可编辑字段</p> : null}
           {recognitionStatus === "error" ? <p className="form-status form-status-error">{recognitionError}</p> : null}
           {status === "saved" ? <p className="form-status form-status-ok">保存成功，已加入衣柜</p> : null}
@@ -542,4 +569,16 @@ function toWardrobeInput(draft: ClothingDraft): WardrobeInput {
     category: draft.category,
     photo_data_url: draft.photo_data_url,
   };
+}
+
+function inferWardrobeCategory(draft: ClothingDraft): WardrobeCategory | null {
+  const text = `${draft.name} ${draft.material} ${draft.note}`.toLowerCase();
+  if (/(内衣|内裤|袜|bra|文胸)/i.test(text)) return "内衣袜子";
+  if (/(床单|被套|枕套|被子|床品|床笠)/i.test(text)) return "床品";
+  if (/(裙|连衣裙)/i.test(text)) return "裙装";
+  if (/(裤|牛仔裤|短裤|长裤)/i.test(text)) return "裤装";
+  if (/(外套|夹克|羽绒服|棉服|大衣|风衣|冲锋衣)/i.test(text)) return "外套";
+  if (/(卫衣|t恤|t 恤|短袖|长袖|衬衫|毛衣|针织衫|背心|上衣|polo)/i.test(text)) return "上衣";
+  if (/(鞋|背包|书包|挎包|帽子|棒球帽|围巾|手套|腰带)/i.test(text)) return "鞋包配饰";
+  return null;
 }

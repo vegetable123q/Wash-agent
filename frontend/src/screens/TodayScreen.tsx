@@ -82,7 +82,9 @@ export function TodayScreen({
         duration:
           totalPlanDuration === null
             ? "时长待确认"
-            : `机器占用约 ${totalPlanDuration} 分钟`,
+            : planHasDryer
+              ? `全程约 ${totalPlanDuration} 分钟`
+              : `机器占用约 ${totalPlanDuration} 分钟`,
         risk: mobileSummary.plan.buckets.length > 0 ? "已按风险自动分桶" : "暂无方案",
         note: mobileSummary.plan.summary,
       }

@@ -365,4 +365,98 @@ describe("TodayScreen", () => {
     expect(screen.queryByText("待机器")).not.toBeInTheDocument();
     expect(screen.queryByText("没有空闲烘干机")).not.toBeInTheDocument();
   });
+
+  it("labels combined wash and drying time as full duration on the dashboard", () => {
+    const mobileSummary = {
+      source: "backend",
+      selected_laundry_item_ids: ["tee-1"],
+      dirty_basket: {
+        item_count: 1,
+        load_percent: 30,
+        oldest_days: 0,
+        urgent_count: 0,
+        status_label: "还没满桶",
+        recommendation: "普通衣物可继续攒。",
+        next_action: "查看本次方案",
+        items: [],
+      },
+      wardrobe: {
+        items: [
+          {
+            item_id: "tee-1",
+            name: "白色棉 T 恤",
+            user_note: "",
+            user_notes: [],
+            wear_count_since_wash: 1,
+            wash_count: 0,
+            material_ratios: { cotton: 1 },
+            colors: ["white"],
+            risks: {},
+          },
+        ],
+      },
+      campus_context: {
+        all_machines: [],
+        available_machines: [],
+        queue_estimates: [],
+        weather: {},
+        drying_context: {},
+        pricing_rules: {},
+      },
+      plan: {
+        buckets: [
+          {
+            bucket_id: "light-standard",
+            item_ids: ["tee-1"],
+            wash_method: "machine_wash",
+            machine_type: "standard_washer",
+            program: "standard",
+            detergent_ml: 24,
+            use_laundry_bag: false,
+            dry_method: "air_dry",
+            warnings: [],
+          },
+        ],
+        estimated_cost_yuan: 3.5,
+        estimated_duration_minutes: 40,
+        summary: "浅色衣物标准洗。",
+        global_warnings: [],
+      },
+      drying_plan: {
+        steps: [
+          {
+            bucket_id: "light-standard",
+            item_ids: ["tee-1"],
+            dry_method: "low_heat_dryer",
+            estimated_cost_yuan: 2,
+            estimated_duration_minutes: 50,
+            warnings: [],
+          },
+        ],
+        estimated_cost_yuan: 2,
+        estimated_duration_minutes: 50,
+        cost_breakdown: [],
+        warnings: [],
+      },
+      report: {
+        title: "本次校园洗衣方案",
+        sections: {},
+        savings_notes: [],
+        risk_notes: [],
+      },
+    } satisfies MobileSummary;
+
+    const { container } = render(
+      <TodayScreen
+        backendStatus="connected"
+        mobileSummary={mobileSummary}
+        userProfile={{ displayName: "", dormName: "紫荆1号楼", dormFloor: "6", latestPickupTime: "22:30", allowDryer: true, budgetYuan: null, maxWaitMinutes: null }}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("全部洗完约 90 分钟")).toBeInTheDocument();
+    expect(screen.getByText("全程约 90 分钟")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("机器占用约 90 分钟");
+  });
 });

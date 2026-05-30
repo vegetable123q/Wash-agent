@@ -136,6 +136,25 @@ describe("AddClothingScreen", () => {
     expect(screen.getByRole("button", { name: /拍照识别/ })).toBeDisabled();
   });
 
+  it("offers a direct action to configure ModelHub when recognition is unavailable", () => {
+    const onConfigureModelHub = vi.fn();
+
+    render(<AddClothingScreen modelHubConfig={{ ...modelHubConfig, apikey: "" }} onBack={() => undefined} onConfigureModelHub={onConfigureModelHub} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "去配置识图模型" }));
+
+    expect(onConfigureModelHub).toHaveBeenCalledTimes(1);
+  });
+
+  it("infers a practical category from a manually typed hoodie name", () => {
+    render(<AddClothingScreen modelHubConfig={{ ...modelHubConfig, apikey: "" }} onBack={() => undefined} />);
+
+    fireEvent.change(screen.getByLabelText("衣物名称"), { target: { value: "黑色连帽卫衣" } });
+
+    expect(screen.getByLabelText<HTMLSelectElement>("分类").value).toBe("上衣");
+    expect(screen.getByText("已按名称建议分类")).toBeInTheDocument();
+  });
+
   it("extracts a long text description through ModelHub without showing image upload in text mode", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

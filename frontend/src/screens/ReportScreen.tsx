@@ -46,7 +46,7 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
         ? { main: `¥${formatMoney(totalCost)}`, breakdown: `洗 ¥${formatMoney(washCost)} + 烘 ¥${formatMoney(dryCost)}` }
         : { main: `¥${formatMoney(washCost)}`, breakdown: null as string | null }
     : { main: report.total, breakdown: null as string | null };
-  const durationText = isPositiveInteger(plan?.estimated_duration_minutes) ? `${plan.estimated_duration_minutes} 分钟` : "待确认";
+  const durationCopy = durationSummary(plan?.estimated_duration_minutes, dryingPlan?.estimated_duration_minutes);
   const bucketCountText = plan ? `${plan.buckets.length} 个批次` : "待生成";
   const routeCards = hasPlan && plan ? buildRouteCards(plan.buckets, nameMap, pricingRules) : [];
   const reminders = conciseReminders(planReport?.risk_notes, plan?.global_warnings, plan?.buckets.flatMap((bucket) => bucket.warnings));
@@ -83,8 +83,9 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
           <div className="report-hero-stats">
             <div>
               <Clock3 size={17} />
-              <strong>{durationText}</strong>
-              <span>机器占用</span>
+              <strong>{durationCopy.main}</strong>
+              {durationCopy.breakdown ? <span className="report-cost-breakdown">{durationCopy.breakdown}</span> : null}
+              <span>{durationCopy.label}</span>
             </div>
             <div>
               <Shirt size={17} />
@@ -308,6 +309,28 @@ function isFiniteNonNegativeNumber(value: unknown): value is number {
 
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value >= 0;
+}
+
+function durationSummary(
+  washMinutes: number | null | undefined,
+  dryMinutes: number | null | undefined,
+): { main: string; breakdown: string | null; label: string } {
+  const hasWash = isPositiveInteger(washMinutes);
+  const hasDry = isPositiveInteger(dryMinutes) && dryMinutes > 0;
+  if (hasWash && hasDry) {
+    return {
+      main: `${washMinutes + dryMinutes} 分钟`,
+      breakdown: `洗 ${washMinutes} 分 + 烘 ${dryMinutes} 分`,
+      label: "全程用时",
+    };
+  }
+  if (hasWash) {
+    return { main: `${washMinutes} 分钟`, breakdown: null, label: "机器占用" };
+  }
+  if (hasDry) {
+    return { main: `${dryMinutes} 分钟`, breakdown: null, label: "烘干用时" };
+  }
+  return { main: "待确认", breakdown: null, label: "全程用时" };
 }
 
 function formatMoney(value: number): string {

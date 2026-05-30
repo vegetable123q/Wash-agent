@@ -4,13 +4,17 @@ interface MachineDisplayInput {
   machine_id?: string | null;
   location?: string | null;
   machine_location?: string | null;
-  machine_type?: MachineType | null;
+  machine_type?: MachineType | string | null;
 }
 
 export function machineDisplayLabel(machine: MachineDisplayInput): string {
   const location = machineDisplayLocation(machine.machine_location ?? machine.location ?? "");
+  const typeLabel = machineTypeLabel(machine.machine_type ?? "unknown");
+  if (location.endsWith(typeLabel)) {
+    return location;
+  }
   const number = locationHasPhysicalMachineNumber(location) ? "" : fallbackMachineNumber(machine.machine_id ?? "");
-  return `${location}${number}${machineTypeLabel(machine.machine_type ?? "unknown")}`;
+  return `${location}${number}${typeLabel}`;
 }
 
 function machineDisplayLocation(location: string): string {
@@ -43,12 +47,12 @@ function fallbackMachineNumber(machineId: string): string {
   return suffix ? `${suffix[1]}号` : "";
 }
 
-function machineTypeLabel(machineType: MachineType): string {
+function machineTypeLabel(machineType: MachineType | string): string {
   const labels: Record<MachineType, string> = {
     standard_washer: "洗衣机",
     shoe_washer: "洗鞋机",
     dryer: "烘干机",
     unknown: "机器",
   };
-  return labels[machineType];
+  return labels[machineType as MachineType] ?? "机器";
 }

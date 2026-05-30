@@ -210,7 +210,9 @@ describe("ReportScreen", () => {
     const { container } = render(<ReportScreen mobileSummary={mobileSummary} />);
 
     expect(screen.getByText(/\¥11/)).toBeInTheDocument();
-    expect(screen.getByText("180 分钟")).toBeInTheDocument();
+    expect(screen.getByText("230 分钟")).toBeInTheDocument();
+    expect(screen.getByText("洗 180 分 + 烘 50 分")).toBeInTheDocument();
+    expect(screen.getByText("全程用时")).toBeInTheDocument();
     expect(screen.getByText("2 个批次")).toBeInTheDocument();
     expect(screen.getByText("可用 9/13")).toBeInTheDocument();
     expect(screen.getByText("深色标准洗")).toBeInTheDocument();
@@ -346,6 +348,82 @@ describe("ReportScreen", () => {
     expect(screen.getByText("¥5.5")).toBeInTheDocument();
     expect(screen.getByText("洗 ¥3.5 + 烘 ¥2")).toBeInTheDocument();
     expect(container.textContent).not.toContain("¥5.5（洗 ¥3.5 + 烘 ¥2）");
+  });
+
+  it("combines wash and drying durations and avoids duplicated dryer labels", () => {
+    const mobileSummary = {
+      source: "backend",
+      selected_laundry_item_ids: ["tee-1"],
+      dirty_basket: {
+        item_count: 1,
+        load_percent: 20,
+        oldest_days: 0,
+        urgent_count: 0,
+        status_label: "可清洗",
+        recommendation: "今晚处理。",
+        next_action: "查看报告",
+        items: [],
+      },
+      wardrobe: { items: [wardrobeItem("tee-1", "白色棉 T 恤")] },
+      campus_context: {
+        all_machines: [],
+        available_machines: [],
+        queue_estimates: [],
+        weather: {},
+        drying_context: {},
+        pricing_rules: { wash_programs: { standard: { price_yuan: 3.5, duration_minutes: 40 } }, dryer_programs: {} },
+      },
+      plan: {
+        buckets: [
+          {
+            bucket_id: "light-standard",
+            item_ids: ["tee-1"],
+            wash_method: "machine_wash",
+            machine_type: "standard_washer",
+            program: "standard",
+            detergent_ml: 24,
+            use_laundry_bag: false,
+            dry_method: "air_dry",
+            warnings: [],
+          },
+        ],
+        estimated_cost_yuan: 3.5,
+        estimated_duration_minutes: 40,
+        summary: "浅色标准洗。",
+        global_warnings: [],
+      },
+      drying_plan: {
+        steps: [
+          {
+            bucket_id: "light-standard",
+            item_ids: ["tee-1"],
+            dry_method: "low_heat_dryer",
+            dryer_machine_id: "dryer-6",
+            dryer_machine_location: "紫荆1号楼 紫荆1号楼6层烘干机",
+            estimated_cost_yuan: 2,
+            estimated_duration_minutes: 50,
+            warnings: [],
+          },
+        ],
+        estimated_cost_yuan: 2,
+        estimated_duration_minutes: 50,
+        cost_breakdown: [],
+        warnings: [],
+      },
+      report: {
+        title: "本次校园洗衣报告",
+        sections: {},
+        savings_notes: [],
+        risk_notes: [],
+      },
+    } satisfies MobileSummary;
+
+    const { container } = render(<ReportScreen mobileSummary={mobileSummary} />);
+
+    expect(screen.getByText("90 分钟")).toBeInTheDocument();
+    expect(screen.getByText("洗 40 分 + 烘 50 分")).toBeInTheDocument();
+    expect(screen.getByText("全程用时")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("烘干机烘干机");
   });
 
   it("hides invalid live report numbers", () => {

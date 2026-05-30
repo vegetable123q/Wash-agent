@@ -154,6 +154,14 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig, onComp
     return () => { cancelled = true; };
   }, [mobileSummary?.plan, modelHubConfig]);
 
+  const handleExecutePlan = () => {
+    if (!onCompletePlan) return;
+    if (!window.confirm("执行后会记录本次洗涤并清空脏衣篮中这批衣物，确定继续吗？")) {
+      return;
+    }
+    void onCompletePlan();
+  };
+
   return (
     <Page compact>
       <TopBar title="本次方案" onBack={onBack} />
@@ -167,7 +175,7 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig, onComp
       </Card>
 
       {hasBuckets && hasSelectedItems ? (
-        <button className="primary-button plan-execute-button" type="button" onClick={() => void onCompletePlan?.()} disabled={!onCompletePlan}>
+        <button className="primary-button plan-execute-button" type="button" onClick={handleExecutePlan} disabled={!onCompletePlan}>
           按此方案执行
         </button>
       ) : null}
