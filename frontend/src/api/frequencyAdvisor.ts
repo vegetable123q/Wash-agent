@@ -138,7 +138,7 @@ function thresholdFor(text: string): number {
 }
 
 function nonNegativeInteger(value: number): number {
-  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  return Number.isFinite(value) && Number.isInteger(value) && value >= 0 ? value : 0;
 }
 
 function termMatches(text: string, term: string): boolean {

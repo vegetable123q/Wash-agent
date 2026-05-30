@@ -47,6 +47,12 @@ describe("frequencyAdvisor", () => {
     expect(advice.reasons[0]).not.toContain("-1");
   });
 
+  it("normalizes fractional wear counts before scoring advice", () => {
+    const advice = adviseFrequency(planItem({ name: "white cotton tee", wearCount: 2.5 }), constraints);
+
+    expect(advice.priority_score).toBe(0);
+  });
+
   it("trims urgent item ids before matching", () => {
     const advice = adviseFrequency(planItem({ name: "white cotton tee", wearCount: 0 }), {
       ...constraints,
