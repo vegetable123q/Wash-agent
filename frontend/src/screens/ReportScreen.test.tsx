@@ -269,6 +269,81 @@ describe("ReportScreen", () => {
     expect(container.textContent).not.toContain("¥24");
   });
 
+  it("splits total cost and cost breakdown into readable text", () => {
+    const mobileSummary = {
+      source: "backend",
+      selected_laundry_item_ids: ["tee-1"],
+      dirty_basket: {
+        item_count: 1,
+        load_percent: 20,
+        oldest_days: 0,
+        urgent_count: 0,
+        status_label: "可清洗",
+        recommendation: "今晚处理。",
+        next_action: "查看报告",
+        items: [],
+      },
+      wardrobe: { items: [wardrobeItem("tee-1", "白色棉 T 恤")] },
+      campus_context: {
+        all_machines: [],
+        available_machines: [],
+        queue_estimates: [],
+        weather: {},
+        drying_context: {},
+        pricing_rules: { wash_programs: { standard: { price_yuan: 3.5, duration_minutes: 40 } }, dryer_programs: {} },
+      },
+      plan: {
+        buckets: [
+          {
+            bucket_id: "light-standard",
+            item_ids: ["tee-1"],
+            wash_method: "machine_wash",
+            machine_type: "standard_washer",
+            program: "standard",
+            detergent_ml: 24,
+            use_laundry_bag: false,
+            dry_method: "air_dry",
+            warnings: [],
+          },
+        ],
+        estimated_cost_yuan: 3.5,
+        estimated_duration_minutes: 40,
+        summary: "浅色标准洗。",
+        global_warnings: [],
+      },
+      drying_plan: {
+        steps: [
+          {
+            bucket_id: "light-standard",
+            item_ids: ["tee-1"],
+            dry_method: "low_heat_dryer",
+            dryer_machine_id: "dryer-1",
+            dryer_machine_location: "紫荆1号楼 六层",
+            estimated_cost_yuan: 2,
+            estimated_duration_minutes: 50,
+            warnings: [],
+          },
+        ],
+        estimated_cost_yuan: 2,
+        estimated_duration_minutes: 50,
+        cost_breakdown: [],
+        warnings: [],
+      },
+      report: {
+        title: "本次校园洗衣报告",
+        sections: {},
+        savings_notes: [],
+        risk_notes: [],
+      },
+    } satisfies MobileSummary;
+
+    const { container } = render(<ReportScreen mobileSummary={mobileSummary} />);
+
+    expect(screen.getByText("¥5.5")).toBeInTheDocument();
+    expect(screen.getByText("洗 ¥3.5 + 烘 ¥2")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("¥5.5（洗 ¥3.5 + 烘 ¥2）");
+  });
+
   it("hides invalid live report numbers", () => {
     const mobileSummary = {
       source: "backend",

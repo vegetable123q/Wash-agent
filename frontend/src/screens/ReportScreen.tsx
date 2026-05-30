@@ -37,9 +37,13 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
   const hasValidWashCost = isFiniteNonNegativeNumber(washCost);
   const hasValidDryCost = dryCost == null || isFiniteNonNegativeNumber(dryCost);
   const totalCost = (hasValidWashCost ? washCost : 0) + (hasValidDryCost ? (dryCost ?? 0) : 0);
-  const totalText = plan
-    ? !hasValidWashCost ? "费用待确认" : dryCost && hasValidDryCost ? `¥${formatMoney(totalCost)}（洗 ¥${formatMoney(washCost)} + 烘 ¥${formatMoney(dryCost)}）` : `¥${formatMoney(washCost)}`
-    : report.total;
+  const totalCopy = plan
+    ? !hasValidWashCost
+      ? { main: "费用待确认", breakdown: null as string | null }
+      : dryCost && hasValidDryCost
+        ? { main: `¥${formatMoney(totalCost)}`, breakdown: `洗 ¥${formatMoney(washCost)} + 烘 ¥${formatMoney(dryCost)}` }
+        : { main: `¥${formatMoney(washCost)}`, breakdown: null as string | null }
+    : { main: report.total, breakdown: null as string | null };
   const durationText = isPositiveInteger(plan?.estimated_duration_minutes) ? `${plan.estimated_duration_minutes} 分钟` : "待确认";
   const bucketCountText = plan ? `${plan.buckets.length} 个批次` : "待生成";
   const routeCards = hasPlan && plan ? buildRouteCards(plan.buckets, nameMap, pricingRules) : [];
@@ -70,7 +74,8 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
         <h2>本次结论</h2>
         <div className="report-hero-grid">
           <div className="report-hero-total">
-            <strong>{totalText}</strong>
+            <strong>{totalCopy.main}</strong>
+            {totalCopy.breakdown ? <span className="report-cost-breakdown">{totalCopy.breakdown}</span> : null}
             <span>预计费用</span>
           </div>
           <div className="report-hero-stats">

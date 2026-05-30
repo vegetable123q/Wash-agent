@@ -612,7 +612,55 @@ function machineFloorRank(machine: MachineInfo, preferredFloor: number): number 
 }
 
 function machineRecommendationWarning(machine: MachineInfo, program: string): string {
-  return `推荐使用 ${machine.machine_id}，位置 ${machine.location}，程序 ${program}。`;
+  const location = machineRecommendationLocation(machine.location);
+  const machineLabel = locationHasPhysicalMachineNumber(location)
+    ? `${location}${machineTypeLabel(machine.machine_type)}`
+    : `${location}的 ${machine.machine_id} 号${machineTypeLabel(machine.machine_type)}`;
+  return `推荐使用${machineLabel}，程序${programLabel(program)}。`;
+}
+
+function machineRecommendationLocation(location: string): string {
+  const compactFloor = location.trim().replace(/\s+(?=[一二三四五六七八九十\d]+层)/g, "");
+  const parts = compactFloor.split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) {
+    return compactFloor;
+  }
+  const withoutRepeatedBuilding = parts.filter((part, index) =>
+    !parts.some((other, otherIndex) =>
+      otherIndex !== index && /[楼栋]/.test(part) && other.includes(part),
+    ),
+  );
+  if (withoutRepeatedBuilding.length !== parts.length) {
+    return withoutRepeatedBuilding.join("");
+  }
+  if (/[楼栋层号]/.test(compactFloor)) {
+    return parts.join("");
+  }
+  return compactFloor;
+}
+
+function locationHasPhysicalMachineNumber(location: string): boolean {
+  return /[一二三四五六七八九十\d]+号$/.test(location);
+}
+
+function machineTypeLabel(machineType: MachineType): string {
+  const labels: Record<MachineType, string> = {
+    standard_washer: "洗衣机",
+    shoe_washer: "洗鞋机",
+    dryer: "烘干机",
+    unknown: "设备",
+  };
+  return labels[machineType];
+}
+
+function programLabel(program: string): string {
+  const labels: Record<string, string> = {
+    standard: "标准洗",
+    quick: "快洗",
+    large: "大件洗",
+    low: "低温烘干",
+  };
+  return labels[program] ?? program;
 }
 
 // ─── pricing helpers ────────────────────────────────────────────────────

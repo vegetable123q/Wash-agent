@@ -97,6 +97,16 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
     setError("");
   };
 
+  const handleContinueAdding = () => {
+    setDraft({ ...emptyDraft });
+    setTextDescription("");
+    setImageFile(null);
+    setStatus("idle");
+    setError("");
+    setRecognitionStatus("idle");
+    setRecognitionError("");
+  };
+
   const fillDraftFromRecognition = (result: ClothingRecognitionResult, imageFilename = "") => {
     setDraft((current) => ({
       ...current,
@@ -380,6 +390,16 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
           {recognitionStatus === "error" ? <p className="form-status form-status-error">{recognitionError}</p> : null}
           {status === "saved" ? <p className="form-status form-status-ok">保存成功，已加入衣柜</p> : null}
           {status === "error" ? <p className="form-status form-status-error">{error}</p> : null}
+          {status === "saved" ? (
+            <div className="button-row">
+              <button className="secondary-button" type="button" onClick={handleContinueAdding}>
+                继续添加
+              </button>
+              <button className="secondary-button" type="button" onClick={onBack}>
+                返回衣柜
+              </button>
+            </div>
+          ) : null}
 
           <button className="primary-button" type="submit" disabled={!canSubmit}>
             <Save size={18} />

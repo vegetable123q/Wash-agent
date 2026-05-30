@@ -55,6 +55,21 @@ describe("AddClothingScreen", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("offers clear exits after saving a manual item", async () => {
+    const onBack = vi.fn();
+
+    render(<AddClothingScreen modelHubConfig={{ ...modelHubConfig, apikey: "" }} onBack={onBack} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "文字输入" }));
+    fireEvent.change(screen.getByLabelText("衣物名称"), { target: { value: "白色棉 T 恤" } });
+    fireEvent.click(screen.getByRole("button", { name: /保存到衣柜/ }));
+
+    expect(await screen.findByText("保存成功，已加入衣柜")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "继续添加" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "返回衣柜" }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
   it("infers a local photo mime type from filename when saving manual input", async () => {
     const { container } = render(
       <AddClothingScreen modelHubConfig={{ ...modelHubConfig, apikey: "" }} onBack={() => undefined} />,

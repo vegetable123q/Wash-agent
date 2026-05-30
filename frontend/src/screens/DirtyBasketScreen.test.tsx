@@ -114,4 +114,36 @@ describe("DirtyBasketScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "查看本次方案" }));
     expect(onNavigate).toHaveBeenCalledWith("planDetail");
   });
+
+  it("keeps the plan action disabled when no clothes are in the basket", () => {
+    const onNavigate = vi.fn();
+    render(
+      <DirtyBasketScreen
+        mobileSummary={{
+          ...summary,
+          selected_laundry_item_ids: [],
+          dirty_basket: {
+            item_count: 0,
+            load_percent: 0,
+            oldest_days: 0,
+            urgent_count: 0,
+            status_label: "空篮",
+            recommendation: "先把脏衣服加入脏衣篮，再生成本次洗衣方案。",
+            next_action: "去衣柜选择这批要洗的衣物",
+            items: [],
+          },
+        }}
+        onBack={vi.fn()}
+        onNavigate={onNavigate}
+        onToggleItem={vi.fn()}
+        onClearBasket={vi.fn()}
+        onSelectAll={vi.fn()}
+      />,
+    );
+
+    const action = screen.getByRole("button", { name: "先选择衣物" });
+    expect(action).toBeDisabled();
+    fireEvent.click(action);
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
 });

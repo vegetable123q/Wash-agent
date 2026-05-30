@@ -191,8 +191,11 @@ describe("App in-APK backend integration", () => {
     fireEvent.click(await screen.findByRole("button", { name: /管理脏衣篮/ }));
     expect(await screen.findByRole("heading", { name: "脏衣篮" })).toBeInTheDocument();
 
+    fireEvent.click(await screen.findByLabelText("加入脏衣篮 清华紫连帽卫衣"));
+    expect(await screen.findByLabelText("移出脏衣篮 清华紫连帽卫衣")).toBeChecked();
     fireEvent.click(screen.getByRole("button", { name: "查看本次方案" }));
     expect(await screen.findByRole("heading", { name: "本次方案" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "返回" }));
     expect(await screen.findByRole("heading", { name: "脏衣篮" })).toBeInTheDocument();

@@ -79,7 +79,7 @@ button {
 }
 
 .page-compact {
-  padding-bottom: 22px;
+  padding-bottom: 96px;
 }
 
 .page::-webkit-scrollbar {
@@ -1668,6 +1668,13 @@ textarea.input-like:focus {
   color: rgba(255, 255, 255, 0.72);
   font-size: 12px;
   font-weight: 850;
+}
+
+.report-hero-total .report-cost-breakdown {
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.25;
 }
 
 .report-hero-stats {

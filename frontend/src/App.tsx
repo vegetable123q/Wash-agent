@@ -311,6 +311,7 @@ export default function App() {
             backendMachine={selectedBackendMachine}
             staticMachine={selectedStaticMachine}
             pricingRules={mobileSummary?.campus_context.pricing_rules}
+            mobileSummary={mobileSummary}
           />
         );
       case "report":
@@ -330,13 +331,11 @@ export default function App() {
     }
   }, [backendStatus, mobileSummary, modelHubConfig, refreshMobileSummary, refreshState, screen, selectedClothingId, selectedMachineId, userProfile]);
 
-  const isTabScreen = screen === activeTab;
-
   return (
     <div className="app-shell">
       <div className="phone-frame">
         {content}
-        {isTabScreen ? <BottomNav active={activeTab} onNavigate={navigateTab} /> : null}
+        <BottomNav active={activeTab} onNavigate={navigateTab} />
       </div>
     </div>
   );

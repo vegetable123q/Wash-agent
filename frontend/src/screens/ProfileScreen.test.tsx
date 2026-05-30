@@ -125,4 +125,61 @@ describe("ProfileScreen", () => {
 
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ budgetYuan: 8.5, maxWaitMinutes: 15 }));
   });
+
+  it("saves an edited latest pickup time", () => {
+    const onSave = vi.fn();
+    render(
+      <ProfileScreen
+        profile={{
+          displayName: "",
+          dormName: "南区21号楼",
+          dormFloor: "4",
+          latestPickupTime: "22:30",
+          allowDryer: false,
+          budgetYuan: null,
+          maxWaitMinutes: null,
+        }}
+        modelHubConfig={emptyModelHubConfig}
+        backendStatus="connected"
+        towerOptions={[{ name: "南区21号楼" }]}
+        onSave={onSave}
+        onSaveModelHubConfig={vi.fn((config) => config)}
+        onClearModelHubConfig={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("最晚取衣"), { target: { value: "21:30" } });
+    fireEvent.click(screen.getByRole("button", { name: /保存个人信息/ }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ latestPickupTime: "21:30" }));
+  });
+
+  it("rejects an empty pickup time instead of silently restoring the default", () => {
+    const onSave = vi.fn();
+    render(
+      <ProfileScreen
+        profile={{
+          displayName: "",
+          dormName: "南区21号楼",
+          dormFloor: "4",
+          latestPickupTime: "22:30",
+          allowDryer: false,
+          budgetYuan: null,
+          maxWaitMinutes: null,
+        }}
+        modelHubConfig={emptyModelHubConfig}
+        backendStatus="connected"
+        towerOptions={[{ name: "南区21号楼" }]}
+        onSave={onSave}
+        onSaveModelHubConfig={vi.fn((config) => config)}
+        onClearModelHubConfig={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("最晚取衣"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /保存个人信息/ }));
+
+    expect(screen.getByText("请输入有效的取衣时间")).toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
+  });
 });

@@ -8,7 +8,7 @@ import {
 } from "../api/modelHubConfig";
 import { Card, Chip, Page, Section } from "../components/AppChrome";
 import type { CampusTowerOption } from "../api/mobileSummary";
-import { dormWithFloor, normalizeDormFloor, type UserProfile } from "../userProfile";
+import { dormWithFloor, isValidPickupTime, normalizeDormFloor, type UserProfile } from "../userProfile";
 
 type BackendStatus = "loading" | "connected" | "offline";
 
@@ -35,6 +35,7 @@ export function ProfileScreen({
   const [modelHubDraft, setModelHubDraft] = useState(modelHubConfig);
   const [saved, setSaved] = useState(false);
   const [floorError, setFloorError] = useState<string | null>(null);
+  const [pickupError, setPickupError] = useState<string | null>(null);
   const [modelHubSaved, setModelHubSaved] = useState(false);
   const selectedDormIsListed = towerOptions.some((tower) => tower.name === draft.dormName);
   const normalizedModelHubDraft = normalizeModelHubConfig(modelHubDraft);
@@ -46,6 +47,9 @@ export function ProfileScreen({
     if ("dormFloor" in patch) {
       setFloorError(null);
     }
+    if ("latestPickupTime" in patch) {
+      setPickupError(null);
+    }
     setDraft((current) => ({ ...current, ...patch }));
   };
 
@@ -55,6 +59,11 @@ export function ProfileScreen({
     if (dormFloor === null) {
       setSaved(false);
       setFloorError("请输入 1-30 之间的楼层");
+      return;
+    }
+    if (!isValidPickupTime(draft.latestPickupTime)) {
+      setSaved(false);
+      setPickupError("请输入有效的取衣时间");
       return;
     }
     const normalizedDraft = { ...draft, dormFloor };
@@ -148,10 +157,12 @@ export function ProfileScreen({
               <input
                 className="input-like"
                 type="time"
+                aria-label="最晚取衣"
                 value={draft.latestPickupTime}
                 onChange={(event) => updateDraft({ latestPickupTime: event.target.value })}
               />
             </label>
+            {pickupError ? <p className="form-status form-status-error">{pickupError}</p> : null}
             <label className="toggle-row">
               <input
                 type="checkbox"
