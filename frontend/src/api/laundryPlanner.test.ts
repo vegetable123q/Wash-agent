@@ -120,6 +120,20 @@ describe("planLaundry", () => {
     });
   });
 
+  it("uses a laundry bag for standard buckets when hygiene sensitive", () => {
+    const plan = planLaundry([standardItem("tee-1", "white tee")], {
+      selected_item_ids: ["tee-1"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: 10,
+      budget_yuan: null,
+    }, context);
+
+    expect(plan.buckets[0].use_laundry_bag).toBe(true);
+  });
+
   it("splits many same-color standard items across multiple washer loads", () => {
     const items: WardrobeItemForPlan[] = Array.from({ length: 12 }, (_, index) => ({
       profile: {

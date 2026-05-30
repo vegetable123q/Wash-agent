@@ -214,7 +214,7 @@ function buildBucket(
     machine_type: machineType,
     program,
     detergent_ml: detergentMl(baseBucketId, items),
-    use_laundry_bag: baseBucketId === "dark-standard" || anyRecommendsBag(items),
+    use_laundry_bag: baseBucketId === "dark-standard" || constraints.hygiene_sensitive || anyRecommendsBag(items),
     dry_method: dryMethod,
     warnings: dedupe(warnings),
   };
