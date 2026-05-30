@@ -310,6 +310,30 @@ class CampusMachineApiTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "price_yuan"):
                 client.list_machines()
 
+    def test_mock_machine_rejects_negative_price(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            mock_path = Path(tmp_dir) / "machines.json"
+            mock_path.write_text(
+                json.dumps(
+                    {
+                        "machines": [
+                            {
+                                "machine_id": "washer-1",
+                                "location": "1F",
+                                "machine_type": "standard_washer",
+                                "status": "available",
+                                "price_yuan": -1,
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            client = LaundryMachineClient(mock_path=mock_path)
+
+            with self.assertRaisesRegex(ValueError, "price_yuan"):
+                client.list_machines()
+
     def test_mock_machine_requires_string_machine_id(self) -> None:
         invalid_ids: list[object] = [True, 123, ""]
         for machine_id in invalid_ids:

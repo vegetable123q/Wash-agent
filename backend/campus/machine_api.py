@@ -440,6 +440,8 @@ def _optional_number(value: object, field_name: str) -> float | None:
     number = float(value)
     if not math.isfinite(number):
         raise ValueError(f"machine {field_name} must be finite")
+    if number < 0:
+        raise ValueError(f"machine {field_name} must be non-negative")
     return number
 
 
