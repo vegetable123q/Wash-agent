@@ -1123,6 +1123,20 @@ class EModuleTests(unittest.TestCase):
                         campus_context,  # type: ignore[arg-type]
                     )
 
+    def test_report_requires_valid_campus_context_maps(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        plan = plan_laundry(items, LaundryConstraints(selected_item_ids=["white-tee"]), _campus_context())
+        invalid_contexts = [
+            ("weather", CampusContext(weather=[])),  # type: ignore[arg-type]
+            ("drying_context", CampusContext(drying_context=[])),  # type: ignore[arg-type]
+            ("pricing_rules", CampusContext(pricing_rules=[])),  # type: ignore[arg-type]
+        ]
+
+        for field_name, campus_context in invalid_contexts:
+            with self.subTest(field_name=field_name, campus_context=campus_context):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    generate_report(plan, items, campus_context)
+
     def test_report_requires_valid_campus_machine_lists(self) -> None:
         items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
         plan = plan_laundry(items, LaundryConstraints(selected_item_ids=["white-tee"]), _campus_context())
