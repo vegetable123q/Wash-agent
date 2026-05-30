@@ -446,7 +446,8 @@ function careTexts(value: unknown): string[] {
   if (typeof value === "object") {
     return Object.values(value as Record<string, unknown>).flatMap(careTexts);
   }
-  return String(value)
+  if (typeof value !== "string") return [];
+  return value
     .split(/[、,，/;；\n]+/)
     .map((item) => item.trim())
     .filter(Boolean);

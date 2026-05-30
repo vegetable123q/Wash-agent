@@ -432,6 +432,26 @@ describe("ModelHub clothing recognition", () => {
     expect(result.note).not.toContain("no dry clean");
   });
 
+  it("filters non-string care warning scalars from notes", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        modelHubResponse({
+          is_clothing: true,
+          name: "wool sweater",
+          material_ratios: { wool: 1 },
+          colors: ["beige"],
+          care_warnings: [true, "do not tumble dry"],
+        }),
+      ),
+    );
+
+    const result = await recognizeClothingText("wool sweater", modelHubConfig);
+
+    expect(result.note).not.toContain("true");
+    expect(result.note).not.toBe("");
+  });
+
   it("keeps care label variants in the editable note", async () => {
     vi.stubGlobal(
       "fetch",
