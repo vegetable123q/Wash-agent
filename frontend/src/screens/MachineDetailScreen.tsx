@@ -199,7 +199,7 @@ function machineTypeLabel(machineType: string) {
 function timingText(status: string, remainingMinutes: number | null) {
   if (status === "available") return "无需等待";
   if (status === "running") {
-    return isFiniteNonNegativeNumber(remainingMinutes) ? `剩余 ${remainingMinutes} 分钟` : "运行中";
+    return isFiniteNonNegativeInteger(remainingMinutes) ? `剩余 ${remainingMinutes} 分钟` : "运行中";
   }
   if (status === "out_of_service") return "暂不可用";
   return "状态未知";
@@ -207,6 +207,10 @@ function timingText(status: string, remainingMinutes: number | null) {
 
 function isFiniteNonNegativeNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function isFiniteNonNegativeInteger(value: unknown): value is number {
+  return isFiniteNonNegativeNumber(value) && Number.isInteger(value);
 }
 
 function staticTimingText(machine: MachineView) {

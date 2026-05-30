@@ -98,7 +98,10 @@ describe("MachineDetailScreen", () => {
     expect(screen.queryByText(/等待未知/)).not.toBeInTheDocument();
   });
 
-  it("does not show non-finite running remaining time", () => {
+  it.each([
+    [Number.POSITIVE_INFINITY, "Infinity"],
+    [1.5, "1.5"],
+  ])("does not show invalid running remaining time %s", (remainingMinutes, rawText) => {
     const { container } = render(
       <MachineDetailScreen
         onBack={vi.fn()}
@@ -107,7 +110,7 @@ describe("MachineDetailScreen", () => {
           location: "南区21号楼 南区21号楼6层烘干机",
           machine_type: "dryer",
           status: "running",
-          remaining_minutes: Number.POSITIVE_INFINITY,
+          remaining_minutes: remainingMinutes,
           price_yuan: null,
           modes: [],
           provider: "haier",
@@ -116,7 +119,7 @@ describe("MachineDetailScreen", () => {
       />,
     );
 
-    expect(container.textContent).not.toContain("Infinity");
+    expect(container.textContent).not.toContain(rawText);
     expect(container.querySelector(".panel-metrics span")?.textContent).toBe("运行中");
   });
 
