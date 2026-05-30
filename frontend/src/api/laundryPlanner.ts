@@ -301,7 +301,7 @@ function waitConstraintWarnings(
   constraints: LaundryConstraints,
   context: CampusContext,
 ): string[] {
-  const maxWaitMinutes = nonNegativeConstraintNumber(constraints.max_wait_minutes);
+  const maxWaitMinutes = nonNegativeIntegerConstraintNumber(constraints.max_wait_minutes);
   if (maxWaitMinutes == null) return [];
   const queueByType = new Map(context.queue_estimates.map((e) => [e.machine_type, e]));
   const warnings: string[] = [];
@@ -326,6 +326,11 @@ function waitConstraintWarnings(
 
 function nonNegativeConstraintNumber(value: number | null): number | null {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function nonNegativeIntegerConstraintNumber(value: number | null): number | null {
+  const numberValue = nonNegativeConstraintNumber(value);
+  return numberValue != null && Number.isInteger(numberValue) ? numberValue : null;
 }
 
 function requiredMachineTypes(buckets: LaundryBucket[]): MachineType[] {
