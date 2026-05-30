@@ -171,9 +171,17 @@ function queueFromBackend(queue: BackendQueueEstimate) {
     available: queue.available_count,
     running: queue.running_count,
     outOfService: queue.out_of_service_count,
-    wait: queue.estimated_wait_minutes === null ? "未知" : `${queue.estimated_wait_minutes} 分钟`,
+    wait: queueWaitText(queue.estimated_wait_minutes),
     tone: toneForMachineStatus(queue.available_count > 0 ? "available" : queue.running_count > 0 ? "running" : "out_of_service"),
   };
+}
+
+function queueWaitText(minutes: number | null): string {
+  return isFiniteNonNegativeInteger(minutes) ? `${minutes} 分钟` : "未知";
+}
+
+function isFiniteNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value >= 0;
 }
 
 function machineTypeLabel(machineType: string) {

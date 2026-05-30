@@ -10,7 +10,7 @@ describe("LaundryRoomScreen", () => {
   });
 
   it("hides internal provider keys and raw machine enum values", () => {
-    render(
+    const { container } = render(
       <LaundryRoomScreen
         onNavigate={vi.fn()}
         userProfile={{
@@ -113,7 +113,7 @@ describe("LaundryRoomScreen", () => {
                 running_count: 1,
                 out_of_service_count: 0,
                 unknown_count: 0,
-                estimated_wait_minutes: 18,
+                estimated_wait_minutes: 18.5,
               },
             ],
             weather: {},
@@ -156,16 +156,19 @@ describe("LaundryRoomScreen", () => {
     expect(screen.queryByText("shoe_washer")).not.toBeInTheDocument();
     expect(screen.queryByText("large_washer")).not.toBeInTheDocument();
     expect(screen.queryByText("大件机")).not.toBeInTheDocument();
+    expect(container.textContent).not.toContain("18.5");
     expect(document.querySelectorAll(".machine-card.machine-card-equal")).toHaveLength(3);
   });
 
   it("shows the weather error reason in the laundry room context card", () => {
-    render(
+    const { container } = render(
       <LaundryRoomScreen
         onNavigate={vi.fn()}
         mobileSummary={laundryRoomSummaryWithUnavailableWeather()}
       />,
     );
+
+    expect(container.textContent).not.toContain("18.5");
 
     expect(screen.getByText("Open-Meteo returned 503")).toBeInTheDocument();
   });
