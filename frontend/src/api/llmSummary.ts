@@ -6,6 +6,8 @@
 import { hasCompleteModelHubConfig, type ModelHubConfig } from "./modelHubConfig";
 import type { FrequencyAdvice, LaundryPlan, WeatherSnapshot } from "./types";
 
+const CAMPUS_TIME_ZONE = "Asia/Shanghai";
+
 export interface LLMSummaryResult {
   text: string;
   source: "llm" | "fallback";
@@ -223,26 +225,48 @@ export function computeRecommendedStartTime(
   planDurationMinutes: number | null,
   latestPickupTime: string | null,
 ): string {
-  const now = new Date();
+  const nowMinutes = campusMinutesOfDay(new Date());
   const duration = isValidDuration(planDurationMinutes) ? planDurationMinutes : 60;
   const buffer = 15;
   if (latestPickupTime) {
     const [h, m] = latestPickupTime.split(":").map(Number);
     if (isValidTimePart(h, 23) && isValidTimePart(m, 59)) {
-      const pickup = new Date(now);
-      pickup.setHours(h, m, 0, 0);
-      const latestStart = new Date(pickup.getTime() - (duration + buffer) * 60000);
-      if (latestStart > now) {
-        return `${String(latestStart.getHours()).padStart(2, "0")}:${String(latestStart.getMinutes()).padStart(2, "0")}`;
+      const latestStartMinutes = h * 60 + m - duration - buffer;
+      if (latestStartMinutes > nowMinutes) {
+        return formatMinutesOfDay(latestStartMinutes);
       }
     }
   }
-  const suggested = new Date(now.getTime() + buffer * 60000);
-  return `${String(suggested.getHours()).padStart(2, "0")}:${String(suggested.getMinutes()).padStart(2, "0")}`;
+  return formatMinutesOfDay(nowMinutes + buffer);
 }
 
 function isValidTimePart(value: number, max: number): boolean {
   return Number.isInteger(value) && value >= 0 && value <= max;
+}
+
+function campusMinutesOfDay(date: Date): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: CAMPUS_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const hourText = parts.find((part) => part.type === "hour")?.value;
+  const minuteText = parts.find((part) => part.type === "minute")?.value;
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  if (!isValidTimePart(hour, 24) || !isValidTimePart(minute, 59)) {
+    throw new Error("Unable to resolve campus local time");
+  }
+  return (hour % 24) * 60 + minute;
+}
+
+function formatMinutesOfDay(totalMinutes: number): string {
+  const minutesInDay = 24 * 60;
+  const normalized = ((totalMinutes % minutesInDay) + minutesInDay) % minutesInDay;
+  const hour = Math.floor(normalized / 60);
+  const minute = normalized % 60;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
 function isFiniteNumber(value: unknown): value is number {
