@@ -756,6 +756,33 @@ class EModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, field_name):
                     generate_report(plan, items, _campus_context())
 
+    def test_report_requires_valid_global_warnings(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        bucket = LaundryBucket(
+            bucket_id="light-standard",
+            item_ids=["white-tee"],
+            wash_method=WashMethod.MACHINE_WASH,
+        )
+
+        def invalid_plan(global_warnings: object) -> LaundryPlan:
+            return LaundryPlan(
+                buckets=[bucket],
+                estimated_cost_yuan=0,
+                estimated_duration_minutes=0,
+                global_warnings=global_warnings,  # type: ignore[arg-type]
+            )
+
+        invalid_plans = [
+            ("global_warnings", invalid_plan("warning")),
+            (r"global_warnings\[0\]", invalid_plan([True])),
+            (r"global_warnings\[0\]", invalid_plan([""])),
+        ]
+
+        for field_name, plan in invalid_plans:
+            with self.subTest(field_name=field_name, plan=plan):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    generate_report(plan, items, _campus_context())
+
     def test_report_requires_valid_cost_breakdown(self) -> None:
         items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
         bucket = LaundryBucket(

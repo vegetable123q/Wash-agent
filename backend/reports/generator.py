@@ -60,6 +60,7 @@ def _validate_plan(value: object) -> None:
     _required_non_negative_number(value.estimated_cost_yuan, "plan.estimated_cost_yuan")
     _required_non_negative_int(value.estimated_duration_minutes, "plan.estimated_duration_minutes")
     _validate_cost_breakdown(value.cost_breakdown)
+    _non_empty_string_list(value.global_warnings, "plan.global_warnings")
 
 
 def _validate_cost_breakdown(value: object) -> None:
