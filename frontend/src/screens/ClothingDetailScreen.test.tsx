@@ -79,6 +79,25 @@ describe("ClothingDetailScreen", () => {
     expect(screen.queryByText("与深色衣物同桶")).not.toBeInTheDocument();
     expect(screen.getByText("按浅色衣物清洗")).toBeInTheDocument();
   });
+
+  it("filters invalid material ratios in backend detail text", () => {
+    const { container } = render(
+      <ClothingDetailScreen
+        onBack={vi.fn()}
+        backendItem={wardrobeItem({
+          item_id: "silk-scarf",
+          name: "silk scarf",
+          material_ratios: { cotton: Number.NaN, wool: -0.2, silk: 0.4 },
+          colors: ["blue"],
+          risks: {},
+        })}
+      />,
+    );
+
+    expect(container.textContent).not.toContain("NaN");
+    expect(container.textContent).not.toContain("-20%");
+    expect(container.textContent).toContain("silk 40%");
+  });
 });
 
 const configuredModelHub = {

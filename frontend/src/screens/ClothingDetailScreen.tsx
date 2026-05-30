@@ -178,11 +178,15 @@ function recommendationTitleForBackend(item: WardrobeSummaryItem): string {
 }
 
 function materialText(materialRatios: Record<string, number>) {
-  const entries = Object.entries(materialRatios);
+  const entries = Object.entries(materialRatios).filter(([, ratio]) => isPositiveFiniteNumber(ratio));
   if (entries.length === 0) {
     return "材质未记录";
   }
   return entries.map(([material, ratio]) => `${material} ${Math.round(ratio * 100)}%`).join("、");
+}
+
+function isPositiveFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
 function riskTitle(risks: Record<string, string>) {
