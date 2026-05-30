@@ -191,7 +191,7 @@ function environmentOverview(summary?: MobileSummary | null) {
   const available = summary.campus_context.available_machines.length;
   const waits = summary.campus_context.queue_estimates
     .map((queue) => queue.estimated_wait_minutes)
-    .filter(isFiniteNonNegativeNumber)
+    .filter(isFiniteNonNegativeInteger)
     .sort((a, b) => a - b);
   return {
     machineAvailability: total ? `可用 ${available}/${total}` : "暂无设备",
