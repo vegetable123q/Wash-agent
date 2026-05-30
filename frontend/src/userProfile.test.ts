@@ -31,6 +31,23 @@ describe("userProfile", () => {
     });
   });
 
+  it("preserves zero laundry preferences", () => {
+    const saved = saveUserProfile({
+      ...defaultUserProfile,
+      budgetYuan: 0,
+      maxWaitMinutes: 0,
+    });
+
+    expect(saved).toMatchObject({
+      budgetYuan: 0,
+      maxWaitMinutes: 0,
+    });
+    expect(loadUserProfile()).toMatchObject({
+      budgetYuan: 0,
+      maxWaitMinutes: 0,
+    });
+  });
+
   it("returns a copy of the default profile", () => {
     const loaded = loadUserProfile();
 
@@ -48,7 +65,7 @@ describe("userProfile", () => {
         dormName: "南区21号楼",
         latestPickupTime: "22:00",
         allowDryer: true,
-        budgetYuan: "0",
+        budgetYuan: "-1",
         maxWaitMinutes: "-5",
       }),
     );

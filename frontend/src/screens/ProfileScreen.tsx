@@ -49,7 +49,7 @@ export function ProfileScreen({
   };
 
   const updateNumberDraft = (field: "budgetYuan" | "maxWaitMinutes", value: string) => {
-    updateDraft({ [field]: positiveNumberOrNull(value) });
+    updateDraft({ [field]: nonNegativeNumberOrNull(value) });
   };
 
   const handleSubmit = (event: FormEvent) => {
@@ -161,7 +161,7 @@ export function ProfileScreen({
               <input
                 className="input-like"
                 type="number"
-                min="0.1"
+                min="0"
                 step="0.1"
                 value={numberInputValue(draft.budgetYuan)}
                 onChange={(event) => updateNumberDraft("budgetYuan", event.target.value)}
@@ -173,7 +173,7 @@ export function ProfileScreen({
               <input
                 className="input-like"
                 type="number"
-                min="1"
+                min="0"
                 step="1"
                 value={numberInputValue(draft.maxWaitMinutes)}
                 onChange={(event) => updateNumberDraft("maxWaitMinutes", event.target.value)}
@@ -284,11 +284,11 @@ function numberInputValue(value: number | null | undefined): string {
   return value == null ? "" : String(value);
 }
 
-function positiveNumberOrNull(value: string): number | null {
+function nonNegativeNumberOrNull(value: string): number | null {
   const trimmed = value.trim();
   if (!trimmed) {
     return null;
   }
   const parsed = Number(trimmed);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }

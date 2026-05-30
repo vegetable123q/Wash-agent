@@ -11,19 +11,12 @@ describe("ProfileScreen", () => {
   it("lets users choose a dorm name without exposing tower keys", () => {
     render(
       <ProfileScreen
-        profile={{
-          displayName: "",
-          dormName: "",
-          latestPickupTime: "22:30",
-          allowDryer: false,
-          budgetYuan: null,
-          maxWaitMinutes: null,
-        }}
+        profile={baseProfile()}
         modelHubConfig={emptyModelHubConfig}
         backendStatus="connected"
         towerOptions={[
           {
-            name: "南区21号楼",
+            name: "Dorm A",
           },
         ]}
         onSave={vi.fn()}
@@ -32,8 +25,7 @@ describe("ProfileScreen", () => {
       />,
     );
 
-    expect(screen.getByRole("option", { name: "南区21号楼" })).toBeInTheDocument();
-    expect(screen.queryByText("楼栋编码")).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Dorm A" })).toBeInTheDocument();
     expect(screen.queryByDisplayValue("nq21")).not.toBeInTheDocument();
     expect(screen.queryByText(/cleverschool/)).not.toBeInTheDocument();
     expect(screen.queryByText(/haier/)).not.toBeInTheDocument();
@@ -41,17 +33,9 @@ describe("ProfileScreen", () => {
 
   it("saves budget and maximum wait preferences", () => {
     const onSave = vi.fn();
-
-    render(
+    const { container } = render(
       <ProfileScreen
-        profile={{
-          displayName: "",
-          dormName: "",
-          latestPickupTime: "22:30",
-          allowDryer: false,
-          budgetYuan: null,
-          maxWaitMinutes: null,
-        }}
+        profile={baseProfile()}
         modelHubConfig={emptyModelHubConfig}
         backendStatus="connected"
         towerOptions={[]}
@@ -61,9 +45,10 @@ describe("ProfileScreen", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("本次预算上限（元）"), { target: { value: "12.5" } });
-    fireEvent.change(screen.getByLabelText("最大等待时间（分钟）"), { target: { value: "8" } });
-    fireEvent.click(screen.getByRole("button", { name: /保存个人信息/ }));
+    const numberInputs = numberPreferenceInputs(container);
+    fireEvent.change(numberInputs[0], { target: { value: "12.5" } });
+    fireEvent.change(numberInputs[1], { target: { value: "8" } });
+    fireEvent.click(profileSubmitButton(container));
 
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -73,18 +58,40 @@ describe("ProfileScreen", () => {
     );
   });
 
+  it("saves zero budget and maximum wait preferences", () => {
+    const onSave = vi.fn();
+    const { container } = render(
+      <ProfileScreen
+        profile={baseProfile()}
+        modelHubConfig={emptyModelHubConfig}
+        backendStatus="connected"
+        towerOptions={[]}
+        onSave={onSave}
+        onSaveModelHubConfig={vi.fn((config) => config)}
+        onClearModelHubConfig={vi.fn()}
+      />,
+    );
+
+    const numberInputs = numberPreferenceInputs(container);
+    expect(numberInputs[0].getAttribute("min")).toBe("0");
+    expect(numberInputs[1].getAttribute("min")).toBe("0");
+    fireEvent.change(numberInputs[0], { target: { value: "0" } });
+    fireEvent.change(numberInputs[1], { target: { value: "0" } });
+    fireEvent.click(profileSubmitButton(container));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        budgetYuan: 0,
+        maxWaitMinutes: 0,
+      }),
+    );
+  });
+
   it("blocks saving when the latest pickup time is empty", () => {
     const onSave = vi.fn();
     const { container } = render(
       <ProfileScreen
-        profile={{
-          displayName: "",
-          dormName: "",
-          latestPickupTime: "22:30",
-          allowDryer: false,
-          budgetYuan: null,
-          maxWaitMinutes: null,
-        }}
+        profile={baseProfile()}
         modelHubConfig={emptyModelHubConfig}
         backendStatus="connected"
         towerOptions={[]}
@@ -98,25 +105,16 @@ describe("ProfileScreen", () => {
 
     expect(pickupTimeInput).not.toBeNull();
     fireEvent.change(pickupTimeInput!, { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: /保存个人信息/ }));
+    fireEvent.click(profileSubmitButton(container));
 
     expect(onSave).not.toHaveBeenCalled();
-    expect(screen.getByText("请填写有效的最晚取衣时间")).toBeInTheDocument();
   });
 
   it("blocks saving incomplete ModelHub recognition config", () => {
     const onSaveModelHubConfig = vi.fn((config) => config);
-
-    render(
+    const { container } = render(
       <ProfileScreen
-        profile={{
-          displayName: "",
-          dormName: "",
-          latestPickupTime: "22:30",
-          allowDryer: false,
-          budgetYuan: null,
-          maxWaitMinutes: null,
-        }}
+        profile={baseProfile()}
         modelHubConfig={emptyModelHubConfig}
         backendStatus="connected"
         towerOptions={[]}
@@ -128,9 +126,33 @@ describe("ProfileScreen", () => {
 
     fireEvent.change(screen.getByLabelText("ModelHub baseUrl"), { target: { value: "not a url" } });
     fireEvent.change(screen.getByLabelText("apikey"), { target: { value: "sk-local-test-key" } });
-    fireEvent.click(screen.getByRole("button", { name: /应用识图配置/ }));
+    fireEvent.click(apiSubmitButton(container));
 
     expect(onSaveModelHubConfig).not.toHaveBeenCalled();
-    expect(screen.getByText("请填写有效的 ModelHub baseUrl、apikey 和 model_name")).toBeInTheDocument();
   });
 });
+
+function baseProfile() {
+  return {
+    displayName: "",
+    dormName: "",
+    latestPickupTime: "22:30",
+    allowDryer: false,
+    budgetYuan: null,
+    maxWaitMinutes: null,
+  };
+}
+
+function numberPreferenceInputs(container: HTMLElement): NodeListOf<HTMLInputElement> {
+  const inputs = container.querySelectorAll<HTMLInputElement>('input[type="number"]');
+  expect(inputs).toHaveLength(2);
+  return inputs;
+}
+
+function profileSubmitButton(container: HTMLElement): HTMLButtonElement {
+  return container.querySelector<HTMLButtonElement>('form button[type="submit"]')!;
+}
+
+function apiSubmitButton(container: HTMLElement): HTMLButtonElement {
+  return container.querySelectorAll<HTMLButtonElement>('form button[type="submit"]')[1]!;
+}

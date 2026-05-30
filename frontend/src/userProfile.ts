@@ -52,8 +52,8 @@ function normalizeProfile(value: unknown): UserProfile {
     dormName: String(profile.dormName ?? "").trim(),
     latestPickupTime: normalizePickupTime(profile.latestPickupTime),
     allowDryer: booleanValue(profile.allowDryer),
-    budgetYuan: positiveNumberOrNull(profile.budgetYuan),
-    maxWaitMinutes: positiveNumberOrNull(profile.maxWaitMinutes),
+    budgetYuan: nonNegativeNumberOrNull(profile.budgetYuan),
+    maxWaitMinutes: nonNegativeNumberOrNull(profile.maxWaitMinutes),
   };
 }
 
@@ -82,9 +82,9 @@ function pickupTimeParts(value: string): { hour: number; minute: number } | null
   return { hour, minute };
 }
 
-function positiveNumberOrNull(value: unknown): number | null {
+function nonNegativeNumberOrNull(value: unknown): number | null {
   const numberValue = typeof value === "string" && value.trim() ? Number(value) : value;
-  return typeof numberValue === "number" && Number.isFinite(numberValue) && numberValue > 0 ? numberValue : null;
+  return typeof numberValue === "number" && Number.isFinite(numberValue) && numberValue >= 0 ? numberValue : null;
 }
 
 function booleanValue(value: unknown): boolean {
