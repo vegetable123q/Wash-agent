@@ -264,6 +264,21 @@ class EModuleTests(unittest.TestCase):
                         _campus_context(),
                     )
 
+    def test_plan_normalizes_selected_and_urgent_item_ids(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+
+        plan = plan_laundry(
+            items,
+            LaundryConstraints(
+                selected_item_ids=[" white-tee ", "white-tee"],
+                urgent_item_ids=[" white-tee "],
+                allow_dryer=False,
+            ),
+            _campus_context(),
+        )
+
+        self.assertEqual(plan.buckets[0].item_ids, ["white-tee"])
+
     def test_constraints_require_boolean_flags(self) -> None:
         items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
         invalid_values: list[object] = ["true", 1, None]

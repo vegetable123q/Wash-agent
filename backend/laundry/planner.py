@@ -50,8 +50,10 @@ def plan_laundry(
     _validate_items(items)
     _validate_constraints(constraints)
     _validate_campus_context(campus_context)
-    selected_items = _selected_items(items, constraints.selected_item_ids)
-    _validate_urgent_items(constraints)
+    selected_item_ids = _normalized_item_ids(constraints.selected_item_ids)
+    urgent_item_ids = _normalized_item_ids(constraints.urgent_item_ids)
+    selected_items = _selected_items(items, selected_item_ids)
+    _validate_urgent_items(selected_item_ids, urgent_item_ids)
     bucket_inputs = _split_bucket_inputs(selected_items, constraints)
     buckets = [
         _build_bucket(bucket_id, bucket_items, constraints, campus_context)
@@ -274,8 +276,12 @@ def _selected_items(items: list[WardrobeItem], selected_item_ids: list[str]) -> 
     return [items_by_id[item_id] for item_id in selected_item_ids]
 
 
-def _validate_urgent_items(constraints: LaundryConstraints) -> None:
-    missing = [item_id for item_id in constraints.urgent_item_ids if item_id not in constraints.selected_item_ids]
+def _normalized_item_ids(item_ids: list[str]) -> list[str]:
+    return dedupe([item_id.strip() for item_id in item_ids])
+
+
+def _validate_urgent_items(selected_item_ids: list[str], urgent_item_ids: list[str]) -> None:
+    missing = [item_id for item_id in urgent_item_ids if item_id not in selected_item_ids]
     if missing:
         raise ValueError(f"urgent item ids must be selected for laundry planning: {', '.join(missing)}")
 
