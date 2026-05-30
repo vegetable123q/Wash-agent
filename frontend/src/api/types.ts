@@ -11,6 +11,40 @@ export type MachineStatus = "available" | "running" | "out_of_service" | "unknow
 export type WardrobeCategory = "上衣" | "裤装" | "裙装" | "外套" | "内衣袜子" | "床品" | "鞋包配饰" | "其他";
 export type DirtyBasketAddedAtSource = "known" | "estimated";
 
+/** Outfit log entry — records what the user wore on a given day. */
+export interface OutfitLog {
+  date: string;
+  top_ids: string[];
+  bottom_ids: string[];
+  outer_ids: string[];
+  accessory_ids: string[];
+  note?: string;
+  weather_snapshot?: {
+    temperature_2m: number;
+    weather_code: number;
+    precipitation: number;
+  };
+}
+
+/** LLM-generated outfit recommendation for today. */
+export interface OutfitRecommendation {
+  top_ids: string[];
+  bottom_ids: string[];
+  outer_ids: string[];
+  reason: string;
+  confidence: "high" | "medium" | "low";
+  match_score: number;
+}
+
+/** Co-occurrence pair between two clothing items. */
+export interface ClothingPair {
+  item_a: string;
+  item_b: string;
+  co_wear_count: number;
+  pair_type: "top-bottom" | "top-top" | "outer-top";
+  llm_comment?: string;
+}
+
 /** Normalized machine status used by the planner. */
 export interface MachineInfo {
   machine_id: string;

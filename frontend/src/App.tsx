@@ -19,6 +19,7 @@ import {
   type MobileSummary,
   type WardrobeSummaryItem,
 } from "./api/mobileSummary";
+import { saveOutfitLog, getTodayLog, type OutfitLog } from "./api/outfitLogStore";
 import { BottomNav } from "./components/AppChrome";
 import { machines, wardrobeItems, type MachineView, type ScreenId, type TabId, type WardrobeItemView } from "./data/washMateContent";
 import { AddClothingScreen } from "./screens/AddClothingScreen";
@@ -26,8 +27,10 @@ import { ClothingDetailScreen } from "./screens/ClothingDetailScreen";
 import { DirtyBasketScreen } from "./screens/DirtyBasketScreen";
 import { LaundryRoomScreen } from "./screens/LaundryRoomScreen";
 import { MachineDetailScreen } from "./screens/MachineDetailScreen";
+import { OutfitWikiScreen } from "./screens/OutfitWikiScreen";
 import { PlanDetailScreen } from "./screens/PlanDetailScreen";
 import { ProfileScreen } from "./screens/ProfileScreen";
+import { RecordOutfitScreen } from "./screens/RecordOutfitScreen";
 import { ReportScreen } from "./screens/ReportScreen";
 import { TodayScreen } from "./screens/TodayScreen";
 import { WardrobeScreen } from "./screens/WardrobeScreen";
@@ -43,6 +46,7 @@ const GENERIC_REFRESH_ERROR = "刷新失败，请稍后重试";
 
 const parentTab: Record<ScreenId, TabId> = {
   today: "today",
+  outfitWiki: "outfitWiki",
   wardrobe: "wardrobe",
   laundryRoom: "laundryRoom",
   report: "report",
@@ -52,6 +56,7 @@ const parentTab: Record<ScreenId, TabId> = {
   addClothing: "wardrobe",
   clothingDetail: "wardrobe",
   machineDetail: "laundryRoom",
+  recordOutfit: "outfitWiki",
 };
 
 function isScreenId(value: unknown): value is ScreenId {
@@ -221,8 +226,31 @@ export default function App() {
     );
   };
 
+  const handleAddItemsToBasket = async (itemIds: string[]) => {
+    const selected = new Set(mobileSummary?.selected_laundry_item_ids ?? []);
+    for (const id of itemIds) selected.add(id);
+    const result = await setLaundrySelection([...selected]);
+    setMobileSummary((current) =>
+      current ? rebuildMobileSummaryForSelection(current, result.selected_item_ids, userProfile) : current,
+    );
+  };
+
   const handleCompleteLaundryPlan = async () => {
     await completeLaundryPlan();
+    await refreshMobileSummary();
+  };
+
+  const handleSaveOutfitLog = async (log: OutfitLog) => {
+    saveOutfitLog(log);
+    // Auto-increment wear count for all worn items
+    const allWornIds = [...log.top_ids, ...log.bottom_ids, ...log.outer_ids];
+    for (const itemId of allWornIds) {
+      try {
+        await recordWardrobeWear(itemId);
+      } catch {
+        // Item may not exist in wardrobe, skip silently
+      }
+    }
     await refreshMobileSummary();
   };
 
@@ -310,6 +338,28 @@ export default function App() {
             onToggleItem={handleToggleLaundrySelection}
             onClearBasket={handleClearLaundrySelection}
             onSelectAll={handleSelectAllLaundrySelection}
+          />
+        );
+      case "outfitWiki":
+        return (
+          <OutfitWikiScreen
+            wardrobeItems={mobileSummary?.wardrobe.items ?? []}
+            weather={mobileSummary?.weather}
+            modelHubConfig={modelHubConfig}
+            dirtyItemIds={mobileSummary?.selected_laundry_item_ids}
+            onNavigate={navigate}
+            onAddToBasket={handleAddClothingToBasket}
+            onAddItemsToBasket={handleAddItemsToBasket}
+          />
+        );
+      case "recordOutfit":
+        return (
+          <RecordOutfitScreen
+            wardrobeItems={mobileSummary?.wardrobe.items ?? []}
+            weather={mobileSummary?.weather}
+            existingLog={getTodayLog()}
+            onBack={goBack}
+            onSave={handleSaveOutfitLog}
           />
         );
       case "wardrobe":

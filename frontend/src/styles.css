@@ -1984,21 +1984,21 @@ textarea.input-like:focus {
   bottom: 0;
   height: 76px;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   background: rgba(255, 255, 255, 0.97);
   border-top: 1px solid var(--line);
-  padding: 8px 10px 10px;
+  padding: 8px 6px 10px;
 }
 
 .nav-item {
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: 4px;
+  gap: 3px;
   border: 0;
   background: transparent;
   color: #81808a;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
 }
 
@@ -2079,3 +2079,297 @@ textarea.input-like:focus {
     justify-self: start;
   }
 }
+
+/* ─── Outfit Wiki ──────────────────────────────────────────────────── */
+
+.outfit-select-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.outfit-select-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  text-align: left;
+}
+
+.outfit-select-item:hover {
+  border-color: var(--primary);
+}
+
+.outfit-select-item-active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.outfit-select-item-photo {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+}
+
+.outfit-select-item-photo .wardrobe-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.outfit-select-icon {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.outfit-select-item-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.outfit-select-item-info strong {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.outfit-select-item-info span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.outfit-select-check {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.outfit-empty-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 16px 0;
+}
+
+/* Recommendation card */
+
+.recommendation-card .recommendation-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.recommendation-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recommendation-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  min-width: 28px;
+}
+
+.recommendation-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.recommendation-item-tag {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.recommendation-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.recommendation-reason svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.recommendation-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+}
+
+.recommendation-score {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.recommendation-score strong {
+  font-size: 18px;
+  color: var(--text);
+}
+
+/* Today record card */
+
+.today-record-card .today-record-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  color: var(--primary);
+}
+
+.today-record-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.today-record-detail > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.today-record-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Style summary */
+
+.style-summary-text {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.style-summary-text svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--text-secondary);
+}
+
+/* Pair list */
+
+.pair-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pair-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pair-names {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.pair-names svg {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.pair-plus {
+  color: var(--text-secondary);
+}
+
+.pair-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pair-bar {
+  flex: 1;
+}
+
+.pair-bar-row strong {
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 32px;
+  text-align: right;
+}
+
+/* History row */
+
+.history-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.history-weather {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.history-items {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-left: 20px;
+}
+
+.history-items > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+/* ─── End Outfit Wiki ──────────────────────────────────────────────── */

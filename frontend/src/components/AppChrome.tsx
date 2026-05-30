@@ -3,6 +3,7 @@ import {
   BarChart3,
   CheckSquare,
   ChevronRight,
+  Layers,
   LucideIcon,
   Plus,
   Shirt,
@@ -41,6 +42,7 @@ interface BottomNavProps {
 
 const navItems: Array<{ id: TabId; label: string; icon: LucideIcon }> = [
   { id: "today", label: "今日", icon: CheckSquare },
+  { id: "outfitWiki", label: "穿搭", icon: Layers },
   { id: "wardrobe", label: "衣柜", icon: Shirt },
   { id: "laundryRoom", label: "洗衣房", icon: WashingMachine },
   { id: "report", label: "报告", icon: BarChart3 },

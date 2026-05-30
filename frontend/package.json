@@ -27,6 +27,7 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^6.0.2",
     "jsdom": "^29.1.1",
+    "puppeteer": "^25.1.0",
     "typescript": "^5.6.3",
     "vite": "^8.0.14",
     "vitest": "^4.1.7"

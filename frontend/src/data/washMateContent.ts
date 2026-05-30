@@ -1,4 +1,4 @@
-export type TabId = "today" | "wardrobe" | "laundryRoom" | "report" | "profile";
+export type TabId = "today" | "outfitWiki" | "wardrobe" | "laundryRoom" | "report" | "profile";
 
 export type ScreenId =
   | TabId
@@ -6,7 +6,8 @@ export type ScreenId =
   | "dirtyBasket"
   | "addClothing"
   | "clothingDetail"
-  | "machineDetail";
+  | "machineDetail"
+  | "recordOutfit";
 
 export type Tone =
   | "purple"
