@@ -92,11 +92,16 @@ def _validate_current_weather(current: dict[str, Any]) -> None:
 def _normalize_units(units: dict[str, Any]) -> dict[str, str]:
     normalized: dict[str, str] = {}
     for key, value in units.items():
+        if not isinstance(key, str):
+            continue
+        unit_key = key.strip()
+        if not unit_key:
+            continue
         if not isinstance(value, str):
             continue
         unit = value.strip()
         if unit:
-            normalized[str(key)] = unit
+            normalized[unit_key] = unit
     return normalized
 
 
