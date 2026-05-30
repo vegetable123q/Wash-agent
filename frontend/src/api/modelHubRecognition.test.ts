@@ -315,6 +315,26 @@ describe("ModelHub clothing recognition", () => {
     expect(result.material).toContain("50%");
   });
 
+  it("filters invalid explicit material ratio entries", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        modelHubResponse({
+          is_clothing: true,
+          name: "wool sweater",
+          material_ratios: { zeroFiber: 0, badFiber: true, wool: 1 },
+          colors: ["beige"],
+        }),
+      ),
+    );
+
+    const result = await recognizeClothingText("wool sweater", modelHubConfig);
+
+    expect(result.material).not.toContain("zeroFiber");
+    expect(result.material).not.toContain("badFiber");
+    expect(result.material).toContain("100%");
+  });
+
   it("normalizes colon-separated material ratio strings", async () => {
     vi.stubGlobal(
       "fetch",

@@ -416,14 +416,14 @@ function materialEntryText(value: unknown): string {
 
 function materialWithRatioText(material: string, ratio: unknown): string {
   const name = translateMaterialName(material);
+  if (ratio == null) return name;
   const numericRatio = numericRatioValue(ratio);
-  if (Number.isFinite(numericRatio) && numericRatio > 0) {
-    const normalizedRatio = numericRatio > 1 ? numericRatio / 100 : numericRatio;
-    if (normalizedRatio > 0 && normalizedRatio <= 1) {
-      return `${name} ${Math.round(normalizedRatio * 100)}%`;
-    }
+  if (!Number.isFinite(numericRatio) || numericRatio <= 0) return "";
+  const normalizedRatio = numericRatio > 1 ? numericRatio / 100 : numericRatio;
+  if (normalizedRatio > 0 && normalizedRatio <= 1) {
+    return `${name} ${Math.round(normalizedRatio * 100)}%`;
   }
-  return name;
+  return "";
 }
 
 function numericRatioValue(value: unknown): number {
