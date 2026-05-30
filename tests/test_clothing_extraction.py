@@ -179,6 +179,28 @@ class ClothingExtractionTests(unittest.TestCase):
         self.assertNotIn("True", source_text)
         self.assertNotIn("123", source_text)
 
+    def test_enrich_product_info_uses_fallback_for_blank_supplemental_source_name(
+        self,
+    ) -> None:
+        raw = ClothingInput(
+            name="",
+            extra={
+                "supplemental_sources": [
+                    {"source": "   ", "text": " kept text "},
+                ]
+            },
+        )
+
+        enriched = enrich_product_info(raw)
+
+        matching_lines = [
+            line
+            for line in enriched.extra["normalized_source_text"].splitlines()
+            if "kept text" in line
+        ]
+        self.assertEqual(len(matching_lines), 1)
+        self.assertFalse(matching_lines[0].startswith(":"))
+
     def test_enrich_product_info_ignores_non_string_extra_text_fields(self) -> None:
         raw = ClothingInput(
             name="",

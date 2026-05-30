@@ -79,6 +79,8 @@ def _iter_supplemental_sources(extra: dict[str, Any]) -> list[str]:
                 if isinstance(name_value, str)
                 else f"补充来源{index}"
             )
+            if not name:
+                name = f"补充来源{index}"
             text = _normalize_text(text_value)
             if text:
                 parts.append(f"{name}: {text}")
