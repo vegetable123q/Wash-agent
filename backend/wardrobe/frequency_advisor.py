@@ -162,9 +162,19 @@ def _validate_item(value: object) -> None:
 def _validate_items(value: object) -> None:
     if not isinstance(value, list):
         raise ValueError("items must be a list")
+    seen_item_ids: set[str] = set()
+    duplicates: list[str] = []
     for index, item in enumerate(value):
         if not isinstance(item, WardrobeItem):
             raise ValueError(f"items[{index}] must be a WardrobeItem")
+        _validate_item(item)
+        item_id = item.profile.item_id
+        if item_id in seen_item_ids:
+            duplicates.append(item_id)
+        else:
+            seen_item_ids.add(item_id)
+    if duplicates:
+        raise ValueError(f"items duplicate item_id: {', '.join(dedupe(duplicates))}")
 
 
 def _validate_constraints(value: object) -> None:

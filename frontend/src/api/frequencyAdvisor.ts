@@ -108,6 +108,7 @@ export function adviseAllFrequencies(
   items: WardrobeItemForPlan[],
   constraints: LaundryConstraints,
 ): FrequencyAdvice[] {
+  validateUniqueItemIds(items);
   return items
     .map((item) => adviseFrequency(item, constraints))
     .sort((a, b) => b.priority_score - a.priority_score);
@@ -192,4 +193,22 @@ function containsAny(text: string, terms: Set<string>): boolean {
 
 function dedupe(items: string[]): string[] {
   return [...new Set(items)];
+}
+
+function validateUniqueItemIds(items: WardrobeItemForPlan[]): void {
+  const seen = new Set<string>();
+  const duplicates: string[] = [];
+
+  for (const item of items) {
+    const itemId = item.profile.item_id;
+    if (seen.has(itemId)) {
+      duplicates.push(itemId);
+    } else {
+      seen.add(itemId);
+    }
+  }
+
+  if (duplicates.length) {
+    throw new Error(`items duplicate item_id: ${dedupe(duplicates).join(", ")}`);
+  }
 }

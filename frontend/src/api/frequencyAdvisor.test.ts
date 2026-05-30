@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adviseFrequency, recommendedItemIds } from "./frequencyAdvisor";
+import { adviseAllFrequencies, adviseFrequency, recommendedItemIds } from "./frequencyAdvisor";
 import type { LaundryConstraints, WardrobeItemForPlan } from "./types";
 
 const constraints: LaundryConstraints = {
@@ -56,6 +56,18 @@ describe("frequencyAdvisor", () => {
     expect(advice.priority_score).toBeGreaterThanOrEqual(25);
   });
 
+  it("rejects duplicate item ids before advising all frequencies", () => {
+    expect(() =>
+      adviseAllFrequencies(
+        [
+          planItem({ itemId: "item-1", name: "white cotton tee", wearCount: 2 }),
+          planItem({ itemId: "item-1", name: "duplicate cotton tee", wearCount: 0 }),
+        ],
+        constraints,
+      ),
+    ).toThrow(/duplicate.*item-1/);
+  });
+
   it("falls back to zero when recommended item min score is invalid", () => {
     const item = planItem({ name: "white cotton tee", wearCount: 2 });
 
@@ -63,10 +75,10 @@ describe("frequencyAdvisor", () => {
   });
 });
 
-function planItem({ name, wearCount }: { name: string; wearCount: number }): WardrobeItemForPlan {
+function planItem({ itemId = "item-1", name, wearCount }: { itemId?: string; name: string; wearCount: number }): WardrobeItemForPlan {
   return {
     profile: {
-      item_id: "item-1",
+      item_id: itemId,
       name,
       user_note: "",
       material_ratios: { cotton: 1 },

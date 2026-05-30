@@ -374,6 +374,13 @@ class CModuleTests(unittest.TestCase):
                         constraints,  # type: ignore[arg-type]
                     )
 
+    def test_advise_all_rejects_duplicate_item_ids(self) -> None:
+        items = self.store.list_items()
+        items[1].profile.item_id = items[0].profile.item_id
+
+        with self.assertRaisesRegex(ValueError, "duplicate.*item_id"):
+            advise_all_frequencies(items, LaundryConstraints())
+
     def test_jeans_can_be_deferred_before_threshold(self) -> None:
         item = self.store.get_item("wm-black-jeans-001")
         assert item is not None
