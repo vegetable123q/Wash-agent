@@ -98,6 +98,28 @@ describe("ClothingDetailScreen", () => {
     expect(container.textContent).not.toContain("-20%");
     expect(container.textContent).toContain("silk 40%");
   });
+
+  it("shows detailed care labels and advice on the detail page", () => {
+    render(
+      <ClothingDetailScreen
+        onBack={vi.fn()}
+        backendItem={wardrobeItem({
+          item_id: "vest-1",
+          name: "黑白拼色背心",
+          user_note: "洗涤方式：机洗（推断）；洗涤温度：冷水（推断）；漂白：不可漂白（推断）；翻转烘干：不可翻转烘干（推断）；自然晾干：阴干（推断）\n黑白拼色设计极易串色，建议冷水装洗衣袋轻柔机洗，切勿长时间浸泡或使用热水。",
+          user_notes: [],
+          material_ratios: { cotton: 1 },
+          colors: ["黑白拼色"],
+          risks: { color_bleed: "medium" },
+        })}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "洗护标签" })).toBeInTheDocument();
+    expect(screen.getByText(/洗涤方式：机洗（推断）/)).toBeInTheDocument();
+    expect(screen.getByText(/自然晾干：阴干（推断）/)).toBeInTheDocument();
+    expect(screen.getByText(/黑白拼色设计极易串色/)).toBeInTheDocument();
+  });
 });
 
 const configuredModelHub = {

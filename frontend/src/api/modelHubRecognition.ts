@@ -4,6 +4,8 @@ import type { WardrobeCategory } from "./types";
 export interface ClothingRecognitionResult {
   name?: string;
   material?: string;
+  careTags?: string;
+  suggestion?: string;
   colors?: string;
   note?: string;
   category?: WardrobeCategory;
@@ -82,6 +84,34 @@ const careDisplayNames: Record<string, string> = {
   shrinkage: "注意缩水",
   laundry_bag: "建议使用洗衣袋",
 };
+const careLabelDisplayNames: Record<string, string> = {
+  wash_method: "洗涤方式",
+  washing_method: "洗涤方式",
+  wash_temperature: "洗涤温度",
+  washing_temperature: "洗涤温度",
+  temperature: "洗涤温度",
+  bleach: "漂白",
+  bleaching: "漂白",
+  tumble_dry: "翻转烘干",
+  dryer: "翻转烘干",
+  drying: "翻转烘干",
+  ironing: "熨烫",
+  iron: "熨烫",
+  dry_clean: "干洗",
+  dry_cleaning: "干洗",
+  air_dry: "自然晾干",
+  natural_dry: "自然晾干",
+  line_dry: "自然晾干",
+  hang_dry: "自然晾干",
+  "洗涤方式": "洗涤方式",
+  "洗涤温度": "洗涤温度",
+  "漂白": "漂白",
+  "翻转烘干": "翻转烘干",
+  "烘干": "翻转烘干",
+  "熨烫": "熨烫",
+  "干洗": "干洗",
+  "自然晾干": "自然晾干",
+};
 const recognitionResponseSchema = {
   type: "object",
   properties: {
@@ -99,6 +129,11 @@ const recognitionResponseSchema = {
     material: { type: "string" },
     colors: { type: "array", items: { type: "string" } },
     recommended_wash: { type: "string" },
+    care_labels: {
+      type: "object",
+      additionalProperties: { type: "string" },
+    },
+    care_suggestion: { type: "string" },
     care_warnings: { type: "array", items: { type: "string" } },
     care_forbidden: { type: "array", items: { type: "string" } },
     care_symbols: { type: "array", items: { type: "string" } },
@@ -126,9 +161,12 @@ export async function recognizeClothingImage(
           "请先判断图片中是否包含衣物、吊牌、洗护标签或可用于衣物洗护的商品图。",
           "如果无关，请返回 {\"is_clothing\": false}。",
           "如果相关，请识别衣物名称、主要材质、颜色和简短洗护建议。",
+          "请尽量输出详细洗护标签 care_labels，键包括 wash_method, wash_temperature, bleach, tumble_dry, ironing, dry_clean, air_dry。",
+          "care_labels 的每个值必须用中文，并明确标注来源：从洗标/吊牌读到的写（标签），根据衣物外观或常识判断的写（推断）。",
+          "请输出 care_suggestion，用一段中文说明颜色、材质和洗护风险，例如是否易串色、是否要冷水、洗衣袋、避免浸泡或高温烘干。",
           "请额外判断衣物分类 category，只能从 tops, bottoms, dresses, outerwear, underwear_socks, bedding, shoes_accessories, other 中选择。",
           "除 category 枚举值外，name、material_ratios 的键、colors、recommended_wash、care_warnings 等用户可见内容请优先使用中文。",
-          "只返回 JSON，字段为 is_clothing, name, category, material_ratios, material, colors, recommended_wash, care_warnings, care_symbols, care_instructions。",
+          "只返回 JSON，字段为 is_clothing, name, category, material_ratios, material, colors, care_labels, care_suggestion, recommended_wash, care_warnings, care_symbols, care_instructions。",
           "不要输出店铺、价格、购买链接或营销文案。",
         ].join("\n"),
       },
@@ -176,9 +214,12 @@ export async function recognizeClothingText(
         text: [
           "请从用户的一大段衣物描述中抽取衣物名称、主要材质、颜色和洗护建议。",
           "如果文字没有描述任何衣物，请返回 {\"is_clothing\": false}。",
+          "请尽量输出详细洗护标签 care_labels，键包括 wash_method, wash_temperature, bleach, tumble_dry, ironing, dry_clean, air_dry。",
+          "care_labels 的每个值必须用中文，并明确标注来源：从用户文字或洗标读到的写（标签），根据衣物描述或常识判断的写（推断）。",
+          "请输出 care_suggestion，用一段中文说明颜色、材质和洗护风险，例如是否易串色、是否要冷水、洗衣袋、避免浸泡或高温烘干。",
           "请额外判断衣物分类 category，只能从 tops, bottoms, dresses, outerwear, underwear_socks, bedding, shoes_accessories, other 中选择。",
           "除 category 枚举值外，name、material_ratios 的键、colors、recommended_wash、care_warnings 等用户可见内容请优先使用中文。",
-          "只返回 JSON，字段为 is_clothing, name, category, material_ratios, material, colors, recommended_wash, care_warnings, care_symbols, care_instructions。",
+          "只返回 JSON，字段为 is_clothing, name, category, material_ratios, material, colors, care_labels, care_suggestion, recommended_wash, care_warnings, care_symbols, care_instructions。",
           "用户描述：",
           trimmedDescription,
         ].join("\n"),
@@ -269,7 +310,23 @@ function normalizeRecognitionPayload(payload: Record<string, unknown>, source: R
   const careWarnings = extractCareWarnings(payload);
   const careNote = careWarnings.length ? careWarnings.join("、") : "";
   const recommendedWash = translateCareText(stringValue(payload.recommended_wash));
-  const note = [recommendedWash, careNote].filter(Boolean).join("；");
+  const careTags = careLabelText(firstValue(
+    payload.care_labels,
+    payload.care_label,
+    payload.care_tags,
+    payload.labels,
+    payload["标签"],
+  ));
+  const suggestion = suggestionText(firstValue(
+    payload.care_suggestion,
+    payload.suggestion,
+    payload.advice,
+    payload.washing_advice,
+    payload.laundry_advice,
+    payload["建议"],
+    payload["洗护建议"],
+  )) || [recommendedWash, careNote].filter(Boolean).join("；");
+  const note = suggestion;
 
   const result = {
     name: stringValue(payload.name),
@@ -279,8 +336,19 @@ function normalizeRecognitionPayload(payload: Record<string, unknown>, source: R
       payload.material,
       payload.material_text,
       payload.fabric,
+      payload.fabric_composition,
       payload.composition,
+      payload.composition_text,
+      payload.main_material,
+      payload.primary_material,
+      payload["材质"],
+      payload["主要材质"],
+      payload["面料"],
+      payload["面料成分"],
+      payload["成分"],
     )),
+    careTags,
+    suggestion,
     colors: colorsText(payload.colors),
     note,
     category: normalizeWardrobeCategory(payload.category),
@@ -377,6 +445,69 @@ function materialText(value: unknown): string {
       .join("、");
   }
 
+  return "";
+}
+
+function careLabelText(value: unknown): string {
+  if (!value) return "";
+
+  if (Array.isArray(value)) {
+    return value.map((item) => careLabelEntryText("", item)).filter(Boolean).join("；");
+  }
+
+  if (typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([label, entry]) => careLabelEntryText(label, entry))
+      .filter(Boolean)
+      .join("；");
+  }
+
+  return careLabelEntryText("", value);
+}
+
+function careLabelEntryText(label: string, entry: unknown): string {
+  const displayLabel = careLabelDisplayNames[termKey(label)] ?? label.trim();
+  const text = careLabelValueText(entry);
+  if (!text) return "";
+  const value = withCareEvidenceMarker(translateCareText(text), entry);
+  return displayLabel ? `${displayLabel}：${value}` : value;
+}
+
+function careLabelValueText(entry: unknown): string {
+  if (typeof entry === "string") return entry.trim();
+  if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+    const record = entry as Record<string, unknown>;
+    return stringValue(firstValue(record.value, record.label, record.text, record.status, record.method, record.temperature));
+  }
+  return "";
+}
+
+function withCareEvidenceMarker(text: string, entry: unknown): string {
+  if (!text || /（(?:推断|标签)）/.test(text)) return text;
+  const source = careEvidenceSource(entry);
+  return `${text}（${source}）`;
+}
+
+function careEvidenceSource(entry: unknown): "推断" | "标签" {
+  if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+    const record = entry as Record<string, unknown>;
+    if (record.inferred === true) return "推断";
+    if (record.inferred === false) return "标签";
+    const source = stringValue(firstValue(record.source, record.evidence, record.origin, record.basis));
+    const normalized = termKey(source);
+    if (/(tag|label|visible|ocr|user|explicit)/.test(normalized)) return "标签";
+  }
+  return "推断";
+}
+
+function suggestionText(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value)) {
+    return value.map(suggestionText).filter(Boolean).join("；");
+  }
+  if (value && typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).map(suggestionText).filter(Boolean).join("；");
+  }
   return "";
 }
 

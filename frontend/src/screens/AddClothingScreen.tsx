@@ -3,6 +3,7 @@ import { FormEvent, useRef, useState } from "react";
 import { hasCompleteModelHubConfig, type ModelHubConfig } from "../api/modelHubConfig";
 import { recognizeClothingImage, recognizeClothingText, type ClothingRecognitionResult } from "../api/modelHubRecognition";
 import { createWardrobeItem, type WardrobeCategory, type WardrobeInput } from "../api/mobileSummary";
+import { fileToThumbnailDataUrl } from "../api/photoThumbnail";
 import { Card, Chip, Page, Section, TopBar } from "../components/AppChrome";
 
 interface AddClothingScreenProps {
@@ -23,6 +24,7 @@ interface BatchRecognitionProgress {
 interface ClothingDraft {
   name: string;
   material: string;
+  careTags: string;
   colors: string;
   note: string;
   image_filename: string;
@@ -33,6 +35,7 @@ interface ClothingDraft {
 const emptyDraft: ClothingDraft = {
   name: "",
   material: "",
+  careTags: "",
   colors: "",
   note: "",
   image_filename: "",
@@ -74,8 +77,9 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
     ["名称", draft.name.trim() || "待填写"],
     ["分类", draft.category],
     ["材质", draft.material.trim() || "未知"],
+    ["标签", draft.careTags.trim() || "待识别"],
     ["颜色风险", draft.colors.trim() ? `${draft.colors.trim()}，保存后参与分桶` : "待补充"],
-    ["烘干", draft.note.includes("缩水") ? "建议低温，避免高温" : "按衣标或默认低温"],
+    ["建议", draft.note.trim() || "待识别"],
   ];
 
   const changeMode = (nextMode: EntryMode) => {
@@ -98,8 +102,9 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
       ...current,
       name: result.name || current.name,
       material: result.material || current.material,
+      careTags: result.careTags || current.careTags,
       colors: result.colors || current.colors,
-      note: result.note || current.note,
+      note: result.suggestion || result.note || current.note,
       category: result.category || current.category,
       image_filename: imageFilename || current.image_filename,
     }));
@@ -176,11 +181,12 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
           ...emptyDraft,
           name: result.name ?? "",
           material: result.material ?? "",
+          careTags: result.careTags ?? "",
           colors: result.colors ?? "",
-          note: result.note ?? "",
+          note: result.suggestion ?? result.note ?? "",
           category: result.category ?? emptyDraft.category,
           image_filename: file.name,
-          photo_data_url: await fileToDataUrl(file),
+          photo_data_url: await fileToThumbnailDataUrl(file),
         });
       } catch {
         failedNames.push(file.name);
@@ -256,7 +262,7 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved }: AddClothi
                 setImageFile(file);
                 updateDraft({ image_filename: file?.name ?? "", photo_data_url: "" });
                 if (file) {
-                  void fileToDataUrl(file).then((photoDataUrl) => {
+                  void fileToThumbnailDataUrl(file).then((photoDataUrl) => {
                     updateDraft({ photo_data_url: photoDataUrl });
                   });
                 }
@@ -485,7 +491,7 @@ function BatchEntry({
                   </span>
                   <div>
                     <h3>{item.name || "未命名衣物"}</h3>
-                    <p>{[item.material, item.colors, item.note].filter(Boolean).join(" · ") || item.image_filename}</p>
+                    <p>{[item.material, item.colors, item.careTags, item.note].filter(Boolean).join(" · ") || item.image_filename}</p>
                   </div>
                   <Chip tone="teal">{item.category}</Chip>
                 </div>
@@ -510,30 +516,9 @@ function toWardrobeInput(draft: ClothingDraft): WardrobeInput {
     name: draft.name.trim(),
     material: draft.material.trim(),
     colors: draft.colors.trim(),
-    note: draft.note.trim(),
+    note: [draft.careTags.trim(), draft.note.trim()].filter(Boolean).join("\n"),
     image_filename: draft.image_filename.trim(),
     category: draft.category,
     photo_data_url: draft.photo_data_url,
   };
-}
-
-async function fileToDataUrl(file: File): Promise<string> {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  let binary = "";
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-  return `data:${imageDataUrlMimeType(file)};base64,${btoa(binary)}`;
-}
-
-function imageDataUrlMimeType(file: File): string {
-  const explicitType = file.type.trim().toLowerCase();
-  if (explicitType.startsWith("image/")) return explicitType;
-  const lowerName = file.name.toLowerCase();
-  if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) return "image/jpeg";
-  if (lowerName.endsWith(".png")) return "image/png";
-  if (lowerName.endsWith(".webp")) return "image/webp";
-  if (lowerName.endsWith(".gif")) return "image/gif";
-  if (lowerName.endsWith(".heic")) return "image/heic";
-  return "image/jpeg";
 }

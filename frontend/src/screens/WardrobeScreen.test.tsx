@@ -106,8 +106,8 @@ const selectableSummary: MobileSummary = {
       {
         item_id: "coat-1",
         name: "黑色羽绒服",
-        user_note: "冬天穿",
-        user_notes: ["冬天穿"],
+        user_note: "洗涤方式：机洗（推断）；洗涤温度：冷水（推断）；漂白：不可漂白（推断）；翻转烘干：不可翻转烘干（推断）；自然晾干：阴干（推断）\n黑色羽绒服建议冷水轻柔机洗，不可长时间浸泡。",
+        user_notes: ["洗涤方式：机洗（推断）；洗涤温度：冷水（推断）；漂白：不可漂白（推断）；翻转烘干：不可翻转烘干（推断）；自然晾干：阴干（推断）\n黑色羽绒服建议冷水轻柔机洗，不可长时间浸泡。"],
         wear_count_since_wash: 1,
         wash_count: 0,
         material_ratios: { polyester: 1 },
@@ -160,6 +160,15 @@ describe("WardrobeScreen", () => {
       "src",
       "data:image/png;base64,Y29hdA==",
     );
+  });
+
+  it("keeps wardrobe cards compact by showing only key tags, not full care advice", () => {
+    render(<WardrobeScreen mobileSummary={selectableSummary} onNavigate={() => undefined} />);
+
+    expect(screen.getByText("冷水")).toBeInTheDocument();
+    expect(screen.getByText("不可烘干")).toBeInTheDocument();
+    expect(screen.queryByText(/黑色羽绒服建议冷水轻柔机洗/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/洗涤方式：机洗/)).not.toBeInTheDocument();
   });
 
   it("disables every delete button while a delete is pending", async () => {

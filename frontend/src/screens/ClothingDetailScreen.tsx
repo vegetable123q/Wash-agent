@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { ModelHubConfig } from "../api/modelHubConfig";
 import { fallbackRiskDescription, generateRiskDescription, riskKeyLabel } from "../api/llmSummary";
 import type { WardrobeSummaryItem } from "../api/mobileSummary";
+import { splitWardrobeCareMemory } from "../api/wardrobeCareText";
 import { Card, Chip, MetricCard, Page, Section, TopBar } from "../components/AppChrome";
 import { ClothingArt } from "../components/ClothingArt";
 import { type WardrobeItemView } from "../data/washMateContent";
@@ -78,6 +79,14 @@ export function ClothingDetailScreen({ onBack, backendItem, staticItem, modelHub
         </div>
       </Section>
 
+      {item.careTags ? (
+        <Section title="洗护标签">
+          <Card>
+            <p className="care-label-text">{item.careTags}</p>
+          </Card>
+        </Section>
+      ) : null}
+
       <Section title="风险画像">
         <Card accent="orange" className="warning-surface">
           <div className="progress-block">
@@ -121,7 +130,9 @@ function detailFromBackend(item: WardrobeSummaryItem) {
   const riskValues = Object.values(item.risks);
   const highRisk = riskValues.includes("high");
   const mediumRisk = riskValues.includes("medium");
-  const userNote = item.user_note || item.user_notes?.[0] || "没有额外备注";
+  const rawCareMemory = item.user_note || item.user_notes?.[0] || "";
+  const careMemory = splitWardrobeCareMemory(rawCareMemory);
+  const userNote = careMemory.suggestion || rawCareMemory || "没有额外备注";
   return {
     name: item.name,
     art: artForName(item.name),
@@ -140,6 +151,7 @@ function detailFromBackend(item: WardrobeSummaryItem) {
     riskLevel: highRisk ? "高" : mediumRisk ? "中" : "低",
     riskProgress: highRisk ? "82%" : mediumRisk ? "54%" : "24%",
     riskDescription: fallbackRiskDescription(item.risks, item.name, item.material_ratios),
+    careTags: careMemory.careTags,
     recommendationTitle: recommendationTitleForBackend(item),
     recommendation: userNote,
     historyText: `已穿 ${item.wear_count_since_wash} 次，累计洗涤 ${item.wash_count} 次。`,
@@ -159,6 +171,7 @@ function detailFromStatic(item: WardrobeItemView) {
     riskLevel: item.riskLevel,
     riskProgress: item.riskLevel === "高" ? "82%" : item.riskLevel === "中" ? "54%" : "24%",
     riskDescription: item.recommendation,
+    careTags: "",
     recommendationTitle: "查看洗护建议",
     recommendation: item.recommendation,
     historyText: `已穿 ${item.wearCount} 次，累计洗涤 ${item.washCount} 次。`,

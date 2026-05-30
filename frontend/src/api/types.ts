@@ -253,6 +253,7 @@ export interface WardrobeSummaryItem {
   material_ratios: Record<string, number>;
   colors: string[];
   risks: Record<string, string>;
+  photo_file_path?: string;
   photo_data_url?: string;
 }
 

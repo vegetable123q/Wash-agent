@@ -13,6 +13,7 @@ import { buildProfileFromInput, storedToPlanItem, type StoredWardrobeItem } from
 import { adviseAllFrequencies } from "./frequencyAdvisor";
 import { estimatedWasherLoadCount, loadPercentForItems } from "./laundryLoad";
 import { planLaundry, recommendDrying } from "./laundryPlanner";
+import { deleteWardrobePhotoFile, loadWardrobePhotoDataUrl, saveWardrobePhotoDataUrl } from "./photoFileStorage";
 import { DRYING_CONTEXT, PRICING_RULES } from "./pricingRules";
 import { generateReport } from "./reportGenerator";
 import type {
@@ -103,6 +104,7 @@ export async function createWardrobeItem(input: WardrobeInput): Promise<{ status
   if (!name) throw new Error("name is required");
   const items = readLocalWardrobeItems();
   const itemId = nextWardrobeItemId(items.map((item) => item.item_id));
+  const photoFilePath = await saveWardrobePhotoDataUrl(itemId, input.photo_data_url);
 
   const profile = buildProfileFromInput({
     item_id: itemId,
@@ -125,20 +127,22 @@ export async function createWardrobeItem(input: WardrobeInput): Promise<{ status
     risks: Object.fromEntries(
       Object.entries(profile.risks).map(([key, level]) => [key, level]),
     ),
-    photo_data_url: validPhotoDataUrl(input.photo_data_url) ? input.photo_data_url : undefined,
+    ...(photoFilePath ? { photo_file_path: photoFilePath } : {}),
   };
 
   writeLocalWardrobeItems([...items, item]);
-  return { status: "created", item };
+  return { status: "created", item: photoFilePath ? { ...item, photo_data_url: input.photo_data_url } : item };
 }
 
 export async function deleteWardrobeItem(itemId: string): Promise<{ status: string; item_id: string }> {
   const normalizedItemId = itemId.trim();
   if (!normalizedItemId) throw new Error("item_id is required");
   const items = readLocalWardrobeItems();
+  const deletedItem = items.find((item) => item.item_id === normalizedItemId);
   const nextItems = items.filter((item) => item.item_id !== normalizedItemId);
   if (nextItems.length === items.length) throw new Error(`Unknown wardrobe item: ${normalizedItemId}`);
   writeLocalWardrobeItems(nextItems);
+  await deleteWardrobePhotoFile(deletedItem?.photo_file_path);
   writeDirtyBasketRecords(readDirtyBasketRecords(nextItems));
   return { status: "deleted", item_id: normalizedItemId };
 }
@@ -172,7 +176,7 @@ export async function clearLaundrySelection(): Promise<{ status: string; selecte
 // ─── integrated summary builder ─────────────────────────────────────────
 
 async function buildIntegratedMobileSummary(profile?: MobileSummaryProfile): Promise<MobileSummary> {
-  const storedItems = readLocalWardrobeItems();
+  const storedItems = await hydrateWardrobePhotoDataUrls(readLocalWardrobeItems());
 
   let weather: WeatherSnapshot = await fetchTsinghuaWeather();
   let campusContext: CampusContext;
@@ -440,12 +444,12 @@ function readLocalWardrobeItems(): WardrobeSummaryItem[] {
 
 function writeLocalWardrobeItems(items: WardrobeSummaryItem[]): void {
   if (typeof localStorage === "undefined") return;
-  localStorage.setItem(LOCAL_WARDROBE_STORAGE_KEY, JSON.stringify(items));
+  localStorage.setItem(LOCAL_WARDROBE_STORAGE_KEY, JSON.stringify(items.map(toStoredWardrobeItem)));
 }
 
 function normalizeStoredWardrobeItem(value: unknown): WardrobeSummaryItem {
   const item = typeof value === "object" && value !== null ? (value as Partial<WardrobeSummaryItem>) : {};
-  const photoDataUrl = validPhotoDataUrl(item.photo_data_url) ? item.photo_data_url : undefined;
+  const photoFilePath = String(item.photo_file_path ?? "").trim();
   return {
     item_id: String(item.item_id ?? "").trim(),
     name: String(item.name ?? "未命名衣物").trim() || "未命名衣物",
@@ -457,8 +461,23 @@ function normalizeStoredWardrobeItem(value: unknown): WardrobeSummaryItem {
     material_ratios: normalizeMaterialRatioRecord(item.material_ratios),
     colors: stringArray(item.colors),
     risks: normalizeStoredRiskRecord(item.risks),
-    ...(photoDataUrl ? { photo_data_url: photoDataUrl } : {}),
+    ...(photoFilePath ? { photo_file_path: photoFilePath } : {}),
   };
+}
+
+function toStoredWardrobeItem(item: WardrobeSummaryItem): WardrobeSummaryItem {
+  const { photo_data_url: _photoDataUrl, ...storedItem } = item;
+  return storedItem;
+}
+
+async function hydrateWardrobePhotoDataUrls(items: WardrobeSummaryItem[]): Promise<WardrobeSummaryItem[]> {
+  return Promise.all(
+    items.map(async (item) => {
+      if (!item.photo_file_path) return item;
+      const photoDataUrl = await loadWardrobePhotoDataUrl(item.photo_file_path);
+      return photoDataUrl ? { ...item, photo_data_url: photoDataUrl } : item;
+    }),
+  );
 }
 
 function stringArray(value: unknown): string[] {
@@ -549,10 +568,6 @@ function normalizeWardrobeCategory(value: unknown): WardrobeCategory | undefined
 
 function wardrobeCategories(): WardrobeCategory[] {
   return ["上衣", "裤装", "裙装", "外套", "内衣袜子", "床品", "鞋包配饰", "其他"];
-}
-
-function validPhotoDataUrl(value: unknown): value is string {
-  return typeof value === "string" && /^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(value);
 }
 
 function readDirtyBasketRecords(items: WardrobeSummaryItem[]): DirtyBasketRecord[] {

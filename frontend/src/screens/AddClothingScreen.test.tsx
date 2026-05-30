@@ -2,6 +2,26 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AddClothingScreen } from "./AddClothingScreen";
 
+const filesystemData = vi.hoisted(() => new Map<string, string>());
+
+vi.mock("@capacitor/filesystem", () => ({
+  Directory: { Data: "DATA" },
+  Filesystem: {
+    writeFile: vi.fn(async ({ path, data }: { path: string; data: string }) => {
+      filesystemData.set(path, data);
+      return { uri: path };
+    }),
+    readFile: vi.fn(async ({ path }: { path: string }) => {
+      const data = filesystemData.get(path);
+      if (!data) throw new Error(`Missing file: ${path}`);
+      return { data };
+    }),
+    deleteFile: vi.fn(async ({ path }: { path: string }) => {
+      filesystemData.delete(path);
+    }),
+  },
+}));
+
 const modelHubConfig = {
   baseUrl: "https://modelhub.ailemac.com/v1beta",
   apikey: "test-modelhub-key",
@@ -12,6 +32,7 @@ describe("AddClothingScreen", () => {
   afterEach(() => {
     cleanup();
     localStorage.clear();
+    filesystemData.clear();
     vi.unstubAllGlobals();
   });
 
@@ -53,7 +74,8 @@ describe("AddClothingScreen", () => {
 
     await waitFor(() => {
       const saved = JSON.parse(localStorage.getItem("washmate.localWardrobe") ?? "[]");
-      expect(saved[0]?.photo_data_url).toMatch(/^data:image\/jpeg;base64,/);
+      expect(saved[0]?.photo_data_url).toBeUndefined();
+      expect(saved[0]?.photo_file_path).toMatch(/^wardrobe-photos\/wm-user-.+\.jpg$/);
     });
   });
 
@@ -112,6 +134,12 @@ describe("AddClothingScreen", () => {
                     name: "灰色连帽卫衣",
                     material_ratios: { cotton: 0.7, polyester: 0.3 },
                     colors: ["gray"],
+                    care_labels: {
+                      wash_method: "机洗（推断）",
+                      wash_temperature: "冷水（推断）",
+                      tumble_dry: "不可翻转烘干（推断）",
+                    },
+                    care_suggestion: "建议冷水轻柔机洗，不可高温烘干。",
                     recommended_wash: "冷水机洗，避免高温烘干",
                   }),
                 },
@@ -135,6 +163,8 @@ describe("AddClothingScreen", () => {
     expect(await screen.findByDisplayValue("灰色连帽卫衣")).toBeInTheDocument();
     expect(screen.getByDisplayValue("棉 70%、聚酯纤维 30%")).toBeInTheDocument();
     expect(screen.getByDisplayValue("灰色")).toBeInTheDocument();
+    expect(screen.getByText(/洗涤方式：机洗（推断）/)).toBeInTheDocument();
+    expect(screen.getAllByText(/建议冷水轻柔机洗/).length).toBeGreaterThan(0);
     const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
     expect(JSON.stringify(body)).not.toContain("inline_data");
   });

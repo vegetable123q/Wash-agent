@@ -1,4 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const filesystemData = vi.hoisted(() => new Map<string, string>());
+
+vi.mock("@capacitor/filesystem", () => ({
+  Directory: { Data: "DATA" },
+  Filesystem: {
+    writeFile: vi.fn(async ({ path, data }: { path: string; data: string }) => {
+      filesystemData.set(path, data);
+      return { uri: path };
+    }),
+    readFile: vi.fn(async ({ path }: { path: string }) => {
+      const data = filesystemData.get(path);
+      if (!data) throw new Error(`Missing file: ${path}`);
+      return { data };
+    }),
+    deleteFile: vi.fn(async ({ path }: { path: string }) => {
+      filesystemData.delete(path);
+    }),
+  },
+}));
 import {
   clearLaundrySelection,
   clearWardrobeItems,
@@ -16,6 +36,7 @@ const dirtyBasketStorageKey = "washmate.selectedLaundryItemIds";
 describe("mobileSummary wardrobe selection", () => {
   beforeEach(() => {
     localStorage.clear();
+    filesystemData.clear();
     vi.useRealTimers();
     vi.stubGlobal(
       "fetch",
@@ -177,7 +198,7 @@ describe("mobileSummary wardrobe selection", () => {
     expect(summary.plan.buckets).toEqual([]);
   });
 
-  it("persists wardrobe category and uploaded photo data for inventory display", async () => {
+  it("stores uploaded photo thumbnails as local file references outside wardrobe JSON", async () => {
     await createWardrobeItem({
       name: "黑色羽绒服",
       material: "polyester 100%",
@@ -185,15 +206,19 @@ describe("mobileSummary wardrobe selection", () => {
       note: "冬天穿",
       image_filename: "coat.png",
       category: "外套",
-      photo_data_url: "data:image/png;base64,Y29hdA==",
+      photo_data_url: "data:image/jpeg;base64,dGh1bWI=",
     });
+
+    const saved = JSON.parse(localStorage.getItem(wardrobeStorageKey) ?? "[]");
+    expect(saved[0].photo_data_url).toBeUndefined();
+    expect(saved[0].photo_file_path).toMatch(/^wardrobe-photos\/wm-user-.+\.jpg$/);
 
     const summary = await fetchMobileSummary();
 
     expect(summary.wardrobe.items[0]).toMatchObject({
       name: "黑色羽绒服",
       category: "外套",
-      photo_data_url: "data:image/png;base64,Y29hdA==",
+      photo_data_url: "data:image/jpeg;base64,dGh1bWI=",
     });
   });
 

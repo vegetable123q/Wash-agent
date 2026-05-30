@@ -1,6 +1,7 @@
 import { Plus, Trash2 } from "lucide-react";
 import type { MobileSummary } from "../api/mobileSummary";
 import type { WardrobeCategory } from "../api/types";
+import { importantCareChips, splitWardrobeCareMemory, type CareChip } from "../api/wardrobeCareText";
 import { Card, Chip, IconAction, MetricCard, Page, Section } from "../components/AppChrome";
 import { ClothingArt } from "../components/ClothingArt";
 import { type ClothingArtKind, type ScreenId, type Tone } from "../data/washMateContent";
@@ -17,9 +18,10 @@ interface WardrobeScreenProps {
 interface WardrobeCardModel {
   id: string;
   name: string;
-  description: string;
+  summary: string;
   art: ClothingArtKind;
   tag: { label: string; tone: Tone };
+  careChips: CareChip[];
   category: WardrobeCategory;
   photoDataUrl: string;
 }
@@ -33,9 +35,10 @@ export function WardrobeScreen({ mobileSummary, onNavigate, onViewItem, onDelete
   const cards: WardrobeCardModel[] = backendItems.map((item) => ({
     id: item.item_id,
     name: item.name,
-    description: item.user_note || item.user_notes?.[0] || `${item.wash_count} 次洗涤记录`,
+    summary: wardrobeCardSummary(item),
     art: artForName(item.name),
     tag: tagForItem(item),
+    careChips: importantCareChips(splitWardrobeCareMemory(item.user_note || item.user_notes?.[0]).careTags),
     category: categoryForItem(item),
     photoDataUrl: item.photo_data_url ?? "",
   }));
@@ -116,7 +119,16 @@ export function WardrobeScreen({ mobileSummary, onNavigate, onViewItem, onDelete
                       </div>
                       <div>
                         <h3>{item.name}</h3>
-                        <p>{item.description}</p>
+                        <p>{item.summary}</p>
+                        {item.careChips.length ? (
+                          <div className="wardrobe-card-tags">
+                            {item.careChips.map((chip) => (
+                              <Chip key={chip.label} tone={chip.tone}>
+                                {chip.label}
+                              </Chip>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                       <div className="wardrobe-card-actions inventory-actions">
                         <button
@@ -202,6 +214,20 @@ function buildPriorityItems(summary: MobileSummary | null | undefined) {
       badge: a.priority_score >= 75 ? "急" : a.priority_score >= 45 ? "建议" : "可选",
       tone: (a.priority_score >= 75 ? "orange" : "teal") as Tone,
     }));
+}
+
+function wardrobeCardSummary(item: MobileSummary["wardrobe"]["items"][number]): string {
+  const material = materialSummary(item.material_ratios);
+  const colors = item.colors.filter(Boolean).join("、");
+  return [material, colors].filter(Boolean).join(" · ") || `${item.wash_count} 次洗涤记录`;
+}
+
+function materialSummary(materialRatios: Record<string, number>): string {
+  return Object.entries(materialRatios)
+    .filter(([, ratio]) => typeof ratio === "number" && Number.isFinite(ratio) && ratio > 0)
+    .slice(0, 2)
+    .map(([material, ratio]) => `${material} ${Math.round(ratio * 100)}%`)
+    .join("、");
 }
 
 function groupWardrobeCards(cards: WardrobeCardModel[]) {

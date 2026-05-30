@@ -278,6 +278,74 @@ describe("ModelHub clothing recognition", () => {
     });
   });
 
+  it("accepts composition aliases from ModelHub instead of showing unknown material", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        modelHubResponse({
+          is_clothing: true,
+          name: "blue vest",
+          fabric_composition: "cotton 80%, polyester 20%",
+          colors: ["blue"],
+        }),
+      ),
+    );
+
+    const result = await recognizeClothingText("blue vest", modelHubConfig);
+
+    expect(result.material).toContain("80%");
+    expect(result.material).toContain("20%");
+  });
+
+  it("accepts Chinese material aliases from ModelHub instead of showing unknown material", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        modelHubResponse({
+          is_clothing: true,
+          name: "blue vest",
+          "主要材质": "cotton 100%",
+          colors: ["blue"],
+        }),
+      ),
+    );
+
+    const result = await recognizeClothingText("blue vest", modelHubConfig);
+
+    expect(result.material).toContain("100%");
+  });
+
+  it("preserves detailed inferred care labels and washing advice", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        modelHubResponse({
+          is_clothing: true,
+          name: "黑白拼色背心",
+          material_ratios: { cotton: 1 },
+          colors: ["black", "white"],
+          care_labels: {
+            wash_method: "机洗（推断）",
+            wash_temperature: "冷水（推断）",
+            bleach: "不可漂白（推断）",
+            tumble_dry: "不可翻转烘干（推断）",
+            ironing: "低温熨烫（推断）",
+            dry_clean: "不可干洗（推断）",
+            air_dry: "阴干（推断）",
+          },
+          care_suggestion: "黑白拼色设计极易串色，建议冷水装洗衣袋轻柔机洗，切勿长时间浸泡或使用热水。",
+        }),
+      ),
+    );
+
+    const result = await recognizeClothingText("黑白拼色背心 cotton 100%", modelHubConfig);
+
+    expect(result.material).toContain("100%");
+    expect(result.careTags).toContain("洗涤方式：机洗（推断）");
+    expect(result.careTags).toContain("自然晾干：阴干（推断）");
+    expect(result.suggestion).toContain("黑白拼色设计极易串色");
+  });
+
   it("normalizes string percent material ratios", async () => {
     vi.stubGlobal(
       "fetch",
