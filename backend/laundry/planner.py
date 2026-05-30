@@ -29,11 +29,32 @@ from backend.shared.models import (
 )
 from backend.shared.utils import contains_any, dedupe
 
-_DARK_COLOR_TERMS = {"black", "dark", "navy", "indigo", "深色", "黑", "藏青", "靛蓝"}
-_LIGHT_COLOR_TERMS = {"white", "light", "gray", "grey", "浅色", "白", "灰"}
+_DARK_COLOR_TERMS = {
+    "black", "dark", "navy", "indigo", "deep blue", "dark blue", "charcoal",
+    "深色", "黑", "藏青", "靛蓝", "深蓝", "深灰", "炭灰", "墨绿", "酒红", "深棕", "棕色", "咖啡色",
+}
+_LIGHT_COLOR_TERMS = {
+    "white", "light", "gray", "grey", "light blue", "sky blue", "silver", "beige", "cream", "ivory", "pastel",
+    "浅色", "白", "灰", "浅灰", "浅蓝", "淡蓝", "天蓝", "银色", "米色", "奶油色", "象牙白",
+    "浅粉", "浅黄", "浅绿", "浅紫", "浅卡其",
+}
 _BEDDING_TERMS = {"bedding", "sheet", "duvet", "床单", "被套", "床品"}
 _WOOL_TERMS = {"wool", "羊毛", "cashmere", "羊绒"}
 _HAND_WASH_TERMS = {"hand_wash_only", "hand wash only", "只能手洗", "仅限手洗"}
+_DO_NOT_MACHINE_WASH_TERMS = {
+    "do_not_machine_wash",
+    "no_machine_wash",
+    "no machine wash",
+    "do not machine wash",
+    "不可机洗",
+    "不能机洗",
+    "不可以机洗",
+    "不建议机洗",
+    "不适合机洗",
+    "避免机洗",
+    "禁止机洗",
+    "非机洗",
+}
 _DRY_CLEAN_TERMS = {"dry_clean_only", "dry clean only", "只能干洗", "干洗"}
 _DO_NOT_WASH_TERMS = {"do_not_wash", "不可水洗", "不能水洗"}
 _DO_NOT_DRY_TERMS = {"do_not_tumble_dry", "do_not_dry", "不可烘干", "不能烘干"}
@@ -310,6 +331,7 @@ def _bucket_id_for(item: WardrobeItem, constraints: LaundryConstraints) -> str:
     if (
         item.preferred_method == WashMethod.HAND_WASH
         or contains_any(search_text, _HAND_WASH_TERMS)
+        or contains_any(search_text, _DO_NOT_MACHINE_WASH_TERMS)
         or _has_material(item, _WOOL_TERMS)
     ):
         return "hand-wash"

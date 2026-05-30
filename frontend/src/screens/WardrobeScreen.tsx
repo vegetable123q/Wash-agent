@@ -1,7 +1,7 @@
 import { Plus, Trash2 } from "lucide-react";
 import type { MobileSummary } from "../api/mobileSummary";
 import type { WardrobeCategory } from "../api/types";
-import { importantCareChips, splitWardrobeCareMemory, type CareChip } from "../api/wardrobeCareText";
+import { hasNonMachineWashCare, importantCareChips, splitWardrobeCareMemory, type CareChip } from "../api/wardrobeCareText";
 import { Card, Chip, IconAction, MetricCard, Page, Section } from "../components/AppChrome";
 import { ClothingArt } from "../components/ClothingArt";
 import { type ClothingArtKind, type ScreenId, type Tone } from "../data/washMateContent";
@@ -261,6 +261,9 @@ function artForName(name: string): ClothingArtKind {
 }
 
 function tagForItem(item: MobileSummary["wardrobe"]["items"][number]): { label: string; tone: Tone } {
+  if (hasNonMachineWashCare(item.user_note, ...(item.user_notes ?? []))) {
+    return { label: "不可机洗", tone: "orange" };
+  }
   if (Object.values(item.risks).includes("high")) {
     return { label: "高风险", tone: "red" };
   }

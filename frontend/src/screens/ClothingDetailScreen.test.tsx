@@ -120,6 +120,26 @@ describe("ClothingDetailScreen", () => {
     expect(screen.getByText(/自然晾干：阴干（推断）/)).toBeInTheDocument();
     expect(screen.getByText(/黑白拼色设计极易串色/)).toBeInTheDocument();
   });
+
+  it("does not title non-machine-wash backend items as light-color machine wash", () => {
+    render(
+      <ClothingDetailScreen
+        onBack={vi.fn()}
+        backendItem={wardrobeItem({
+          item_id: "silver-jacket",
+          name: "银色机能风多口袋外套",
+          user_note: "洗涤方式：不可机洗（推断）；自然晾干：阴干（推断）\n银色涂层材质较特殊，建议冷水轻柔手洗。",
+          material_ratios: { polyester: 1 },
+          colors: ["银色"],
+          risks: {},
+        })}
+      />,
+    );
+
+    expect(screen.getByText("不可机洗，单独手洗")).toBeInTheDocument();
+    expect(screen.queryByText("按浅色衣物清洗")).not.toBeInTheDocument();
+    expect(screen.queryByText("可机洗")).not.toBeInTheDocument();
+  });
 });
 
 const configuredModelHub = {

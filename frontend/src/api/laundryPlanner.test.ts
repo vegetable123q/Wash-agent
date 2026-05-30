@@ -545,6 +545,120 @@ describe("hand-wash classification (bug fix regressions)", () => {
     },
   };
 
+  const standardItem = (itemId: string, name: string, colors: string[]): WardrobeItemForPlan => ({
+    profile: {
+      item_id: itemId,
+      name,
+      user_note: "",
+      material_ratios: { cotton: 1 },
+      colors,
+      care_warnings: [],
+      care_recommendations: [],
+      care_forbidden: [],
+      care_symbols: {},
+      risks: {},
+      recommended_wash: "machine_wash",
+    },
+    wear_count_since_wash: 1,
+    preferred_method: "machine_wash",
+    user_notes: [],
+  });
+
+  it("keeps do_not_machine_wash items out of machine-wash buckets", () => {
+    const jacket: WardrobeItemForPlan = {
+      profile: {
+        item_id: "silver-jacket",
+        name: "银色机能风多口袋外套",
+        user_note: "洗涤方式：不可机洗；建议冷水轻柔手洗。",
+        material_ratios: { polyester: 1 },
+        colors: ["银色"],
+        care_warnings: ["do_not_machine_wash"],
+        care_recommendations: [],
+        care_forbidden: ["do_not_machine_wash"],
+        care_symbols: {},
+        risks: { deform: "high" },
+        recommended_wash: "hand_wash",
+      },
+      wear_count_since_wash: 1,
+      preferred_method: "machine_wash",
+      user_notes: ["不可机洗"],
+    };
+
+    const plan = planLaundry([jacket], {
+      selected_item_ids: ["silver-jacket"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, context);
+
+    expect(plan.buckets).toHaveLength(1);
+    expect(plan.buckets[0]).toMatchObject({
+      bucket_id: "hand-wash",
+      wash_method: "hand_wash",
+    });
+    expect(plan.buckets[0].machine_id).toBeUndefined();
+    expect(plan.buckets[0].warnings.join(" ")).toContain("不进入共享洗衣机");
+  });
+
+  it("keeps natural-language non-machine-wash notes out of machine-wash buckets", () => {
+    const jacket: WardrobeItemForPlan = {
+      profile: {
+        item_id: "non-machine-jacket",
+        name: "银色机能风外套",
+        user_note: "这件外套非机洗，建议冷水手洗后自然晾干。",
+        material_ratios: { polyester: 1 },
+        colors: ["银色"],
+        care_warnings: [],
+        care_recommendations: [],
+        care_forbidden: [],
+        care_symbols: {},
+        risks: {},
+        recommended_wash: "machine_wash",
+      },
+      wear_count_since_wash: 1,
+      preferred_method: "machine_wash",
+      user_notes: [],
+    };
+
+    const plan = planLaundry([jacket], {
+      selected_item_ids: ["non-machine-jacket"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, context);
+
+    expect(plan.buckets).toHaveLength(1);
+    expect(plan.buckets[0].bucket_id).toBe("hand-wash");
+    expect(plan.buckets[0].wash_method).toBe("hand_wash");
+  });
+
+  it("classifies light blue and silver as light-standard instead of defaulting to dark", () => {
+    const items: WardrobeItemForPlan[] = [
+      standardItem("light-blue-jeans", "浅蓝色牛仔裤", ["浅蓝色"]),
+      standardItem("silver-socks", "银色袜子", ["银色"]),
+    ];
+
+    const plan = planLaundry(items, {
+      selected_item_ids: ["light-blue-jeans", "silver-socks"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: false,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, context);
+
+    expect(plan.buckets).toHaveLength(1);
+    expect(plan.buckets[0].bucket_id).toBe("light-standard");
+    expect(plan.buckets[0].item_ids).toEqual(["light-blue-jeans", "silver-socks"]);
+  });
+
   it("does NOT force hand-wash for a hoodie with shrink note and machine_wash preference", () => {
     // Bug: hoodie with "缩水" in notes was forced to hand-wash
     const hoodie: WardrobeItemForPlan = {

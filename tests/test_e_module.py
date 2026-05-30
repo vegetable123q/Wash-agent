@@ -506,6 +506,45 @@ class EModuleTests(unittest.TestCase):
         self.assertEqual(plan.buckets[0].wash_method, WashMethod.MACHINE_WASH)
         self.assertEqual(plan.buckets[0].bucket_id, "dark-standard")
 
+    def test_do_not_machine_wash_item_goes_to_hand_wash(self) -> None:
+        jacket = _item(
+            "silver-jacket",
+            "银色机能风多口袋外套",
+            colors=["银色"],
+            materials={"polyester": 1.0},
+            risks={"deform": RiskLevel.HIGH},
+            warnings=["do_not_machine_wash"],
+        )
+        jacket.profile.user_note = "洗涤方式：不可机洗；建议冷水轻柔手洗。"
+
+        plan = plan_laundry(
+            [jacket],
+            LaundryConstraints(selected_item_ids=["silver-jacket"], allow_dryer=False),
+            _campus_context(),
+        )
+
+        self.assertEqual(plan.buckets[0].bucket_id, "hand-wash")
+        self.assertEqual(plan.buckets[0].wash_method, WashMethod.HAND_WASH)
+        self.assertFalse(plan.buckets[0].machine_id)
+
+    def test_natural_language_non_machine_wash_item_goes_to_hand_wash(self) -> None:
+        jacket = _item(
+            "non-machine-jacket",
+            "银色机能风外套",
+            colors=["银色"],
+            materials={"polyester": 1.0},
+        )
+        jacket.profile.user_note = "这件外套非机洗，建议冷水手洗后自然晾干。"
+
+        plan = plan_laundry(
+            [jacket],
+            LaundryConstraints(selected_item_ids=["non-machine-jacket"], allow_dryer=False),
+            _campus_context(),
+        )
+
+        self.assertEqual(plan.buckets[0].bucket_id, "hand-wash")
+        self.assertEqual(plan.buckets[0].wash_method, WashMethod.HAND_WASH)
+
     def test_high_shrink_risk_item_with_machine_preference_gets_machine_wash(self) -> None:
         """Bug fix: high shrink risk alone should not force hand-wash."""
         risky_cotton = _item(
@@ -575,6 +614,27 @@ class EModuleTests(unittest.TestCase):
             _campus_context(),
         )
         self.assertEqual(plan.buckets[0].bucket_id, "dark-standard")
+
+    def test_light_blue_and_silver_items_go_to_light_standard(self) -> None:
+        items = [
+            _item(
+                "light-blue-jeans",
+                "浅蓝色牛仔裤",
+                colors=["浅蓝色"],
+                materials={"cotton": 0.98, "elastane": 0.02},
+            ),
+            _item("silver-socks", "银色袜子", colors=["银色"], materials={"cotton": 1.0}),
+        ]
+
+        plan = plan_laundry(
+            items,
+            LaundryConstraints(selected_item_ids=["light-blue-jeans", "silver-socks"], allow_dryer=False),
+            _campus_context(),
+        )
+
+        self.assertEqual(len(plan.buckets), 1)
+        self.assertEqual(plan.buckets[0].bucket_id, "light-standard")
+        self.assertEqual(plan.buckets[0].item_ids, ["light-blue-jeans", "silver-socks"])
 
     def test_high_deform_risk_adds_warning_in_machine_wash_bucket(self) -> None:
         """Items with deform risk in machine-wash should get a warning, not forced to hand-wash."""

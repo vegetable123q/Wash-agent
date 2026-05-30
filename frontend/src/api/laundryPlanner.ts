@@ -22,11 +22,32 @@ import { splitItemsByLaundryLoad } from "./laundryLoad";
 
 // ─── constants ──────────────────────────────────────────────────────────
 
-const DARK_COLOR_TERMS = new Set(["black", "dark", "navy", "indigo", "深色", "黑", "藏青", "靛蓝"]);
-const LIGHT_COLOR_TERMS = new Set(["white", "light", "gray", "grey", "浅色", "白", "灰"]);
+const DARK_COLOR_TERMS = new Set([
+  "black", "dark", "navy", "indigo", "deep blue", "dark blue", "charcoal",
+  "深色", "黑", "藏青", "靛蓝", "深蓝", "深灰", "炭灰", "墨绿", "酒红", "深棕", "棕色", "咖啡色",
+]);
+const LIGHT_COLOR_TERMS = new Set([
+  "white", "light", "gray", "grey", "light blue", "sky blue", "silver", "beige", "cream", "ivory", "pastel",
+  "浅色", "白", "灰", "浅灰", "浅蓝", "淡蓝", "天蓝", "银色", "米色", "奶油色", "象牙白",
+  "浅粉", "浅黄", "浅绿", "浅紫", "浅卡其",
+]);
 const BEDDING_TERMS = new Set(["bedding", "sheet", "duvet", "床单", "被套", "床品"]);
 const WOOL_TERMS = new Set(["wool", "羊毛", "cashmere", "羊绒"]);
 const HAND_WASH_TERMS = new Set(["hand_wash_only", "hand wash only", "只能手洗", "仅限手洗"]);
+const DO_NOT_MACHINE_WASH_TERMS = new Set([
+  "do_not_machine_wash",
+  "no_machine_wash",
+  "no machine wash",
+  "do not machine wash",
+  "不可机洗",
+  "不能机洗",
+  "不可以机洗",
+  "不建议机洗",
+  "不适合机洗",
+  "避免机洗",
+  "禁止机洗",
+  "非机洗",
+]);
 const DRY_CLEAN_TERMS = new Set(["dry_clean_only", "dry clean only", "只能干洗", "干洗"]);
 const DO_NOT_WASH_TERMS = new Set(["do_not_wash", "不可水洗", "不能水洗"]);
 const DO_NOT_DRY_TERMS = new Set(["do_not_tumble_dry", "do_not_dry", "不可烘干", "不能烘干"]);
@@ -271,6 +292,7 @@ function bucketIdFor(item: WardrobeItemForPlan, constraints: LaundryConstraints)
   if (
     item.preferred_method === "hand_wash" ||
     containsAny(text, HAND_WASH_TERMS) ||
+    containsAny(text, DO_NOT_MACHINE_WASH_TERMS) ||
     hasMaterial(item, WOOL_TERMS)
   ) {
     return "hand-wash";

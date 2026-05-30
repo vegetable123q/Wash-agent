@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { ModelHubConfig } from "../api/modelHubConfig";
 import { fallbackRiskDescription, generateRiskDescription, riskKeyLabel } from "../api/llmSummary";
 import type { WardrobeSummaryItem } from "../api/mobileSummary";
-import { splitWardrobeCareMemory } from "../api/wardrobeCareText";
+import { hasNonMachineWashCare, splitWardrobeCareMemory } from "../api/wardrobeCareText";
 import { Card, Chip, MetricCard, Page, Section, TopBar } from "../components/AppChrome";
 import { ClothingArt } from "../components/ClothingArt";
 import { type WardrobeItemView } from "../data/washMateContent";
@@ -132,6 +132,7 @@ function detailFromBackend(item: WardrobeSummaryItem) {
   const mediumRisk = riskValues.includes("medium");
   const rawCareMemory = item.user_note || item.user_notes?.[0] || "";
   const careMemory = splitWardrobeCareMemory(rawCareMemory);
+  const nonMachineWash = hasNonMachineWashCare(careMemory.sourceText, item.user_note, ...(item.user_notes ?? []));
   const userNote = careMemory.suggestion || rawCareMemory || "没有额外备注";
   return {
     name: item.name,
@@ -141,7 +142,9 @@ function detailFromBackend(item: WardrobeSummaryItem) {
     wearCount: item.wear_count_since_wash,
     washCount: item.wash_count,
     tags: [
-      highRisk
+      nonMachineWash
+        ? { label: "不可机洗", tone: "orange" as const }
+        : highRisk
         ? { label: "高风险", tone: "red" as const }
         : mediumRisk
           ? { label: "需注意", tone: "orange" as const }
@@ -152,7 +155,7 @@ function detailFromBackend(item: WardrobeSummaryItem) {
     riskProgress: highRisk ? "82%" : mediumRisk ? "54%" : "24%",
     riskDescription: fallbackRiskDescription(item.risks, item.name, item.material_ratios),
     careTags: careMemory.careTags,
-    recommendationTitle: recommendationTitleForBackend(item),
+    recommendationTitle: recommendationTitleForBackend(item, nonMachineWash),
     recommendation: userNote,
     historyText: `已穿 ${item.wear_count_since_wash} 次，累计洗涤 ${item.wash_count} 次。`,
   };
@@ -178,7 +181,10 @@ function detailFromStatic(item: WardrobeItemView) {
   };
 }
 
-function recommendationTitleForBackend(item: WardrobeSummaryItem): string {
+function recommendationTitleForBackend(item: WardrobeSummaryItem, nonMachineWash = false): string {
+  if (nonMachineWash || hasNonMachineWashCare(item.user_note, ...(item.user_notes ?? []))) {
+    return "不可机洗，单独手洗";
+  }
   const colorText = item.colors.join(" ").toLowerCase();
   const colorBleedRisk = item.risks.color_bleed;
   if (colorBleedRisk === "high" || colorBleedRisk === "medium") {

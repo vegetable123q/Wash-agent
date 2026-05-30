@@ -171,6 +171,36 @@ describe("WardrobeScreen", () => {
     expect(screen.queryByText(/洗涤方式：机洗/)).not.toBeInTheDocument();
   });
 
+  it("does not label non-machine-wash wardrobe cards as machine washable", () => {
+    render(
+      <WardrobeScreen
+        mobileSummary={{
+          ...emptySummary,
+          wardrobe: {
+            items: [
+              {
+                item_id: "silver-jacket",
+                name: "银色机能风外套",
+                user_note: "洗涤方式：不可机洗（推断）",
+                user_notes: ["洗涤方式：不可机洗（推断）"],
+                wear_count_since_wash: 1,
+                wash_count: 0,
+                material_ratios: { polyester: 1 },
+                colors: ["银色"],
+                risks: {},
+                category: "外套",
+              },
+            ],
+          },
+        }}
+        onNavigate={() => undefined}
+      />,
+    );
+
+    expect(screen.getAllByText("不可机洗").length).toBeGreaterThan(0);
+    expect(screen.queryByText("可机洗")).not.toBeInTheDocument();
+  });
+
   it("disables every delete button while a delete is pending", async () => {
     let resolveDelete: () => void = () => undefined;
     const onDeleteItem = vi.fn(

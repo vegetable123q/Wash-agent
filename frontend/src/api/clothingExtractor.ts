@@ -37,7 +37,10 @@ const CARE_LABEL_ALIASES: Record<string, string> = {
   "hand wash": "hand_wash_only", handwash: "hand_wash_only", "只能手洗": "hand_wash_only", "仅限手洗": "hand_wash_only",
   "no iron": "do_not_iron", no_iron: "do_not_iron", "不可熨烫": "do_not_iron",
   "no dry clean": "do_not_dry_clean", no_dry_clean: "do_not_dry_clean", "不可干洗": "do_not_dry_clean",
-  "no machine wash": "do_not_machine_wash", no_machine_wash: "do_not_machine_wash", "不可机洗": "do_not_machine_wash",
+  "no machine wash": "do_not_machine_wash", no_machine_wash: "do_not_machine_wash",
+  "不可机洗": "do_not_machine_wash", "不能机洗": "do_not_machine_wash", "不可以机洗": "do_not_machine_wash",
+  "不建议机洗": "do_not_machine_wash", "不适合机洗": "do_not_machine_wash", "避免机洗": "do_not_machine_wash",
+  "禁止机洗": "do_not_machine_wash", "非机洗": "do_not_machine_wash",
   "flat dry": "flat_dry", "dry flat": "flat_dry", "平摊晾干": "flat_dry",
 };
 
