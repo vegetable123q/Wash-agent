@@ -250,8 +250,12 @@ function weatherSummary(mobileSummary: MobileSummary): string {
   if (!w) return "天气数据不可用";
   if (w.status !== "live" || !w.current) return w.error ?? "天气数据不可用";
   const parts: string[] = [];
-  if (w.current.temperature_2m != null) parts.push(`${w.current.temperature_2m}°C`);
-  if (w.current.relative_humidity_2m != null) parts.push(`湿度 ${w.current.relative_humidity_2m}%`);
-  if (w.current.precipitation != null) parts.push(`降水 ${w.current.precipitation}mm`);
+  if (isFiniteNumber(w.current.temperature_2m)) parts.push(`${w.current.temperature_2m}°C`);
+  if (isFiniteNumber(w.current.relative_humidity_2m)) parts.push(`湿度 ${w.current.relative_humidity_2m}%`);
+  if (isFiniteNumber(w.current.precipitation)) parts.push(`降水 ${w.current.precipitation}mm`);
   return parts.join(" · ") || "天气数据不可用";
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }

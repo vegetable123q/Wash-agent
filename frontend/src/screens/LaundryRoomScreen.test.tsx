@@ -173,6 +173,30 @@ describe("LaundryRoomScreen", () => {
     expect(screen.getByText("Open-Meteo returned 503")).toBeInTheDocument();
   });
 
+  it("hides invalid live weather values in the laundry room context card", () => {
+    const summary = laundryRoomSummaryWithUnavailableWeather();
+    summary.weather = {
+      source: "open-meteo",
+      status: "live",
+      location: "Tsinghua University",
+      current: {
+        temperature_2m: Number.NaN,
+        relative_humidity_2m: Number.POSITIVE_INFINITY,
+        precipitation: Number.NaN,
+      },
+    };
+
+    const { container } = render(
+      <LaundryRoomScreen
+        onNavigate={vi.fn()}
+        mobileSummary={summary}
+      />,
+    );
+
+    expect(container.textContent).not.toContain("NaN");
+    expect(container.textContent).not.toContain("Infinity");
+  });
+
   it("requests a unified refresh from the laundry room status area", () => {
     const onRefresh = vi.fn();
     render(
