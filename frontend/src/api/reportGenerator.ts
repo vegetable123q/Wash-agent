@@ -21,8 +21,9 @@ export function generateReport(
   items: WardrobeItemForPlan[],
   campusContext: CampusContext,
 ): WashReport {
-  validatePlanItemIdsUnique(plan);
   validateReportItemsUnique(items);
+  validatePlanItemIdsPresent(plan, items);
+  validatePlanItemIdsUnique(plan);
   const itemNames = new Map(items.map((item) => [item.profile.item_id, item.profile.name]));
   return {
     title: "本次校园洗衣报告",
@@ -256,6 +257,16 @@ function validateReportItemsUnique(items: WardrobeItemForPlan[]): void {
   }
   if (duplicates.length) {
     throw new Error(`items duplicate item_id: ${dedupe(duplicates).join(", ")}`);
+  }
+}
+
+function validatePlanItemIdsPresent(plan: LaundryPlan, items: WardrobeItemForPlan[]): void {
+  const itemIds = new Set(items.map((item) => item.profile.item_id));
+  const missing = plan.buckets
+    .flatMap((bucket) => bucket.item_ids)
+    .filter((itemId) => !itemIds.has(itemId));
+  if (missing.length) {
+    throw new Error(`items missing plan item ids: ${dedupe(missing).join(", ")}`);
   }
 }
 

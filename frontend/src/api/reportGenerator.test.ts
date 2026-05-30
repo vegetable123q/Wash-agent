@@ -115,6 +115,15 @@ describe("generateReport", () => {
 
     expect(() => generateReport(minimalPlan(), items, minimalCampusContext())).toThrow(/duplicate.*bedding/);
   });
+
+  it("lists all missing plan item ids before rendering", () => {
+    const plan = minimalPlan();
+    plan.buckets = [
+      { ...plan.buckets[0], item_ids: ["missing-a", "missing-b"] },
+    ];
+
+    expect(() => generateReport(plan, minimalItems(), minimalCampusContext())).toThrow(/missing-a.*missing-b/);
+  });
 });
 
 function minimalPlan(): LaundryPlan {
