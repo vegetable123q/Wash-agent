@@ -865,6 +865,40 @@ class EModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, field_name):
                     generate_report(plan, items, _campus_context())
 
+    def test_report_requires_valid_bucket_numeric_fields(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+
+        def invalid_plan(**overrides: object) -> LaundryPlan:
+            bucket_values = {
+                "bucket_id": "light-standard",
+                "item_ids": ["white-tee"],
+                "wash_method": WashMethod.MACHINE_WASH,
+            }
+            bucket_values.update(overrides)
+            return LaundryPlan(
+                buckets=[LaundryBucket(**bucket_values)],  # type: ignore[arg-type]
+                estimated_cost_yuan=0,
+                estimated_duration_minutes=0,
+            )
+
+        invalid_plans = [
+            ("detergent_ml", invalid_plan(detergent_ml=True)),
+            ("detergent_ml", invalid_plan(detergent_ml=float("nan"))),
+            ("detergent_ml", invalid_plan(detergent_ml=-1)),
+            ("use_laundry_bag", invalid_plan(use_laundry_bag="yes")),
+            ("estimated_cost_yuan", invalid_plan(estimated_cost_yuan=True)),
+            ("estimated_cost_yuan", invalid_plan(estimated_cost_yuan=float("inf"))),
+            ("estimated_cost_yuan", invalid_plan(estimated_cost_yuan=-1)),
+            ("estimated_duration_minutes", invalid_plan(estimated_duration_minutes=True)),
+            ("estimated_duration_minutes", invalid_plan(estimated_duration_minutes=1.5)),
+            ("estimated_duration_minutes", invalid_plan(estimated_duration_minutes=-1)),
+        ]
+
+        for field_name, plan in invalid_plans:
+            with self.subTest(field_name=field_name, plan=plan):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    generate_report(plan, items, _campus_context())
+
     def test_report_requires_wardrobe_item_list(self) -> None:
         items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
         plan = plan_laundry(items, LaundryConstraints(selected_item_ids=["white-tee"]), _campus_context())

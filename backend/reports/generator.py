@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from backend.shared.models import (
     CampusContext,
     ClothingProfile,
@@ -65,8 +67,12 @@ def _validate_bucket(bucket: LaundryBucket, field_name: str) -> None:
     _string(bucket.machine_id, f"{field_name}.machine_id")
     _string(bucket.machine_location, f"{field_name}.machine_location")
     _string(bucket.program, f"{field_name}.program")
+    _optional_non_negative_number(bucket.detergent_ml, f"{field_name}.detergent_ml")
+    _boolean(bucket.use_laundry_bag, f"{field_name}.use_laundry_bag")
     _string(bucket.dryer_machine_id, f"{field_name}.dryer_machine_id")
     _string(bucket.dryer_machine_location, f"{field_name}.dryer_machine_location")
+    _optional_non_negative_number(bucket.estimated_cost_yuan, f"{field_name}.estimated_cost_yuan")
+    _optional_non_negative_int(bucket.estimated_duration_minutes, f"{field_name}.estimated_duration_minutes")
     _non_empty_string_list(bucket.warnings, f"{field_name}.warnings")
 
 
@@ -106,6 +112,27 @@ def _non_empty_string_list(value: object, field_name: str) -> None:
 def _enum_field(value: object, enum_type: type[object], field_name: str) -> None:
     if not isinstance(value, enum_type):
         raise ValueError(f"{field_name} must be a {enum_type.__name__}")
+
+
+def _boolean(value: object, field_name: str) -> None:
+    if not isinstance(value, bool):
+        raise ValueError(f"{field_name} must be a boolean")
+
+
+def _optional_non_negative_number(value: object, field_name: str) -> None:
+    if value is None:
+        return
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ValueError(f"{field_name} must be numeric")
+    if not math.isfinite(float(value)) or value < 0:
+        raise ValueError(f"{field_name} must be a non-negative finite number")
+
+
+def _optional_non_negative_int(value: object, field_name: str) -> None:
+    if value is None:
+        return
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"{field_name} must be a non-negative integer")
 
 
 def _validate_campus_context(value: object) -> None:
