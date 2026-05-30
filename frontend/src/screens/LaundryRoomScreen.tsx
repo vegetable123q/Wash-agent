@@ -3,7 +3,7 @@ import { machinePriceText } from "../api/machinePricing";
 import type { BackendMachine, BackendQueueEstimate, MobileSummary } from "../api/mobileSummary";
 import { Card, Chip, Page, Section } from "../components/AppChrome";
 import { dryerOptions, type ScreenId } from "../data/washMateContent";
-import type { UserProfile } from "../userProfile";
+import { dormWithFloor, normalizeDormFloor, type UserProfile } from "../userProfile";
 
 interface LaundryRoomScreenProps {
   mobileSummary?: MobileSummary | null;
@@ -28,7 +28,9 @@ export function LaundryRoomScreen({
   const backendQueues = mobileSummary?.campus_context.queue_estimates ?? [];
   const campusStatus = mobileSummary?.campus_status;
   const hasBackend = campusStatus?.state === "live" && backendMachines.length > 0;
-  const dormName = userProfile?.dormName || "请选择宿舍楼";
+  const dormName = dormWithFloor(userProfile) || "请选择宿舍楼";
+  const dormFloor = normalizeDormFloor(userProfile?.dormFloor);
+  const dormFloorText = dormFloor ? `${dormFloor}层 · ` : "";
   const latestPickup = userProfile?.latestPickupTime || "22:30";
   const availableCount = mobileSummary?.campus_context.available_machines.length ?? 0;
   const queueRows = backendQueues.map(queueFromBackend);
@@ -54,7 +56,7 @@ export function LaundryRoomScreen({
           <h1>{dormName}</h1>
           <p>
             {userProfile?.dormName
-              ? `个人默认楼栋 · 最晚 ${latestPickup} 取衣`
+              ? `个人默认楼栋 · ${dormFloorText}最晚 ${latestPickup} 取衣`
               : "请先在“我的”保存宿舍楼，洗衣房不会再默认紫荆 1 号楼"}
           </p>
         </div>

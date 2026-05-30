@@ -1,6 +1,6 @@
 import { AlertTriangle, BadgeCheck, Clock3, Leaf, Shirt, TrendingDown, WashingMachine } from "lucide-react";
 import type { MobileSummary } from "../api/mobileSummary";
-import type { LaundryBucket } from "../api/types";
+import type { LaundryBucket, DryingStep } from "../api/types";
 import { Card, Chip, Page, PrimaryPanel, Section } from "../components/AppChrome";
 import { report } from "../data/washMateContent";
 
@@ -19,27 +19,37 @@ interface RouteCard {
 }
 
 function formatPrice(price: number | null | undefined): string {
-  return isFiniteNonNegativeNumber(price) ? `¥${price}` : "待确认";
-}
-
-function formatDuration(minutes: number | null | undefined): string {
-  return isFiniteNonNegativeInteger(minutes) ? `${minutes} 分钟` : "待确认";
+  return isFiniteNonNegativeNumber(price) ? `¥${formatMoney(price)}` : "价格待确认";
 }
 
 export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary | null }) {
   const plan = mobileSummary?.plan;
+  const dryingPlan = mobileSummary?.drying_plan;
   const planReport = mobileSummary?.report;
   const hasPlan = Boolean(plan?.buckets.length);
   const hasSummary = Boolean(mobileSummary);
   const pricingRules = mobileSummary?.campus_context.pricing_rules as PriceRuleMap | undefined;
   const nameMap = new Map(mobileSummary?.wardrobe.items.map((item) => [item.item_id, item.name]) ?? []);
 
-  const totalText = plan ? formatPrice(plan.estimated_cost_yuan) : report.total;
-  const durationText = plan ? formatDuration(plan.estimated_duration_minutes) : "待确认";
+  // Wash-phase cost only.
+  const washCost = plan?.estimated_cost_yuan;
+  const dryCost = dryingPlan?.estimated_cost_yuan;
+  const hasValidWashCost = isFiniteNonNegativeNumber(washCost);
+  const hasValidDryCost = dryCost == null || isFiniteNonNegativeNumber(dryCost);
+  const totalCost = (hasValidWashCost ? washCost : 0) + (hasValidDryCost ? (dryCost ?? 0) : 0);
+  const totalText = plan
+    ? !hasValidWashCost ? "费用待确认" : dryCost && hasValidDryCost ? `¥${formatMoney(totalCost)}（洗 ¥${formatMoney(washCost)} + 烘 ¥${formatMoney(dryCost)}）` : `¥${formatMoney(washCost)}`
+    : report.total;
+  const durationText = isPositiveInteger(plan?.estimated_duration_minutes) ? `${plan.estimated_duration_minutes} 分钟` : "待确认";
   const bucketCountText = plan ? `${plan.buckets.length} 个批次` : "待生成";
   const routeCards = hasPlan && plan ? buildRouteCards(plan.buckets, nameMap, pricingRules) : [];
   const reminders = conciseReminders(planReport?.risk_notes, plan?.global_warnings, plan?.buckets.flatMap((bucket) => bucket.warnings));
   const overview = environmentOverview(mobileSummary);
+
+  // Drying route cards.
+  const dryRouteCards = dryingPlan
+    ? buildDryingRouteCards(dryingPlan.steps, nameMap, pricingRules)
+    : [];
 
   return (
     <Page>
@@ -115,7 +125,6 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
                 <div className="report-route-facts">
                   <span>{route.method}</span>
                   <span>{route.detergent}</span>
-                  <span>{route.dry}</span>
                   <span>{route.priceLine}</span>
                 </div>
               </Card>
@@ -128,6 +137,29 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
           </Card>
         )}
       </Section>
+
+      {dryRouteCards.length > 0 && (
+        <Section title="烘干安排" action={<Chip tone="amber">洗完后执行</Chip>}>
+          <div className="report-route-list">
+            {dryRouteCards.map((route, index) => (
+              <Card key={route.id} accent="amber" className="report-route-card">
+                <div className="report-route-head">
+                  <span className="report-route-index report-route-index-amber">{index + 1}</span>
+                  <div>
+                    <h3>{route.title}</h3>
+                    <p>{route.items}</p>
+                  </div>
+                  <Chip tone="amber">{route.itemCount}</Chip>
+                </div>
+                <div className="report-route-facts">
+                  <span>{route.method}</span>
+                  <span>{route.priceLine}</span>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </Section>
+      )}
 
       <Section title="重点提醒">
         <div className="report-reminder-list">
@@ -155,6 +187,9 @@ function buildRouteCards(
 ): RouteCard[] {
   return buckets.map((bucket) => {
     const itemNames = bucket.item_ids.map((id) => nameMap.get(id) ?? "本批衣物");
+    const washPrice = bucket.wash_method === "machine_wash"
+      ? pricingRules?.wash_programs?.[bucket.program]?.price_yuan
+      : undefined;
     return {
       id: bucket.bucket_id,
       title: bucketTitle(bucket),
@@ -163,24 +198,33 @@ function buildRouteCards(
       method: methodLabel(bucket),
       detergent: bucket.detergent_ml == null ? "洗衣液按需" : `洗衣液 ${bucket.detergent_ml} ml`,
       dry: dryLabel(bucket.dry_method),
-      priceLine: priceLine(bucket, pricingRules),
+      priceLine: washPrice ? formatPrice(washPrice) : "无需机洗计费",
       tone: bucketTone(bucket),
     };
   });
 }
 
-function priceLine(bucket: LaundryBucket, pricingRules?: PriceRuleMap): string {
-  if (bucket.wash_method !== "machine_wash" && bucket.dry_method !== "low_heat_dryer") return "无需机洗计费";
-  const washPrice = bucket.wash_method === "machine_wash"
-    ? pricingRules?.wash_programs?.[bucket.program]?.price_yuan
-    : undefined;
-  const dryerPrice = bucket.dry_method === "low_heat_dryer"
-    ? pricingRules?.dryer_programs?.low?.price_yuan
-    : undefined;
-  const total = [washPrice, dryerPrice]
-    .filter(isFiniteNonNegativeNumber)
-    .reduce((sum, value) => sum + value, 0);
-  return total > 0 ? formatPrice(total) : "费用待确认";
+function buildDryingRouteCards(
+  steps: DryingStep[],
+  nameMap: Map<string, string>,
+  _pricingRules?: PriceRuleMap,
+): RouteCard[] {
+  return steps
+    .filter((step) => step.dry_method === "low_heat_dryer")
+    .map((step) => {
+      const itemNames = step.item_ids.map((id) => nameMap.get(id) ?? "本批衣物");
+      return {
+        id: `dry-${step.bucket_id}`,
+        title: `${bucketDisplayName(step.bucket_id)} 烘干`,
+        items: itemNames.join("、"),
+        itemCount: `${step.item_ids.length} 件`,
+        method: dryLabel(step.dry_method),
+        detergent: "",
+        dry: step.dryer_machine_id ? `烘干机 ${step.dryer_machine_id}` : "",
+        priceLine: step.estimated_cost_yuan != null ? formatPrice(step.estimated_cost_yuan) : "费用待确认",
+        tone: "orange" as const,
+      };
+    });
 }
 
 function environmentOverview(summary?: MobileSummary | null) {
@@ -191,21 +235,13 @@ function environmentOverview(summary?: MobileSummary | null) {
   const available = summary.campus_context.available_machines.length;
   const waits = summary.campus_context.queue_estimates
     .map((queue) => queue.estimated_wait_minutes)
-    .filter(isFiniteNonNegativeInteger)
+    .filter(isPositiveInteger)
     .sort((a, b) => a - b);
   return {
     machineAvailability: total ? `可用 ${available}/${total}` : "暂无设备",
     waitTime: waits.length ? `${waits[0]} 分钟` : "无需等待",
     drying: dryingLabel(summary.campus_context.drying_context),
   };
-}
-
-function isFiniteNonNegativeNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
-}
-
-function isFiniteNonNegativeInteger(value: unknown): value is number {
-  return isFiniteNonNegativeNumber(value) && Number.isInteger(value);
 }
 
 function conciseReminders(...groups: Array<string[] | undefined>): string[] {
@@ -218,19 +254,35 @@ function conciseReminders(...groups: Array<string[] | undefined>): string[] {
 }
 
 function cleanReminder(note: string): string {
-  return note
-    .replace(/\bstandard_washer\b/g, "洗衣机")
-    .replace(/\bshoe_washer\b/g, "洗鞋机")
-    .replace(/\bdryer\b/g, "烘干机")
-    .replace(/程序\s+standard/g, "程序 标准洗")
-    .replace(/程序\s+quick/g, "程序 快洗")
-    .replace(/程序\s+large/g, "程序 大物洗")
-    .replace(/程序\s+low/g, "程序 低温烘干")
+  return userFacingReminder(note)
     .replace(/，?位置[^，。；]*[，。；]?/g, "")
     .replace(/，?程序\s+[a-z0-9_+-]+[。；]?/gi, "")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 42);
+}
+
+function userFacingReminder(text: string): string {
+  return text
+    .replace(/\bstandard_washer\b/g, "洗衣机")
+    .replace(/\bshoe_washer\b/g, "洗鞋机")
+    .replace(/\bdryer\b/g, "烘干机")
+    .replace(/程序\s+standard/g, "程序 标准洗")
+    .replace(/程序\s+quick/g, "程序 快洗")
+    .replace(/程序\s+large/g, "程序 大件洗")
+    .replace(/程序\s+low/g, "程序 低温烘干");
+}
+
+function isFiniteNonNegativeNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value >= 0;
+}
+
+function formatMoney(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 function bucketTitle(bucket: LaundryBucket): string {
@@ -292,4 +344,18 @@ function bucketTone(bucket: LaundryBucket): RouteCard["tone"] {
 
 function baseBucketId(bucketId: string): string {
   return bucketId.replace(/-\d+$/, "");
+}
+
+function bucketDisplayName(bucketId: string): string {
+  const labels: Record<string, string> = {
+    "do-not-wash": "不可水洗衣物",
+    "dry-clean": "干洗衣物",
+    "hand-wash": "手洗衣物",
+    "large-bedding": "床品单独洗",
+    "dark-standard": "深色标准洗",
+    "light-standard": "浅色标准洗",
+    "mixed-standard": "混色标准洗",
+  };
+  const base = bucketId.replace(/-\d+$/, "");
+  return labels[base] ?? labels[bucketId] ?? "本批衣物";
 }

@@ -5,6 +5,7 @@
 
 import type {
   CampusContext,
+  DryingPlan,
   DryMethod,
   LaundryBucket,
   LaundryPlan,
@@ -20,22 +21,23 @@ export function generateReport(
   plan: LaundryPlan,
   items: WardrobeItemForPlan[],
   campusContext: CampusContext,
+  dryingPlan?: DryingPlan,
 ): WashReport {
-  validateReportItemsUnique(items);
-  validatePlanItemIdsPresent(plan, items);
-  validatePlanItemIdsUnique(plan);
-  validateBucketNumbers(plan);
   const itemNames = new Map(items.map((item) => [item.profile.item_id, item.profile.name]));
+  const sections: Record<string, string> = {
+    "洗衣步骤": stepsSection(plan, itemNames),
+    "费用和时间": costTimeSection(plan, dryingPlan),
+    "机器环境": campusSection(campusContext),
+    "风险提醒": riskSection(plan),
+  };
+  if (dryingPlan && dryingPlan.steps.some((s) => s.dry_method === "low_heat_dryer")) {
+    sections["烘干安排"] = dryingSection(dryingPlan, itemNames);
+  }
   return {
     title: "本次校园洗衣报告",
-    sections: {
-      "洗衣步骤": stepsSection(plan, itemNames),
-      "费用和时间": costTimeSection(plan),
-      "机器环境": campusSection(campusContext),
-      "风险提醒": riskSection(plan),
-    },
-    savings_notes: savingsNotes(plan),
-    risk_notes: riskNotes(plan),
+    sections,
+    savings_notes: savingsNotes(plan, dryingPlan),
+    risk_notes: riskNotes(plan, dryingPlan),
   };
 }
 
@@ -61,16 +63,43 @@ function stepsSection(plan: LaundryPlan, itemNames: Map<string, string>): string
   return lines.join("\n");
 }
 
-function costTimeSection(plan: LaundryPlan): string {
-  if (plan.estimated_cost_yuan == null) throw new Error("plan estimated_cost_yuan is required for report");
-  if (plan.estimated_duration_minutes == null) throw new Error("plan estimated_duration_minutes is required for report");
-  const estimatedCost = requiredNonNegativeNumber(plan.estimated_cost_yuan, "plan.estimated_cost_yuan");
-  const estimatedDuration = requiredNonNegativeInteger(plan.estimated_duration_minutes, "plan.estimated_duration_minutes");
-  const charged = chargedBatches(plan);
-  const batchText = charged.length ? charged.join("；") : "本次没有共享洗衣机或烘干机计费批次";
+function dryingSection(dryingPlan: DryingPlan, itemNames: Map<string, string>): string {
+  const lines: string[] = [];
+  for (const step of dryingPlan.steps) {
+    if (step.dry_method === "air_dry" || step.dry_method === "do_not_dry") continue;
+    const parts = [`烘干批次 ${step.bucket_id}：${dryMethodText(step.dry_method)}`];
+    if (step.dryer_machine_id) parts.push(`烘干机：${step.dryer_machine_id}（${step.dryer_machine_location ?? ""}）`);
+    if (step.estimated_cost_yuan != null) parts.push(`费用：${step.estimated_cost_yuan} 元`);
+    if (step.estimated_duration_minutes != null) parts.push(`时长：${step.estimated_duration_minutes} 分钟`);
+    if (step.warnings.length) parts.push(`提醒：${step.warnings.map(userFacingWarning).join("；")}`);
+    lines.push(parts.join("；") + "。");
+  }
+  return lines.length ? lines.join("\n") : "本次没有需要烘干机烘干的批次。";
+}
+
+function costTimeSection(plan: LaundryPlan, dryingPlan?: DryingPlan): string {
+  const washCharged = washChargedBatches(plan);
+  const washText = washCharged.length ? washCharged.join("；") : "本次没有洗衣机计费批次";
+
+  if (plan.estimated_cost_yuan == null || plan.estimated_duration_minutes == null) {
+    return `费用和机器占用时间暂时无法估算，因为存在尚未分配到空闲机器的分桶。待执行批次：${washText}。`;
+  }
+
+  if (dryingPlan && dryingPlan.estimated_cost_yuan) {
+    const dryCharged = dryingChargedBatches(dryingPlan);
+    const dryText = dryCharged.join("；");
+    const total = Math.round((plan.estimated_cost_yuan + dryingPlan.estimated_cost_yuan) * 100) / 100;
+    const totalDuration = plan.estimated_duration_minutes + (dryingPlan.estimated_duration_minutes ?? 0);
+    return (
+      `洗涤费用 ${plan.estimated_cost_yuan} 元（${washText}）；` +
+      `烘干费用 ${dryingPlan.estimated_cost_yuan} 元（${dryText}）；` +
+      `合计 ${total} 元，预计总时间 ${totalDuration} 分钟。`
+    );
+  }
+
   return (
-    `预计费用 ${estimatedCost} 元，预计机器占用时间 ${estimatedDuration} 分钟。` +
-    `计费批次：${batchText}。`
+    `预计费用 ${plan.estimated_cost_yuan} 元，预计机器占用时间 ${plan.estimated_duration_minutes} 分钟。` +
+    `计费批次：${washText}。`
   );
 }
 
@@ -100,10 +129,13 @@ function riskSection(plan: LaundryPlan): string {
 
 // ─── savings / risk notes ───────────────────────────────────────────────
 
-function savingsNotes(plan: LaundryPlan): string[] {
+function savingsNotes(plan: LaundryPlan, dryingPlan?: DryingPlan): string[] {
   const notes: string[] = [];
   if (plan.buckets.some((b) => b.dry_method === "air_dry")) {
     notes.push("自然晾干批次减少烘干用电，也能降低缩水和变形风险。");
+  }
+  if (plan.buckets.some((b) => baseBucketId(b.bucket_id) === "mixed-standard")) {
+    notes.push("用户允许混色且衣物无高掉色风险时合并标准批次，减少空筒和重复用水。");
   }
   if (plan.buckets.some((b) => baseBucketId(b.bucket_id) === "dark-standard" || baseBucketId(b.bucket_id) === "hand-wash")) {
     notes.push("高风险衣物分开处理，能减少串色、返洗和重复用水。");
@@ -111,10 +143,13 @@ function savingsNotes(plan: LaundryPlan): string[] {
   if (plan.buckets.some((b) => baseBucketId(b.bucket_id) === "large-bedding")) {
     notes.push("床品单独成桶，减少过载造成的洗不净和返洗。");
   }
+  if (dryingPlan && dryingPlan.estimated_cost_yuan) {
+    notes.push("烘干安排在洗涤完成后推荐，使用实时烘干机状态，避免无效等待。");
+  }
   return dedupe(notes);
 }
 
-function riskNotes(plan: LaundryPlan): string[] {
+function riskNotes(plan: LaundryPlan, dryingPlan?: DryingPlan): string[] {
   const notes: string[] = [];
   for (const bucket of plan.buckets) {
     if (baseBucketId(bucket.bucket_id) === "dark-standard") {
@@ -125,7 +160,11 @@ function riskNotes(plan: LaundryPlan): string[] {
     }
     notes.push(...bucket.warnings.map(userFacingWarning));
   }
-  notes.push(...plan.global_warnings.map(userFacingWarning));
+  if (dryingPlan) {
+    for (const step of dryingPlan.steps) {
+      notes.push(...step.warnings.map(userFacingWarning));
+    }
+  }
   return dedupe(notes);
 }
 
@@ -140,18 +179,19 @@ function bucketReason(bucket: LaundryBucket): string {
     "large-bedding": "床品体积大，单独占用洗衣机减少过载和返洗",
     "dark-standard": "深色或高掉色风险衣物单独处理，避免串色",
     "light-standard": "浅色普通机洗衣物集中标准洗",
-    "mixed-standard": "用户允许混色，低掉色风险普通衣物合并标准洗",
+    "mixed-standard": "用户允许混色，低掉色风险衣物合并标准洗",
   };
   return reasons[bucketId] ?? "本批衣物需要单独处理";
 }
 
-function chargedBatches(plan: LaundryPlan): string[] {
-  const batches: string[] = [];
-  for (const bucket of plan.buckets) {
-    if (bucket.wash_method === "machine_wash") batches.push(`${bucketTitle(bucket)} · ${programText(bucket.program)}`);
-    if (bucket.dry_method === "low_heat_dryer") batches.push(`${bucketTitle(bucket)} · 低温烘干`);
-  }
-  return batches;
+function washChargedBatches(plan: LaundryPlan): string[] {
+  return plan.buckets
+    .filter((b) => b.wash_method === "machine_wash")
+    .map((b) => `${bucketTitle(b)} · ${programText(b.program)}`);
+}
+
+function dryingChargedBatches(dryingPlan: DryingPlan): string[] {
+  return dryingPlan.cost_breakdown.map((line) => line.label);
 }
 
 function availableMachineLocations(machines: MachineInfo[]): string {
@@ -169,14 +209,10 @@ function queueSummary(estimates: MachineQueueEstimate[]): string {
   if (!estimates.length) return "";
   return estimates
     .map((e) => {
-      const wait = queueWaitText(e.estimated_wait_minutes);
+      const wait = e.estimated_wait_minutes == null ? "未知" : `${e.estimated_wait_minutes} 分钟`;
       return `${machineTypeText(e.machine_type)} 可用 ${e.available_count}/${e.total_count}，预计等待 ${wait}`;
     })
     .join("；");
-}
-
-function queueWaitText(minutes: number | null): string {
-  return typeof minutes === "number" && Number.isInteger(minutes) && minutes >= 0 ? `${minutes} 分钟` : "未知";
 }
 
 function dryingContextSummary(dc: Record<string, unknown>): string {
@@ -236,57 +272,6 @@ function itemName(id: string, names: Map<string, string>): string {
   return name;
 }
 
-function validatePlanItemIdsUnique(plan: LaundryPlan): void {
-  const seen = new Set<string>();
-  const duplicates: string[] = [];
-  for (const bucket of plan.buckets) {
-    for (const itemId of bucket.item_ids) {
-      if (seen.has(itemId)) {
-        duplicates.push(itemId);
-        continue;
-      }
-      seen.add(itemId);
-    }
-  }
-  if (duplicates.length) {
-    throw new Error(`plan duplicate item ids: ${dedupe(duplicates).join(", ")}`);
-  }
-}
-
-function validateReportItemsUnique(items: WardrobeItemForPlan[]): void {
-  const seen = new Set<string>();
-  const duplicates: string[] = [];
-  for (const item of items) {
-    const itemId = item.profile.item_id;
-    if (seen.has(itemId)) {
-      duplicates.push(itemId);
-      continue;
-    }
-    seen.add(itemId);
-  }
-  if (duplicates.length) {
-    throw new Error(`items duplicate item_id: ${dedupe(duplicates).join(", ")}`);
-  }
-}
-
-function validatePlanItemIdsPresent(plan: LaundryPlan, items: WardrobeItemForPlan[]): void {
-  const itemIds = new Set(items.map((item) => item.profile.item_id));
-  const missing = plan.buckets
-    .flatMap((bucket) => bucket.item_ids)
-    .filter((itemId) => !itemIds.has(itemId));
-  if (missing.length) {
-    throw new Error(`items missing plan item ids: ${dedupe(missing).join(", ")}`);
-  }
-}
-
-function validateBucketNumbers(plan: LaundryPlan): void {
-  plan.buckets.forEach((bucket, index) => {
-    if (bucket.detergent_ml != null) {
-      requiredNonNegativeNumber(bucket.detergent_ml, `plan.buckets[${index}].detergent_ml`);
-    }
-  });
-}
-
 function washMethodText(method: WashMethod): string {
   const labels: Record<WashMethod, string> = {
     hand_wash: "手洗",
@@ -321,18 +306,4 @@ function machineTypeText(type: MachineType): string {
 
 function dedupe(items: string[]): string[] {
   return [...new Set(items)];
-}
-
-function requiredNonNegativeNumber(value: number, fieldName: string): number {
-  if (!Number.isFinite(value) || value < 0) {
-    throw new Error(`${fieldName} must be a non-negative finite number`);
-  }
-  return value;
-}
-
-function requiredNonNegativeInteger(value: number, fieldName: string): number {
-  if (!Number.isInteger(value) || value < 0) {
-    throw new Error(`${fieldName} must be a non-negative integer`);
-  }
-  return value;
 }

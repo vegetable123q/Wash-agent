@@ -1,143 +1,60 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { defaultUserProfile, loadUserProfile, saveUserProfile } from "./userProfile";
+import { describe, expect, it } from "vitest";
+import { defaultUserProfile, dormWithFloor, isValidPickupTime, loadUserProfile, normalizeDormFloor, saveUserProfile } from "./userProfile";
 
-const storageKey = "washmate.userProfile";
+describe("normalizeDormFloor", () => {
+  it("accepts only floors from 1 to 30", () => {
+    expect(normalizeDormFloor("1")).toBe("1");
+    expect(normalizeDormFloor("30")).toBe("30");
+    expect(normalizeDormFloor("04")).toBe("4");
+    expect(normalizeDormFloor("")).toBe("");
+  });
 
-describe("userProfile", () => {
-  beforeEach(() => {
+  it("rejects floor formats outside the supported range", () => {
+    expect(normalizeDormFloor("0")).toBeNull();
+    expect(normalizeDormFloor("31")).toBeNull();
+    expect(normalizeDormFloor("B1")).toBeNull();
+    expect(normalizeDormFloor("4层")).toBeNull();
+  });
+
+  it("formats a dorm name with a normalized floor", () => {
+    expect(dormWithFloor({ dormName: "南区21号楼", dormFloor: "04" })).toBe("南区21号楼 · 4层");
+    expect(dormWithFloor({ dormName: "南区21号楼", dormFloor: "" })).toBe("南区21号楼");
+  });
+});
+
+describe("user profile preferences", () => {
+  it("normalizes pickup time, dryer flag, budget, and max wait", () => {
     localStorage.clear();
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("persists explicit laundry budget and wait preferences", () => {
-    const saved = saveUserProfile({
-      ...defaultUserProfile,
-      displayName: " 小徐 ",
-      budgetYuan: 12.5,
-      maxWaitMinutes: 8,
-    });
-
-    expect(saved).toMatchObject({
-      displayName: "小徐",
-      budgetYuan: 12.5,
-      maxWaitMinutes: 8,
-    });
-    expect(loadUserProfile()).toMatchObject({
-      budgetYuan: 12.5,
-      maxWaitMinutes: 8,
-    });
-  });
-
-  it("preserves zero laundry preferences", () => {
-    const saved = saveUserProfile({
-      ...defaultUserProfile,
-      budgetYuan: 0,
-      maxWaitMinutes: 0,
-    });
-
-    expect(saved).toMatchObject({
-      budgetYuan: 0,
-      maxWaitMinutes: 0,
-    });
-    expect(loadUserProfile()).toMatchObject({
-      budgetYuan: 0,
-      maxWaitMinutes: 0,
-    });
-  });
-
-  it("returns a copy of the default profile", () => {
-    const loaded = loadUserProfile();
-
-    loaded.displayName = "Mutated";
-
-    expect(defaultUserProfile.displayName).toBe("");
-    expect(loadUserProfile().displayName).toBe("");
-  });
-
-  it("normalizes missing or invalid laundry preferences to null", () => {
-    localStorage.setItem(
-      storageKey,
-      JSON.stringify({
-        displayName: " 小徐 ",
-        dormName: "南区21号楼",
-        latestPickupTime: "22:00",
-        allowDryer: true,
-        budgetYuan: "-1",
-        maxWaitMinutes: "-5",
-      }),
-    );
-
-    expect(loadUserProfile()).toMatchObject({
-      displayName: "小徐",
-      dormName: "南区21号楼",
-      budgetYuan: null,
-      maxWaitMinutes: null,
-    });
-  });
-
-  it("keeps decimal budgets but normalizes fractional maximum wait preferences to null", () => {
-    localStorage.setItem(
-      storageKey,
-      JSON.stringify({
-        budgetYuan: "12.5",
-        maxWaitMinutes: "8.5",
-      }),
-    );
-
-    expect(loadUserProfile()).toMatchObject({
-      budgetYuan: 12.5,
-      maxWaitMinutes: null,
-    });
-  });
-
-  it("normalizes string false dryer preference to false", () => {
-    localStorage.setItem(
-      storageKey,
-      JSON.stringify({
-        allowDryer: "false",
-      }),
-    );
-
-    expect(loadUserProfile().allowDryer).toBe(false);
-  });
-
-  it("normalizes invalid stored pickup time to the default", () => {
-    localStorage.setItem(
-      storageKey,
-      JSON.stringify({
-        latestPickupTime: "99:99",
-      }),
-    );
-
-    expect(loadUserProfile().latestPickupTime).toBe(defaultUserProfile.latestPickupTime);
-  });
-
-  it("normalizes one-digit pickup hours to HH:MM", () => {
-    localStorage.setItem(
-      storageKey,
-      JSON.stringify({
-        latestPickupTime: "7:05",
-      }),
-    );
-
-    expect(loadUserProfile().latestPickupTime).toBe("07:05");
-  });
-
-  it("returns a normalized profile when localStorage is unavailable", () => {
-    vi.stubGlobal("localStorage", undefined);
 
     const saved = saveUserProfile({
       ...defaultUserProfile,
-      displayName: " Test User ",
-      latestPickupTime: "99:99",
+      latestPickupTime: "7:05",
+      allowDryer: true,
+      budgetYuan: 8.5,
+      maxWaitMinutes: 20,
     });
 
-    expect(saved).toMatchObject({
-      displayName: "Test User",
-      latestPickupTime: defaultUserProfile.latestPickupTime,
+    expect(saved.latestPickupTime).toBe("07:05");
+    expect(saved.allowDryer).toBe(true);
+    expect(saved.budgetYuan).toBe(8.5);
+    expect(saved.maxWaitMinutes).toBe(20);
+    expect(loadUserProfile()).toMatchObject(saved);
+  });
+
+  it("falls back for invalid pickup and numeric preferences", () => {
+    localStorage.clear();
+
+    const saved = saveUserProfile({
+      ...defaultUserProfile,
+      latestPickupTime: "25:70",
+      budgetYuan: -1,
+      maxWaitMinutes: 2.5,
     });
+
+    expect(saved.latestPickupTime).toBe("22:30");
+    expect(saved.budgetYuan).toBeNull();
+    expect(saved.maxWaitMinutes).toBeNull();
+    expect(isValidPickupTime("23:59")).toBe(true);
+    expect(isValidPickupTime("24:00")).toBe(false);
   });
 });

@@ -1,6 +1,7 @@
 export interface UserProfile {
   displayName: string;
   dormName: string;
+  dormFloor?: string;
   latestPickupTime: string;
   allowDryer: boolean;
   budgetYuan: number | null;
@@ -10,6 +11,7 @@ export interface UserProfile {
 export const defaultUserProfile: UserProfile = {
   displayName: "",
   dormName: "",
+  dormFloor: "",
   latestPickupTime: "22:30",
   allowDryer: false,
   budgetYuan: null,
@@ -47,9 +49,11 @@ function defaultProfile(): UserProfile {
 
 function normalizeProfile(value: unknown): UserProfile {
   const profile = typeof value === "object" && value !== null ? (value as Partial<UserProfile>) : {};
+  const dormFloor = normalizeDormFloor(profile.dormFloor);
   return {
     displayName: String(profile.displayName ?? "").trim(),
     dormName: String(profile.dormName ?? "").trim(),
+    dormFloor: dormFloor ?? "",
     latestPickupTime: normalizePickupTime(profile.latestPickupTime),
     allowDryer: booleanValue(profile.allowDryer),
     budgetYuan: nonNegativeNumberOrNull(profile.budgetYuan),
@@ -80,6 +84,30 @@ function pickupTimeParts(value: string): { hour: number; minute: number } | null
     return null;
   }
   return { hour, minute };
+}
+
+export function normalizeDormFloor(value: unknown): string | null {
+  const text = String(value ?? "").trim();
+  if (!text) {
+    return "";
+  }
+  if (!/^\d{1,2}$/.test(text)) {
+    return null;
+  }
+  const floor = Number(text);
+  if (!Number.isInteger(floor) || floor < 1 || floor > 30) {
+    return null;
+  }
+  return String(floor);
+}
+
+export function dormWithFloor(profile?: Pick<UserProfile, "dormName" | "dormFloor"> | null): string {
+  const dormName = String(profile?.dormName ?? "").trim();
+  if (!dormName) {
+    return "";
+  }
+  const dormFloor = normalizeDormFloor(profile?.dormFloor);
+  return dormFloor ? `${dormName} · ${dormFloor}层` : dormName;
 }
 
 function nonNegativeNumberOrNull(value: unknown): number | null {

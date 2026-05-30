@@ -5,7 +5,7 @@ import { computeRecommendedStartTime, generateTodayAdvice } from "../api/llmSumm
 import type { MobileSummary } from "../api/mobileSummary";
 import { Card, Chip, MetricCard, Page, PrimaryPanel, Section } from "../components/AppChrome";
 import { bucketPlans, planSummaryFallback, todaySummary, type ScreenId } from "../data/washMateContent";
-import type { UserProfile } from "../userProfile";
+import { dormWithFloor, type UserProfile } from "../userProfile";
 
 interface TodayScreenProps {
   backendStatus?: "unconfigured" | "loading" | "connected" | "offline";
@@ -30,33 +30,37 @@ export function TodayScreen({
 }: TodayScreenProps) {
   const connected = backendStatus === "connected" && mobileSummary;
   const weather = connected ? liveWeather(mobileSummary) : null;
-  const weatherError = connected ? mobileSummary.weather?.error : null;
   const hasPersonalContext = Boolean(
     userProfile?.displayName ||
-      userProfile?.dormName ||
-      userProfile?.allowDryer ||
-      userProfile?.budgetYuan != null ||
-      userProfile?.maxWaitMinutes != null ||
-      (userProfile?.latestPickupTime && userProfile.latestPickupTime !== "22:30"),
+    userProfile?.dormName ||
+    userProfile?.dormFloor ||
+    userProfile?.allowDryer ||
+    userProfile?.budgetYuan != null ||
+    userProfile?.maxWaitMinutes != null ||
+    (userProfile?.latestPickupTime && userProfile.latestPickupTime !== "22:30"),
   );
+  const dormLabel = dormWithFloor(userProfile);
   const subtitle = userProfile?.dormName
-    ? `${userProfile.dormName} · 最晚 ${userProfile.latestPickupTime} 取衣`
+    ? `${dormLabel} · 最晚 ${userProfile.latestPickupTime} 取衣`
     : "请先在「我的」配置宿舍楼和偏好";
   const constraints = userProfile && hasPersonalContext
     ? [
-        userProfile.dormName || "请选择宿舍楼",
+        dormLabel || "请选择宿舍楼",
         userProfile.allowDryer ? "允许烘干" : "优先低温/晾干",
         `最晚 ${userProfile.latestPickupTime}`,
-        userProfile.budgetYuan != null ? `预算 ¥${formatPreferenceNumber(userProfile.budgetYuan)}` : null,
-        userProfile.maxWaitMinutes != null ? `最长等待 ${formatPreferenceNumber(userProfile.maxWaitMinutes)} 分钟` : null,
-      ].filter((item): item is string => item !== null)
+        userProfile.budgetYuan != null ? `预算 ¥${formatMoney(userProfile.budgetYuan)}` : null,
+        userProfile.maxWaitMinutes != null ? `最多等 ${userProfile.maxWaitMinutes} 分钟` : null,
+      ].filter((item): item is string => Boolean(item))
     : ["请先配置宿舍楼", "可在「我的」设置偏好"];
+  const totalPlanCost = connected && mobileSummary ? summaryTotalCost(mobileSummary) : null;
+  const totalPlanDuration = connected && mobileSummary ? summaryTotalDuration(mobileSummary) : null;
+  const planHasDryer = connected && mobileSummary ? summaryHasDryer(mobileSummary) : false;
   const panelMetrics = connected && mobileSummary
     ? {
         buckets: `${mobileSummary.plan.buckets.length} 桶分洗`,
         costDryer:
-          isFiniteNonNegativeNumber(mobileSummary.plan.estimated_cost_yuan)
-            ? `¥${mobileSummary.plan.estimated_cost_yuan}${mobileSummary.plan.buckets.some((b) => b.dry_method === "low_heat_dryer") ? " · 含烘干" : ""}`
+          totalPlanCost != null
+            ? `¥${formatMoney(totalPlanCost)}${planHasDryer ? " · 含烘干" : ""}`
             : "费用待确认",
       }
     : { buckets: "待生成方案", costDryer: "配置后显示" };
@@ -68,13 +72,13 @@ export function TodayScreen({
             ? `${mobileSummary.plan.buckets.length} 个洗护批次`
             : "暂无待洗衣物",
         cost:
-          !isFiniteNonNegativeNumber(mobileSummary.plan.estimated_cost_yuan)
+          totalPlanCost === null
             ? "费用待确认"
-            : `预计 ¥${mobileSummary.plan.estimated_cost_yuan}`,
+            : `预计 ¥${formatMoney(totalPlanCost)}`,
         duration:
-          !isPositiveFiniteInteger(mobileSummary.plan.estimated_duration_minutes)
+          totalPlanDuration === null
             ? "时长待确认"
-            : `机器占用约 ${mobileSummary.plan.estimated_duration_minutes} 分钟`,
+            : `机器占用约 ${totalPlanDuration} 分钟`,
         risk: mobileSummary.plan.buckets.length > 0 ? "已按风险自动分桶" : "暂无方案",
         note: mobileSummary.plan.summary,
       }
@@ -86,28 +90,24 @@ export function TodayScreen({
   const recommendedTime = useMemo(
     () => hasExecutablePlan
       ? computeRecommendedStartTime(
-          isPositiveFiniteInteger(mobileSummary.plan.estimated_duration_minutes)
-            ? mobileSummary.plan.estimated_duration_minutes
-            : null,
+          totalPlanDuration,
           userProfile?.latestPickupTime ?? null,
         )
       : "暂无",
-    [hasExecutablePlan, mobileSummary?.plan.estimated_duration_minutes, userProfile?.latestPickupTime],
+    [hasExecutablePlan, totalPlanDuration, userProfile?.latestPickupTime],
   );
   const recommendedHeadline = hasExecutablePlan ? "按方案清洗" : "暂无待洗";
   const recommendedTimeLabel = hasExecutablePlan ? `建议开始 ${recommendedTime}` : "暂无建议时间";
 
   const recommendedLabel = useMemo(() => {
     if (!mobileSummary?.plan.buckets.length) return "暂无待洗衣物";
-    const duration = mobileSummary.plan.estimated_duration_minutes;
-    if (isPositiveFiniteInteger(duration)) return `全部洗完约 ${duration} 分钟`;
-    return "全部洗完并低温烘干";
-  }, [mobileSummary?.plan.buckets.length, mobileSummary?.plan.estimated_duration_minutes]);
+    if (totalPlanDuration != null) return `全部洗完约 ${totalPlanDuration} 分钟`;
+    return planHasDryer ? "全部洗完并低温烘干" : "存在待分配机器";
+  }, [mobileSummary?.plan.buckets.length, totalPlanDuration, planHasDryer]);
 
   // LLM-enhanced today advice
   const [llmAdvice, setLlmAdvice] = useState<string | null>(null);
   useEffect(() => {
-    setLlmAdvice(null);
     if (!mobileSummary?.plan || !modelHubConfig) return;
     let cancelled = false;
     generateTodayAdvice(
@@ -146,14 +146,16 @@ export function TodayScreen({
     }
     return mobileSummary.plan.buckets.map((b) => {
       const names = b.item_ids.map((id) => nameMap.get(id) || id);
+      const unavailableWasherReason = bucketUnavailableWasherReason(b);
+      const dryMethod = bucketDryMethod(mobileSummary, b.bucket_id, b.dry_method);
       return {
         id: b.bucket_id,
         label: names.join("、"),
-        description: washMethodDesc(b.wash_method, b.dry_method),
-        tone: b.wash_method === "hand_wash" || b.wash_method === "dry_clean" || b.wash_method === "do_not_wash" ? ("red" as const) : baseBucketId(b.bucket_id) === "dark-standard" ? ("purple" as const) : ("blue" as const),
+        description: washMethodDesc(b.wash_method, dryMethod),
+        tone: unavailableWasherReason ? ("orange" as const) : b.wash_method === "hand_wash" || b.wash_method === "dry_clean" || b.wash_method === "do_not_wash" ? ("red" as const) : baseBucketId(b.bucket_id) === "dark-standard" ? ("purple" as const) : ("blue" as const),
         badge: {
-          label: b.wash_method === "machine_wash" ? "可机洗" : b.wash_method === "hand_wash" ? "手洗" : "排除",
-          tone: b.wash_method === "machine_wash" ? ("teal" as const) : ("orange" as const),
+          label: unavailableWasherReason ?? (b.wash_method === "machine_wash" ? "可机洗" : b.wash_method === "hand_wash" ? "手洗" : "排除"),
+          tone: unavailableWasherReason ? ("orange" as const) : b.wash_method === "machine_wash" ? ("teal" as const) : ("orange" as const),
         },
       };
     });
@@ -175,15 +177,17 @@ export function TodayScreen({
     return mobileSummary.plan.buckets.map((b) => {
       const names = b.item_ids.map((id) => nameMap.get(id) || id);
       const label = bucketLabelFromId(b.bucket_id);
+      const unavailableWasherReason = bucketUnavailableWasherReason(b);
+      const dryMethod = bucketDryMethod(mobileSummary, b.bucket_id, b.dry_method);
       const machineLabel = b.wash_method === "machine_wash"
-        ? friendlyMachineType(b.machine_type)
+        ? unavailableWasherReason ?? friendlyMachineType(b.machine_type)
         : washMethodLabel(b.wash_method);
       return {
         id: b.bucket_id,
         title: label,
         machine: machineLabel,
-        detail: `${names.join("、")} · ${dryLabel(b.dry_method)}`,
-        accent: b.wash_method === "hand_wash" || b.wash_method === "dry_clean" || b.wash_method === "do_not_wash" ? ("orange" as const) : baseBucketId(b.bucket_id) === "dark-standard" ? ("purple" as const) : ("blue" as const),
+        detail: `${names.join("、")} · ${dryLabel(dryMethod)}`,
+        accent: unavailableWasherReason ? ("orange" as const) : b.wash_method === "hand_wash" || b.wash_method === "dry_clean" || b.wash_method === "do_not_wash" ? ("orange" as const) : baseBucketId(b.bucket_id) === "dark-standard" ? ("purple" as const) : ("blue" as const),
       };
     });
   }, [connected, mobileSummary]);
@@ -193,7 +197,7 @@ export function TodayScreen({
     if (!connected || !mobileSummary) return todaySummary.stats;
     const available = mobileSummary.campus_context.available_machines.length;
     const waits = mobileSummary.campus_context.queue_estimates
-      .filter((q) => isPositiveFiniteInteger(q.estimated_wait_minutes))
+      .filter((q) => q.estimated_wait_minutes != null && q.estimated_wait_minutes > 0)
       .sort((a, b) => (a.estimated_wait_minutes ?? 0) - (b.estimated_wait_minutes ?? 0));
     const minWait = waits[0]?.estimated_wait_minutes;
     return [
@@ -244,8 +248,6 @@ export function TodayScreen({
         </div>
       </PrimaryPanel>
 
-      {refreshError ? <p className="refresh-error" role="status">{refreshError}</p> : null}
-
       <div className="constraint-row" aria-label="本次约束">
         {constraints.map((item) => (
           <span key={item}>{item}</span>
@@ -269,10 +271,11 @@ export function TodayScreen({
             <Card className="weather-card" accent="amber">
               <div>
                 <strong>天气数据不可用</strong>
-                <span>{weatherError ?? "请稍后刷新"}</span>
+                <span>{weatherErrorText(mobileSummary) ?? "请稍后刷新"}</span>
               </div>
             </Card>
           )}
+          {refreshError ? <p className="refresh-error" role="status">{refreshError}</p> : null}
         </Section>
       ) : null}
 
@@ -360,7 +363,7 @@ export function TodayScreen({
         </Card>
       </Section>
 
-      <Section title="分桶摘要" action={<Chip tone="purple">可执行</Chip>}>
+      <Section title="分桶摘要" action={<Chip tone={hasUnavailableWasherBucket(mobileSummary?.plan.buckets) ? "orange" : "purple"}>{hasUnavailableWasherBucket(mobileSummary?.plan.buckets) ? "缺洗衣机" : "可执行"}</Chip>}>
         <div className="bucket-preview">
           {todayBuckets.map((bucket) => (
             <div key={bucket.id} className={`bucket-chip bucket-${bucket.accent}`}>
@@ -397,6 +400,11 @@ function liveWeather(summary: MobileSummary) {
   };
 }
 
+function weatherErrorText(summary?: MobileSummary | null): string | null {
+  const error = summary?.weather?.status === "unavailable" ? summary.weather.error : null;
+  return typeof error === "string" && error.trim() ? error.trim() : null;
+}
+
 function timeOfDayTitle(): string {
   const hour = new Date().getHours();
   if (hour < 6) return "夜间洗衣";
@@ -406,33 +414,47 @@ function timeOfDayTitle(): string {
 }
 
 function formatNumber(value: number | undefined) {
-  if (!isFiniteNumber(value)) {
+  if (typeof value !== "number" || Number.isNaN(value)) {
     return "--";
   }
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
-function formatPreferenceNumber(value: number) {
-  if (!isFiniteNumber(value)) {
-    return "--";
-  }
+function formatMoney(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
+function summaryTotalCost(summary: MobileSummary): number | null {
+  const washCost = summary.plan.estimated_cost_yuan;
+  if (washCost == null) return null;
+  const dryCost = summary.drying_plan?.estimated_cost_yuan ?? 0;
+  return Math.round((washCost + dryCost) * 100) / 100;
 }
 
-function isFiniteNonNegativeNumber(value: unknown): value is number {
-  return isFiniteNumber(value) && value >= 0;
+function summaryTotalDuration(summary: MobileSummary): number | null {
+  const washDuration = summary.plan.estimated_duration_minutes;
+  if (washDuration == null) return null;
+  return washDuration + (summary.drying_plan?.estimated_duration_minutes ?? 0);
 }
 
-function isPositiveFiniteNumber(value: unknown): value is number {
-  return isFiniteNumber(value) && value > 0;
+function summaryHasDryer(summary: MobileSummary): boolean {
+  return Boolean(summary.drying_plan?.steps.some((step) => step.dry_method === "low_heat_dryer"));
 }
 
-function isPositiveFiniteInteger(value: unknown): value is number {
-  return isPositiveFiniteNumber(value) && Number.isInteger(value);
+function bucketDryMethod(
+  summary: MobileSummary,
+  bucketId: string,
+  fallback: MobileSummary["plan"]["buckets"][number]["dry_method"],
+): MobileSummary["plan"]["buckets"][number]["dry_method"] {
+  return summary.drying_plan?.steps.find((step) => step.bucket_id === bucketId)?.dry_method ?? fallback;
+}
+
+function bucketUnavailableWasherReason(bucket: { warnings: string[] }): string | null {
+  return bucket.warnings.find((warning) => warning === "没有空闲洗衣机" || warning === "没有空闲洗鞋机") ?? null;
+}
+
+function hasUnavailableWasherBucket(buckets: { warnings: string[] }[] | undefined): boolean {
+  return Boolean(buckets?.some((bucket) => bucketUnavailableWasherReason(bucket)));
 }
 
 function washMethodDesc(washMethod: string, dryMethod: string): string {

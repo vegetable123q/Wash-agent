@@ -187,6 +187,7 @@ class CampusMachineApiTests(unittest.TestCase):
         self.assertEqual(len(machines), 3)
         self.assertEqual(machines[0].machine_id, "85500827")
         self.assertEqual(machines[0].location, "清华大学紫荆19号楼 紫荆19号楼1层1号")
+        self.assertEqual(machines[0].machine_floor, 1)
         self.assertEqual(machines[0].machine_type, MachineType.STANDARD_WASHER)
         self.assertEqual(machines[0].status, MachineStatus.AVAILABLE)
         self.assertEqual(machines[1].machine_type, MachineType.SHOE_WASHER)
@@ -277,6 +278,7 @@ class CampusMachineApiTests(unittest.TestCase):
         self.assertEqual(len(machines), 2)
         self.assertEqual(machines[0].machine_id, "he10000177")
         self.assertEqual(machines[0].location, "紫荆1号楼 一层")
+        self.assertEqual(machines[0].machine_floor, 1)
         self.assertEqual(machines[0].machine_type, MachineType.STANDARD_WASHER)
         self.assertEqual(machines[0].status, MachineStatus.RUNNING)
         self.assertEqual(machines[0].remaining_minutes, 10)
@@ -284,6 +286,7 @@ class CampusMachineApiTests(unittest.TestCase):
         self.assertEqual(machines[0].price_yuan, 3.0)
         self.assertEqual(machines[0].modes, ["quick", "standard", "heavy"])
         self.assertEqual(machines[1].status, MachineStatus.AVAILABLE)
+        self.assertEqual(machines[1].machine_floor, 2)
         self.assertIsNone(machines[1].remaining_minutes)
 
     def test_mock_machine_rejects_nonfinite_price(self) -> None:

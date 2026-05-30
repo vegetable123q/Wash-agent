@@ -603,7 +603,7 @@ describe("mobileSummary wardrobe selection", () => {
     expect(summary.dirty_basket.recommendation).toContain("可继续攒");
   });
 
-  it("flags oversized dirty baskets as multiple washer loads", async () => {
+  it("preserves planned buckets when no live washer can be reserved", async () => {
     const items = Array.from({ length: 12 }, (_, index) => ({
       item_id: `tee-${index + 1}`,
       name: `白色棉 T 恤 ${index + 1}`,
@@ -627,8 +627,11 @@ describe("mobileSummary wardrobe selection", () => {
     });
     expect(summary.dirty_basket.estimated_load_count).toBe(2);
     expect(summary.dirty_basket.recommendation).toContain("约 2 桶");
-    expect(summary.plan.buckets).toHaveLength(0);
-    expect(summary.plan.summary).toContain("当前机器条件不足");
+    expect(summary.plan.buckets.length).toBeGreaterThan(0);
+    expect(summary.plan.buckets.flatMap((bucket) => bucket.item_ids)).toEqual(items.map((item) => item.item_id));
+    expect(summary.plan.buckets.flatMap((bucket) => bucket.warnings)).toContain("没有空闲洗衣机");
+    expect(summary.plan.estimated_cost_yuan).toBeNull();
+    expect(summary.plan.estimated_duration_minutes).toBeNull();
   });
 
   it("applies profile budget and wait preferences to regenerated laundry plans", async () => {

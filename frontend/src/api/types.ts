@@ -15,6 +15,7 @@ export type DirtyBasketAddedAtSource = "known" | "estimated";
 export interface MachineInfo {
   machine_id: string;
   location: string;
+  machine_floor?: number | null;
   machine_type: MachineType;
   status: MachineStatus;
   remaining_minutes: number | null;
@@ -100,28 +101,68 @@ export interface LaundryConstraints {
   hygiene_sensitive: boolean;
   max_wait_minutes: number | null;
   budget_yuan: number | null;
+  preferred_machine_floor?: number | null;
 }
 
-/** One recommended bucket in the final laundry plan. */
+/** One recommended bucket in the wash-phase laundry plan.
+ *  Dryer assignment is deferred to ``recommendDrying``. */
 export interface LaundryBucket {
   bucket_id: string;
   item_ids: string[];
   wash_method: WashMethod;
   machine_type: MachineType;
+  machine_id?: string;
+  machine_location?: string;
+  machine_floor?: number | null;
   program: string;
   detergent_ml: number | null;
   use_laundry_bag: boolean;
   dry_method: DryMethod;
+  estimated_cost_yuan?: number | null;
+  estimated_duration_minutes?: number | null;
   warnings: string[];
 }
 
-/** Final laundry plan produced by the planner. */
+/** Wash-phase laundry plan.  Use ``recommendDrying`` for dryer assignments. */
 export interface LaundryPlan {
   buckets: LaundryBucket[];
   estimated_cost_yuan: number | null;
   estimated_duration_minutes: number | null;
   summary: string;
   global_warnings: string[];
+}
+
+/** One dryer assignment for a previously-washed bucket. */
+export interface DryingStep {
+  bucket_id: string;
+  item_ids: string[];
+  dry_method: DryMethod;
+  dryer_machine_id?: string;
+  dryer_machine_location?: string;
+  dryer_machine_floor?: number | null;
+  estimated_cost_yuan?: number | null;
+  estimated_duration_minutes?: number | null;
+  warnings: string[];
+}
+
+/** Drying recommendations produced after wash-phase is complete. */
+export interface DryingPlan {
+  steps: DryingStep[];
+  estimated_cost_yuan: number | null;
+  estimated_duration_minutes: number | null;
+  cost_breakdown: LaundryChargeLine[];
+  warnings: string[];
+}
+
+/** One priced machine action. */
+export interface LaundryChargeLine {
+  bucket_id: string;
+  label: string;
+  amount_yuan: number;
+  duration_minutes: number;
+  machine_id?: string;
+  machine_type?: MachineType;
+  program?: string;
 }
 
 /** User-facing report generated from the final plan. */
@@ -230,6 +271,7 @@ export interface WardrobeInput {
 export interface BackendMachine {
   machine_id: string;
   location: string;
+  machine_floor?: number | null;
   machine_type: string;
   status: string;
   remaining_minutes: number | null;
@@ -270,6 +312,7 @@ export interface MobileSummary {
     pricing_rules: Record<string, unknown>;
   };
   plan: LaundryPlan;
+  drying_plan?: DryingPlan;
   report: {
     title: string;
     sections: Record<string, string>;

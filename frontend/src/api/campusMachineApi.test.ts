@@ -52,12 +52,14 @@ describe("campusMachineApi", () => {
     ]);
     expect(context.all_machines[0]).toMatchObject({
       provider: "cleverschool",
+      machine_floor: 1,
       price_yuan: null,
       modes: [],
     });
     expect(context.all_machines[2]).toMatchObject({
       provider: "haier",
       machine_type: "shoe_washer",
+      machine_floor: 1,
     });
     expect(context.all_machines[0]).not.toHaveProperty("capacity_kg");
     expect(context.queue_estimates.map((estimate) => estimate.machine_type)).toEqual([

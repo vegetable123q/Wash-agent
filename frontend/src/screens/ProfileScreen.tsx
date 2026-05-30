@@ -8,7 +8,7 @@ import {
 } from "../api/modelHubConfig";
 import { Card, Chip, Page, Section } from "../components/AppChrome";
 import type { CampusTowerOption } from "../api/mobileSummary";
-import { isValidPickupTime, type UserProfile } from "../userProfile";
+import { dormWithFloor, normalizeDormFloor, type UserProfile } from "../userProfile";
 
 type BackendStatus = "loading" | "connected" | "offline";
 
@@ -34,9 +34,8 @@ export function ProfileScreen({
   const [draft, setDraft] = useState(profile);
   const [modelHubDraft, setModelHubDraft] = useState(modelHubConfig);
   const [saved, setSaved] = useState(false);
-  const [profileError, setProfileError] = useState<string | null>(null);
+  const [floorError, setFloorError] = useState<string | null>(null);
   const [modelHubSaved, setModelHubSaved] = useState(false);
-  const [modelHubError, setModelHubError] = useState<string | null>(null);
   const selectedDormIsListed = towerOptions.some((tower) => tower.name === draft.dormName);
   const normalizedModelHubDraft = normalizeModelHubConfig(modelHubDraft);
   const hasModelDraft = hasCompleteModelHubConfig(normalizedModelHubDraft);
@@ -44,45 +43,35 @@ export function ProfileScreen({
 
   const updateDraft = (patch: Partial<UserProfile>) => {
     setSaved(false);
-    setProfileError(null);
+    if ("dormFloor" in patch) {
+      setFloorError(null);
+    }
     setDraft((current) => ({ ...current, ...patch }));
-  };
-
-  const updateNumberDraft = (field: "budgetYuan" | "maxWaitMinutes", value: string) => {
-    updateDraft({
-      [field]: field === "maxWaitMinutes" ? nonNegativeIntegerOrNull(value) : nonNegativeNumberOrNull(value),
-    });
   };
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    if (!isValidPickupTime(draft.latestPickupTime)) {
+    const dormFloor = normalizeDormFloor(draft.dormFloor);
+    if (dormFloor === null) {
       setSaved(false);
-      setProfileError("请填写有效的最晚取衣时间");
+      setFloorError("请输入 1-30 之间的楼层");
       return;
     }
-    setProfileError(null);
-    onSave(draft);
+    const normalizedDraft = { ...draft, dormFloor };
+    setDraft(normalizedDraft);
+    onSave(normalizedDraft);
     setSaved(true);
   };
 
   const handleApiSubmit = (event: FormEvent) => {
     event.preventDefault();
-    if (!hasCompleteModelHubConfig(normalizedModelHubDraft)) {
-      setModelHubDraft(normalizedModelHubDraft);
-      setModelHubSaved(false);
-      setModelHubError("请填写有效的 ModelHub baseUrl、apikey 和 model_name");
-      return;
-    }
-    setModelHubError(null);
-    setModelHubDraft(onSaveModelHubConfig(normalizedModelHubDraft));
+    setModelHubDraft(onSaveModelHubConfig(modelHubDraft));
     setModelHubSaved(true);
   };
 
   const handleApiClear = () => {
     setModelHubDraft({ baseUrl: "https://modelhub.ailemac.com/v1beta", apikey: "", model_name: "gemini-3.1-pro-preview" });
     setModelHubSaved(false);
-    setModelHubError(null);
     onClearModelHubConfig();
   };
 
@@ -92,7 +81,7 @@ export function ProfileScreen({
         <div>
           <div className="eyebrow">个人洗护配置</div>
           <h1>我的</h1>
-          <p>保存宿舍楼、取衣时间和烘干偏好</p>
+          <p>保存宿舍楼、取衣时间、预算和烘干偏好</p>
         </div>
         <Chip tone={draft.dormName ? "teal" : "amber"}>{draft.dormName ? "已配置" : "待配置"}</Chip>
       </header>
@@ -103,7 +92,7 @@ export function ProfileScreen({
         </span>
         <div>
           <h2>{draft.displayName || "未填写昵称"}</h2>
-          <p>{draft.dormName || "请选择宿舍楼，洗衣房不会再默认紫荆 1 号楼"}</p>
+          <p>{dormWithFloor(draft) || "请选择宿舍楼，洗衣房不会再默认紫荆 1 号楼"}</p>
         </div>
       </Card>
 
@@ -136,6 +125,19 @@ export function ProfileScreen({
                 ))}
               </select>
             </label>
+            <label>
+              <span>所在楼层</span>
+              <input
+                className="input-like"
+                aria-label="所在楼层"
+                inputMode="numeric"
+                maxLength={2}
+                value={draft.dormFloor ?? ""}
+                onChange={(event) => updateDraft({ dormFloor: event.target.value })}
+                placeholder="1-30"
+              />
+            </label>
+            {floorError ? <p className="form-status form-status-error">{floorError}</p> : null}
           </div>
         </Section>
 
@@ -159,33 +161,32 @@ export function ProfileScreen({
               <span>允许使用烘干机</span>
             </label>
             <label>
-              <span>本次预算上限（元）</span>
+              <span>本次预算（元）</span>
               <input
                 className="input-like"
                 type="number"
-                min="0"
-                step="0.1"
-                value={numberInputValue(draft.budgetYuan)}
-                onChange={(event) => updateNumberDraft("budgetYuan", event.target.value)}
-                placeholder="例如 12"
+                min={0}
+                step={0.5}
+                value={draft.budgetYuan ?? ""}
+                onChange={(event) => updateDraft({ budgetYuan: optionalNumber(event.target.value) })}
+                placeholder="不限制"
               />
             </label>
             <label>
-              <span>最大等待时间（分钟）</span>
+              <span>最大等待（分钟）</span>
               <input
                 className="input-like"
                 type="number"
-                min="0"
-                step="1"
-                value={numberInputValue(draft.maxWaitMinutes)}
-                onChange={(event) => updateNumberDraft("maxWaitMinutes", event.target.value)}
-                placeholder="例如 8"
+                min={0}
+                step={1}
+                value={draft.maxWaitMinutes ?? ""}
+                onChange={(event) => updateDraft({ maxWaitMinutes: optionalNumber(event.target.value) })}
+                placeholder="不限制"
               />
             </label>
           </div>
         </Section>
 
-        {profileError ? <p className="form-status form-status-error">{profileError}</p> : null}
         {saved ? <p className="form-status form-status-ok">个人信息已保存</p> : null}
 
         <button className="primary-button" type="submit">
@@ -204,7 +205,6 @@ export function ProfileScreen({
                 value={modelHubDraft.baseUrl}
                 onChange={(event) => {
                   setModelHubSaved(false);
-                  setModelHubError(null);
                   setModelHubDraft((current) => ({ ...current, baseUrl: event.target.value }));
                 }}
                 placeholder="https://modelhub.ailemac.com/v1beta"
@@ -220,7 +220,6 @@ export function ProfileScreen({
                 value={modelHubDraft.apikey}
                 onChange={(event) => {
                   setModelHubSaved(false);
-                  setModelHubError(null);
                   setModelHubDraft((current) => ({ ...current, apikey: event.target.value }));
                 }}
                 placeholder="sk-your-api-key-here"
@@ -236,7 +235,6 @@ export function ProfileScreen({
                 value={modelHubDraft.model_name}
                 onChange={(event) => {
                   setModelHubSaved(false);
-                  setModelHubError(null);
                   setModelHubDraft((current) => ({ ...current, model_name: event.target.value }));
                 }}
               >
@@ -250,7 +248,6 @@ export function ProfileScreen({
           </div>
         </Section>
 
-        {modelHubError ? <p className="form-status form-status-error">{modelHubError}</p> : null}
         {modelHubSaved && hasModelDraft ? (
           <p className="form-status form-status-ok">识图配置已保存到本机；只在本设备使用，可随时清除</p>
         ) : null}
@@ -269,6 +266,13 @@ export function ProfileScreen({
   );
 }
 
+function optionalNumber(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const numberValue = Number(trimmed);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
 function modelHubConnectionStatus(backendStatus: BackendStatus, hasSavedConfig: boolean) {
   if (hasSavedConfig) {
     return { label: "识图已配置", tone: "teal" as const };
@@ -280,22 +284,4 @@ function modelHubConnectionStatus(backendStatus: BackendStatus, hasSavedConfig: 
     return { label: "加载中", tone: "blue" as const };
   }
   return { label: "本地数据异常", tone: "red" as const };
-}
-
-function numberInputValue(value: number | null | undefined): string {
-  return value == null ? "" : String(value);
-}
-
-function nonNegativeNumberOrNull(value: string): number | null {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const parsed = Number(trimmed);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
-}
-
-function nonNegativeIntegerOrNull(value: string): number | null {
-  const parsed = nonNegativeNumberOrNull(value);
-  return parsed != null && Number.isInteger(parsed) ? parsed : null;
 }

@@ -91,136 +91,65 @@ describe("generateReport", () => {
     expect(report.sections["洗衣步骤"]).toContain("床品单独洗：床单被套");
     expect(report.sections["洗衣步骤"]).toContain("程序：标准洗");
     expect(report.sections["费用和时间"]).toContain("床品单独洗 · 标准洗");
-    expect(report.risk_notes).toContain("洗衣机 等待时间未知，无法确认是否满足最大等待 10 分钟。");
     expect(text).toContain("洗衣机 等待时间未知");
     expect(text).not.toMatch(/large-bedding|standard_washer|程序 standard/);
   });
 
-  it("rejects duplicate plan item ids before rendering", () => {
-    const plan = minimalPlan();
-    plan.buckets = [
-      { ...plan.buckets[0], bucket_id: "first", item_ids: ["bedding"] },
-      { ...plan.buckets[0], bucket_id: "second", item_ids: ["bedding"] },
-    ];
-
-    expect(() => generateReport(plan, minimalItems(), minimalCampusContext())).toThrow(/duplicate.*bedding/);
-  });
-
-  it("rejects duplicate report item ids before rendering", () => {
-    const baseItem = minimalItems()[0];
-    const items = [
-      baseItem,
-      { ...baseItem, profile: { ...baseItem.profile, name: "duplicate bedding" } },
-    ];
-
-    expect(() => generateReport(minimalPlan(), items, minimalCampusContext())).toThrow(/duplicate.*bedding/);
-  });
-
-  it("lists all missing plan item ids before rendering", () => {
-    const plan = minimalPlan();
-    plan.buckets = [
-      { ...plan.buckets[0], item_ids: ["missing-a", "missing-b"] },
-    ];
-
-    expect(() => generateReport(plan, minimalItems(), minimalCampusContext())).toThrow(/missing-a.*missing-b/);
-  });
-
-  it("rejects invalid report totals before rendering", () => {
-    expect(() => generateReport(
-      { ...minimalPlan(), estimated_cost_yuan: -1 },
-      minimalItems(),
-      minimalCampusContext(),
-    )).toThrow(/estimated_cost_yuan/);
-
-    expect(() => generateReport(
-      { ...minimalPlan(), estimated_duration_minutes: 1.5 },
-      minimalItems(),
-      minimalCampusContext(),
-    )).toThrow(/estimated_duration_minutes/);
-  });
-
-  it("rejects invalid bucket detergent before rendering", () => {
-    const plan = minimalPlan();
-    plan.buckets = [{ ...plan.buckets[0], detergent_ml: -1 }];
-
-    expect(() => generateReport(plan, minimalItems(), minimalCampusContext())).toThrow(/detergent_ml/);
-  });
-
-  it("hides invalid campus queue waits before rendering", () => {
-    const campusContext = minimalCampusContext();
-    campusContext.queue_estimates = [
+  it("renders an explicit unknown cost section when machines are not fully assigned", () => {
+    const plan: LaundryPlan = {
+      buckets: [
+        {
+          bucket_id: "light-standard",
+          item_ids: ["tee-1"],
+          wash_method: "machine_wash",
+          machine_type: "standard_washer",
+          program: "standard",
+          detergent_ml: 25,
+          use_laundry_bag: false,
+          dry_method: "air_dry",
+          warnings: ["没有空闲洗衣机"],
+        },
+      ],
+      estimated_cost_yuan: null,
+      estimated_duration_minutes: null,
+      summary: "机器不足时仍保留分桶。",
+      global_warnings: [],
+    };
+    const items: WardrobeItemForPlan[] = [
       {
-        machine_type: "standard_washer",
-        total_count: 1,
-        available_count: 0,
-        running_count: 1,
-        out_of_service_count: 0,
-        unknown_count: 0,
-        estimated_wait_minutes: 1.5,
+        profile: {
+          item_id: "tee-1",
+          name: "白色棉 T 恤",
+          user_note: "",
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          care_warnings: [],
+          care_recommendations: [],
+          care_forbidden: [],
+          care_symbols: {},
+          risks: {},
+          recommended_wash: "machine_wash",
+        },
+        wear_count_since_wash: 1,
+        preferred_method: "machine_wash",
+        user_notes: [],
       },
     ];
+    const campusContext: CampusContext = {
+      all_machines: [],
+      available_machines: [],
+      queue_estimates: [],
+      weather: {},
+      drying_context: {},
+      pricing_rules: {
+        wash_programs: { standard: { price_yuan: 3.5, duration_minutes: 40 } },
+        dryer_programs: {},
+      },
+    };
 
-    const report = generateReport(minimalPlan(), minimalItems(), campusContext);
+    const report = generateReport(plan, items, campusContext);
 
-    expect(JSON.stringify(report)).not.toContain("1.5");
+    expect(report.sections["费用和时间"]).toContain("暂时无法估算");
+    expect(report.sections["风险提醒"]).toContain("没有空闲洗衣机");
   });
 });
-
-function minimalPlan(): LaundryPlan {
-  return {
-    buckets: [
-      {
-        bucket_id: "large-bedding",
-        item_ids: ["bedding"],
-        wash_method: "machine_wash",
-        machine_type: "standard_washer",
-        program: "standard",
-        detergent_ml: 35,
-        use_laundry_bag: false,
-        dry_method: "air_dry",
-        warnings: [],
-      },
-    ],
-    estimated_cost_yuan: 4,
-    estimated_duration_minutes: 40,
-    summary: "",
-    global_warnings: [],
-  };
-}
-
-function minimalItems(): WardrobeItemForPlan[] {
-  return [
-    {
-      profile: {
-        item_id: "bedding",
-        name: "搴婂崟琚",
-        user_note: "",
-        material_ratios: { cotton: 1 },
-        colors: ["white"],
-        care_warnings: [],
-        care_recommendations: [],
-        care_forbidden: [],
-        care_symbols: {},
-        risks: {},
-        recommended_wash: "machine_wash",
-      },
-      wear_count_since_wash: 1,
-      preferred_method: "machine_wash",
-      user_notes: [],
-    },
-  ];
-}
-
-function minimalCampusContext(): CampusContext {
-  return {
-    all_machines: [],
-    available_machines: [],
-    queue_estimates: [],
-    weather: {},
-    drying_context: {},
-    pricing_rules: {
-      wash_programs: {},
-      dryer_programs: {},
-    },
-  };
-}

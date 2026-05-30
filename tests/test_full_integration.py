@@ -7,7 +7,7 @@ from pathlib import Path
 
 from backend.campus.context import build_campus_context
 from backend.campus.machine_api import LaundryMachineClient
-from backend.laundry.planner import plan_laundry
+from backend.laundry.planner import plan_laundry, recommend_drying
 from backend.reports.generator import generate_report
 from backend.shared.models import LaundryConstraints
 from backend.wardrobe.store import WardrobeStore
@@ -38,6 +38,7 @@ class FullIntegrationTests(unittest.TestCase):
         plan = plan_laundry(items, constraints, campus_context)
         report = generate_report(plan, items, campus_context)
 
+        # Wash-only costs (no drying).
         self.assertEqual(plan.estimated_cost_yuan, 11.0)
         self.assertEqual([line.amount_yuan for line in plan.cost_breakdown], [4.0, 3.5, 3.5])
         self.assertIn("本次校园洗衣方案", report.title)
@@ -55,6 +56,13 @@ class FullIntegrationTests(unittest.TestCase):
                     "machines": [
                         {
                             "machine_id": "washer-standard-1",
+                            "location": "Dorm A 1F",
+                            "machine_type": "standard_washer",
+                            "status": "available",
+                            "modes": ["standard", "gentle"],
+                        },
+                        {
+                            "machine_id": "washer-standard-2",
                             "location": "Dorm A 1F",
                             "machine_type": "standard_washer",
                             "status": "available",
@@ -132,11 +140,91 @@ class FullIntegrationTests(unittest.TestCase):
         self.assertIn("白色纯棉 T 恤", report.sections["洗衣步骤"])
         self.assertIn("洗衣液：", report.sections["洗衣步骤"])
         self.assertTrue(any("washer-large-1" in step for step in report.action_steps))
-        self.assertIn("当前可用机器记录 3 台", report.sections["机器环境"])
+        self.assertIn("当前可用机器记录 4 台", report.sections["机器环境"])
         self.assertIn("可用位置", report.sections["机器环境"])
         self.assertIn("排队估算", report.sections["机器环境"])
         self.assertIn("晾晒条件", report.sections["机器环境"])
         self.assertIn("计费批次", report.sections["费用和时间"])
+
+    def test_wash_then_dry_two_phase_with_sample_data(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            machine_path = tmp / "machines.json"
+            rules_path = tmp / "machine_rules.json"
+            _write_json(
+                machine_path,
+                {
+                    "machines": [
+                        {
+                            "machine_id": "washer-1",
+                            "location": "Dorm A 1F",
+                            "machine_type": "standard_washer",
+                            "status": "available",
+                            "modes": ["standard"],
+                        },
+                        {
+                            "machine_id": "washer-2",
+                            "location": "Dorm A 1F",
+                            "machine_type": "standard_washer",
+                            "status": "available",
+                            "modes": ["standard"],
+                        },
+                        {
+                            "machine_id": "dryer-1",
+                            "location": "Dorm A 1F",
+                            "machine_type": "dryer",
+                            "status": "available",
+                            "modes": ["low"],
+                        },
+                    ]
+                },
+            )
+            _write_json(
+                rules_path,
+                {
+                    "pricing_rules": {
+                        "wash_programs": {
+                            "standard": {"price_yuan": 3.5, "duration_minutes": 40},
+                        },
+                        "dryer_programs": {
+                            "low": {"price_yuan": 2.0, "duration_minutes": 30},
+                        },
+                    },
+                },
+            )
+
+            items = WardrobeStore(root / "data" / "wardrobe_sample.json").list_items()
+            campus_context = build_campus_context(
+                LaundryMachineClient(machine_path),
+                {"machine_rules_path": str(rules_path)},
+            )
+            # Only select machine-washable items (exclude wool and bedding).
+            constraints = LaundryConstraints(
+                selected_item_ids=["wm-white-tee-001", "wm-black-jeans-001"],
+                allow_dryer=True,
+            )
+
+            # Phase 1: wash plan.
+            plan = plan_laundry(items, constraints, campus_context)
+            self.assertEqual(len(plan.buckets), 2)
+            self.assertEqual(plan.estimated_cost_yuan, 7.0)
+
+            # Phase 2: drying with same campus context.
+            drying = recommend_drying(
+                plan.buckets,
+                campus_context,
+                allow_dryer=True,
+                items=items,
+            )
+            # White tee is safe → dryer; black jeans dark but no high dry risk → dryer.
+            safe_steps = [s for s in drying.steps if s.dry_method.value == "low_heat_dryer"]
+            self.assertGreaterEqual(len(safe_steps), 1)
+            self.assertIsNotNone(drying.estimated_cost_yuan)
+
+            # Full report with drying.
+            report = generate_report(plan, items, campus_context, drying)
+            self.assertIn("烘干安排", report.sections)
 
 
 if __name__ == "__main__":

@@ -148,6 +148,7 @@ class LaundryConstraints:
     hygiene_sensitive: bool = True
     max_wait_minutes: int | None = None
     budget_yuan: float | None = None
+    preferred_machine_floor: int | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -169,6 +170,7 @@ class MachineInfo:
     location: str
     machine_type: MachineType
     status: MachineStatus
+    machine_floor: int | None = None
     remaining_minutes: int | None = None
     price_yuan: float | None = None
     modes: list[str] = field(default_factory=list)
@@ -215,7 +217,13 @@ class LaundryChargeLine:
 
 @dataclass(slots=True)
 class LaundryBucket:
-    """One recommended bucket or batch in the final laundry plan."""
+    """One recommended bucket or batch in the wash-only laundry plan.
+
+    Dryer assignment is deferred to ``recommend_drying`` so that the plan
+    only contains wash-phase information.  ``dry_method`` is set to a safe
+    default (air_dry / do_not_dry) based on item safety; the actual dryer
+    machine is assigned later when drying is recommended.
+    """
 
     bucket_id: str
     item_ids: list[str]
@@ -223,12 +231,11 @@ class LaundryBucket:
     machine_type: MachineType = MachineType.UNKNOWN
     machine_id: str = ""
     machine_location: str = ""
+    machine_floor: int | None = None
     program: str = ""
     detergent_ml: float | None = None
     use_laundry_bag: bool = False
     dry_method: DryMethod = DryMethod.UNKNOWN
-    dryer_machine_id: str = ""
-    dryer_machine_location: str = ""
     estimated_cost_yuan: float | None = None
     estimated_duration_minutes: int | None = None
     warnings: list[str] = field(default_factory=list)
@@ -236,7 +243,11 @@ class LaundryBucket:
 
 @dataclass(slots=True)
 class LaundryPlan:
-    """Final laundry plan produced by the planner."""
+    """Wash-phase laundry plan produced by the planner.
+
+    Use ``recommend_drying`` to produce a ``DryingPlan`` with actual
+    dryer machine assignments after the wash plan is accepted.
+    """
 
     buckets: list[LaundryBucket] = field(default_factory=list)
     estimated_cost_yuan: float | None = None
@@ -244,6 +255,32 @@ class LaundryPlan:
     summary: str = ""
     cost_breakdown: list[LaundryChargeLine] = field(default_factory=list)
     global_warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class DryingStep:
+    """One dryer assignment for a previously-washed bucket."""
+
+    bucket_id: str
+    item_ids: list[str]
+    dry_method: DryMethod
+    dryer_machine_id: str = ""
+    dryer_machine_location: str = ""
+    dryer_machine_floor: int | None = None
+    estimated_cost_yuan: float | None = None
+    estimated_duration_minutes: int | None = None
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class DryingPlan:
+    """Drying recommendations produced after wash-phase is complete."""
+
+    steps: list[DryingStep] = field(default_factory=list)
+    estimated_cost_yuan: float | None = None
+    estimated_duration_minutes: int | None = None
+    cost_breakdown: list[LaundryChargeLine] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)

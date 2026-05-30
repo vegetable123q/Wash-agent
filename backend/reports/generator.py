@@ -2,19 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
-import math
-
 from backend.shared.models import (
     CampusContext,
-    ClothingProfile,
     DryMethod,
+    DryingPlan,
+    DryingStep,
     LaundryBucket,
     LaundryChargeLine,
     LaundryPlan,
     MachineInfo,
     MachineQueueEstimate,
-    MachineStatus,
     MachineType,
     WardrobeItem,
     WashMethod,
@@ -27,251 +24,32 @@ def generate_report(
     plan: LaundryPlan,
     items: list[WardrobeItem],
     campus_context: CampusContext,
+    drying_plan: DryingPlan | None = None,
 ) -> WashReport:
-    """Generate report sections from the final laundry plan."""
+    """Generate report sections from the wash plan and optional drying plan."""
 
-    _validate_plan(plan)
-    _validate_items(items)
-    _validate_plan_item_ids_present(plan, items)
-    _validate_plan_item_ids_unique(plan)
-    _validate_campus_context(campus_context)
     item_names = {item.profile.item_id: item.profile.name for item in items}
+    all_cost_lines = list(plan.cost_breakdown)
+    if drying_plan:
+        all_cost_lines.extend(drying_plan.cost_breakdown)
+
     sections = {
         "洗衣步骤": _steps_section(plan, item_names),
-        "费用和时间": _cost_time_section(plan),
+        "费用和时间": _cost_time_section(plan, drying_plan),
         "机器环境": _campus_section(campus_context),
         "风险提醒": _risk_section(plan),
     }
+    if drying_plan:
+        sections["烘干安排"] = _drying_section(drying_plan, item_names)
+
     return WashReport(
         title="本次校园洗衣方案",
         sections=sections,
-        action_steps=_action_steps(plan, item_names),
-        cost_breakdown=[replace(line) for line in plan.cost_breakdown],
-        savings_notes=_savings_notes(plan),
-        risk_notes=_risk_notes(plan),
+        action_steps=_action_steps(plan, drying_plan, item_names),
+        cost_breakdown=all_cost_lines,
+        savings_notes=_savings_notes(plan, drying_plan),
+        risk_notes=_risk_notes(plan, drying_plan),
     )
-
-
-def _validate_plan(value: object) -> None:
-    if not isinstance(value, LaundryPlan):
-        raise ValueError("plan must be a LaundryPlan")
-    if not isinstance(value.buckets, list):
-        raise ValueError("plan.buckets must be a list")
-    for index, bucket in enumerate(value.buckets):
-        if not isinstance(bucket, LaundryBucket):
-            raise ValueError(f"plan.buckets[{index}] must be a LaundryBucket")
-        _validate_bucket(bucket, f"plan.buckets[{index}]")
-    _required_non_negative_number(value.estimated_cost_yuan, "plan.estimated_cost_yuan")
-    _required_non_negative_int(value.estimated_duration_minutes, "plan.estimated_duration_minutes")
-    _validate_cost_breakdown(value.cost_breakdown)
-    _non_empty_string_list(value.global_warnings, "plan.global_warnings")
-
-
-def _validate_cost_breakdown(value: object) -> None:
-    if not isinstance(value, list):
-        raise ValueError("plan.cost_breakdown must be a list")
-    for index, line in enumerate(value):
-        if not isinstance(line, LaundryChargeLine):
-            raise ValueError(f"plan.cost_breakdown[{index}] must be a LaundryChargeLine")
-        field_name = f"plan.cost_breakdown[{index}]"
-        _non_empty_string(line.bucket_id, f"{field_name}.bucket_id")
-        _non_empty_string(line.label, f"{field_name}.label")
-        _required_non_negative_number(line.amount_yuan, f"{field_name}.amount_yuan")
-        _required_non_negative_int(line.duration_minutes, f"{field_name}.duration_minutes")
-        _string(line.machine_id, f"{field_name}.machine_id")
-        _enum_field(line.machine_type, MachineType, f"{field_name}.machine_type")
-        _string(line.program, f"{field_name}.program")
-
-
-def _validate_bucket(bucket: LaundryBucket, field_name: str) -> None:
-    _non_empty_string(bucket.bucket_id, f"{field_name}.bucket_id")
-    _non_empty_string_list(bucket.item_ids, f"{field_name}.item_ids")
-    _enum_field(bucket.wash_method, WashMethod, f"{field_name}.wash_method")
-    _enum_field(bucket.machine_type, MachineType, f"{field_name}.machine_type")
-    _enum_field(bucket.dry_method, DryMethod, f"{field_name}.dry_method")
-    _string(bucket.machine_id, f"{field_name}.machine_id")
-    _string(bucket.machine_location, f"{field_name}.machine_location")
-    _string(bucket.program, f"{field_name}.program")
-    _optional_non_negative_number(bucket.detergent_ml, f"{field_name}.detergent_ml")
-    _boolean(bucket.use_laundry_bag, f"{field_name}.use_laundry_bag")
-    _string(bucket.dryer_machine_id, f"{field_name}.dryer_machine_id")
-    _string(bucket.dryer_machine_location, f"{field_name}.dryer_machine_location")
-    _optional_non_negative_number(bucket.estimated_cost_yuan, f"{field_name}.estimated_cost_yuan")
-    _optional_non_negative_int(bucket.estimated_duration_minutes, f"{field_name}.estimated_duration_minutes")
-    _non_empty_string_list(bucket.warnings, f"{field_name}.warnings")
-
-
-def _validate_items(value: object) -> None:
-    if not isinstance(value, list):
-        raise ValueError("items must be a list")
-    seen_item_ids: set[str] = set()
-    for index, item in enumerate(value):
-        if not isinstance(item, WardrobeItem):
-            raise ValueError(f"items[{index}] must be a WardrobeItem")
-        _validate_item(item, f"items[{index}]")
-        item_id = item.profile.item_id
-        if item_id in seen_item_ids:
-            raise ValueError(f"items duplicate item_id: {item_id}")
-        seen_item_ids.add(item_id)
-
-
-def _validate_item(item: WardrobeItem, field_name: str) -> None:
-    if not isinstance(item.profile, ClothingProfile):
-        raise ValueError(f"{field_name}.profile must be a ClothingProfile")
-    _non_empty_string(item.profile.item_id, f"{field_name}.profile.item_id")
-    _non_empty_string(item.profile.name, f"{field_name}.profile.name")
-
-
-def _validate_plan_item_ids_present(plan: LaundryPlan, items: list[WardrobeItem]) -> None:
-    item_ids = {item.profile.item_id for item in items}
-    missing = [
-        item_id
-        for bucket in plan.buckets
-        for item_id in bucket.item_ids
-        if item_id not in item_ids
-    ]
-    if missing:
-        raise ValueError(f"items missing plan item ids: {', '.join(dedupe(missing))}")
-
-
-def _validate_plan_item_ids_unique(plan: LaundryPlan) -> None:
-    seen_item_ids: set[str] = set()
-    duplicates: list[str] = []
-    for bucket in plan.buckets:
-        for item_id in bucket.item_ids:
-            if item_id in seen_item_ids:
-                duplicates.append(item_id)
-                continue
-            seen_item_ids.add(item_id)
-    if duplicates:
-        raise ValueError(f"plan duplicate item ids: {', '.join(dedupe(duplicates))}")
-
-
-def _non_empty_string(value: object, field_name: str) -> None:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{field_name} must be a non-empty string")
-
-
-def _string(value: object, field_name: str) -> None:
-    if not isinstance(value, str):
-        raise ValueError(f"{field_name} must be a string")
-
-
-def _non_empty_string_list(value: object, field_name: str) -> None:
-    if not isinstance(value, list):
-        raise ValueError(f"{field_name} must be a list")
-    for index, item in enumerate(value):
-        _non_empty_string(item, f"{field_name}[{index}]")
-
-
-def _string_list(value: object, field_name: str) -> None:
-    if not isinstance(value, list):
-        raise ValueError(f"{field_name} must be a list of non-empty strings")
-    if not all(isinstance(item, str) and item.strip() for item in value):
-        raise ValueError(f"{field_name} must be a list of non-empty strings")
-
-
-def _enum_field(value: object, enum_type: type[object], field_name: str) -> None:
-    if not isinstance(value, enum_type):
-        raise ValueError(f"{field_name} must be a {enum_type.__name__}")
-
-
-def _boolean(value: object, field_name: str) -> None:
-    if not isinstance(value, bool):
-        raise ValueError(f"{field_name} must be a boolean")
-
-
-def _required_non_negative_number(value: object, field_name: str) -> None:
-    if value is None:
-        raise ValueError(f"{field_name} is required")
-    _optional_non_negative_number(value, field_name)
-
-
-def _required_non_negative_int(value: object, field_name: str) -> None:
-    if value is None:
-        raise ValueError(f"{field_name} is required")
-    _optional_non_negative_int(value, field_name)
-
-
-def _optional_non_negative_number(value: object, field_name: str) -> None:
-    if value is None:
-        return
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        raise ValueError(f"{field_name} must be numeric")
-    if not math.isfinite(float(value)) or value < 0:
-        raise ValueError(f"{field_name} must be a non-negative finite number")
-
-
-def _optional_non_negative_int(value: object, field_name: str) -> None:
-    if value is None:
-        return
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ValueError(f"{field_name} must be a non-negative integer")
-
-
-def _validate_campus_context(value: object) -> None:
-    if not isinstance(value, CampusContext):
-        raise ValueError("campus_context must be a CampusContext")
-    _machine_info_list(value.all_machines, "all_machines")
-    _machine_info_list(value.available_machines, "available_machines")
-    _queue_estimate_list(value.queue_estimates)
-    _dict_field(value.weather, "weather")
-    _dict_field(value.drying_context, "drying_context")
-    _validate_drying_context(value.drying_context)
-    _dict_field(value.pricing_rules, "pricing_rules")
-
-
-def _machine_info_list(value: object, field_name: str) -> None:
-    if not isinstance(value, list):
-        raise ValueError(f"campus_context.{field_name} must be a list of MachineInfo")
-    for index, machine in enumerate(value):
-        if not isinstance(machine, MachineInfo):
-            raise ValueError(f"campus_context.{field_name}[{index}] must be a MachineInfo")
-        _validate_machine_info(machine, f"campus_context.{field_name}[{index}]")
-
-
-def _validate_machine_info(machine: MachineInfo, field_name: str) -> None:
-    _non_empty_string(machine.machine_id, f"{field_name}.machine_id")
-    _non_empty_string(machine.location, f"{field_name}.location")
-    _enum_field(machine.machine_type, MachineType, f"{field_name}.machine_type")
-    _enum_field(machine.status, MachineStatus, f"{field_name}.status")
-    _optional_non_negative_int(machine.remaining_minutes, f"{field_name}.remaining_minutes")
-    _optional_non_negative_number(machine.price_yuan, f"{field_name}.price_yuan")
-    _string_list(machine.modes, f"{field_name}.modes")
-
-
-def _queue_estimate_list(value: object) -> None:
-    if not isinstance(value, list):
-        raise ValueError("campus_context.queue_estimates must be a list of MachineQueueEstimate")
-    for index, estimate in enumerate(value):
-        if not isinstance(estimate, MachineQueueEstimate):
-            raise ValueError(f"campus_context.queue_estimates[{index}] must be a MachineQueueEstimate")
-        _validate_queue_estimate(estimate, f"campus_context.queue_estimates[{index}]")
-
-
-def _validate_queue_estimate(estimate: MachineQueueEstimate, field_name: str) -> None:
-    _enum_field(estimate.machine_type, MachineType, f"{field_name}.machine_type")
-    _required_non_negative_int(estimate.total_count, f"{field_name}.total_count")
-    _required_non_negative_int(estimate.available_count, f"{field_name}.available_count")
-    _required_non_negative_int(estimate.running_count, f"{field_name}.running_count")
-    _required_non_negative_int(
-        estimate.out_of_service_count,
-        f"{field_name}.out_of_service_count",
-    )
-    _required_non_negative_int(estimate.unknown_count, f"{field_name}.unknown_count")
-    _optional_non_negative_int(estimate.estimated_wait_minutes, f"{field_name}.estimated_wait_minutes")
-
-
-def _dict_field(value: object, field_name: str) -> None:
-    if not isinstance(value, dict):
-        raise ValueError(f"campus_context.{field_name} must be a dictionary")
-
-
-def _validate_drying_context(value: dict[str, object]) -> None:
-    if "balcony_available" in value:
-        _boolean(value["balcony_available"], "campus_context.drying_context.balcony_available")
-    if "ventilation" in value:
-        _non_empty_string(value["ventilation"], "campus_context.drying_context.ventilation")
 
 
 def _steps_section(plan: LaundryPlan, item_names: dict[str, str]) -> str:
@@ -296,51 +74,96 @@ def _steps_section(plan: LaundryPlan, item_names: dict[str, str]) -> str:
         if bucket.estimated_duration_minutes is not None:
             parts.append(f"机器占用：{bucket.estimated_duration_minutes} 分钟")
         parts.append(f"干燥：{_dry_method_text(bucket.dry_method)}")
-        if bucket.dryer_machine_id:
-            parts.append(f"烘干机：{bucket.dryer_machine_id}（{bucket.dryer_machine_location}）")
         if bucket.warnings:
             parts.append(f"提醒：{'；'.join(bucket.warnings)}")
         lines.append("；".join(parts) + "。")
     return "\n".join(lines)
 
 
-def _action_steps(plan: LaundryPlan, item_names: dict[str, str]) -> list[str]:
+def _drying_section(drying_plan: DryingPlan, item_names: dict[str, str]) -> str:
+    lines: list[str] = []
+    for step in drying_plan.steps:
+        if step.dry_method in (DryMethod.AIR_DRY, DryMethod.DO_NOT_DRY):
+            continue
+        parts = [f"烘干批次 {step.bucket_id}：{_dry_method_text(step.dry_method)}"]
+        if step.dryer_machine_id:
+            parts.append(f"烘干机：{step.dryer_machine_id}（{step.dryer_machine_location}）")
+        if step.estimated_cost_yuan is not None:
+            parts.append(f"费用：{step.estimated_cost_yuan} 元")
+        if step.estimated_duration_minutes is not None:
+            parts.append(f"时长：{step.estimated_duration_minutes} 分钟")
+        if step.warnings:
+            parts.append(f"提醒：{'；'.join(step.warnings)}")
+        lines.append("；".join(parts) + "。")
+    if not lines:
+        return "本次没有需要烘干机烘干的批次。"
+    return "\n".join(lines)
+
+
+def _action_steps(
+    plan: LaundryPlan,
+    drying_plan: DryingPlan | None,
+    item_names: dict[str, str],
+) -> list[str]:
     steps: list[str] = []
     for index, bucket in enumerate(plan.buckets, start=1):
         names = "、".join(_item_name(item_id, item_names) for item_id in bucket.item_ids)
         if bucket.wash_method == WashMethod.MACHINE_WASH:
+            if not bucket.machine_id:
+                steps.append(f"{index}. {names} 暂无空闲{_machine_type_text(bucket.machine_type)}，保留分桶，刷新机器状态后再执行。")
+                continue
             machine = bucket.machine_id or _machine_type_text(bucket.machine_type)
             step = f"{index}. {names} 使用 {machine} 执行 {bucket.program} 程序"
             if bucket.detergent_ml is not None:
                 step += f"，加入 {bucket.detergent_ml} ml 洗衣液"
             if bucket.use_laundry_bag:
                 step += "，使用洗衣袋"
-            step += f"，{_dry_method_text(bucket.dry_method)}"
-            if bucket.dryer_machine_id:
-                step += f"（{bucket.dryer_machine_id}）"
             steps.append(step + "。")
             continue
         steps.append(
             f"{index}. {names} {_wash_method_text(bucket.wash_method)}，{_dry_method_text(bucket.dry_method)}，不使用共享洗衣机。"
         )
+    if drying_plan:
+        for step in drying_plan.steps:
+            if step.dry_method in (DryMethod.AIR_DRY, DryMethod.DO_NOT_DRY):
+                continue
+            steps.append(
+                f"烘干 {step.bucket_id}：{_dry_method_text(step.dry_method)}"
+                + (f"（{step.dryer_machine_id}）" if step.dryer_machine_id else "")
+            )
     return steps
 
 
-def _cost_time_section(plan: LaundryPlan) -> str:
-    if plan.estimated_cost_yuan is None:
-        raise ValueError("plan estimated_cost_yuan is required for report generation")
-    if plan.estimated_duration_minutes is None:
-        raise ValueError("plan estimated_duration_minutes is required for report generation")
-    if plan.cost_breakdown:
-        batch_text = "；".join(
+def _cost_time_section(plan: LaundryPlan, drying_plan: DryingPlan | None) -> str:
+    wash_cost = plan.estimated_cost_yuan
+    wash_duration = plan.estimated_duration_minutes
+
+    wash_breakdown = "；".join(
+        f"{line.label} {line.amount_yuan} 元/{line.duration_minutes} 分钟"
+        for line in plan.cost_breakdown
+    ) if plan.cost_breakdown else "本次没有洗衣机计费批次"
+
+    if wash_cost is None or wash_duration is None:
+        return f"费用和机器占用时间暂时无法估算，因为存在尚未分配到空闲机器的分桶。待执行批次：{wash_breakdown}。"
+
+    if drying_plan and drying_plan.estimated_cost_yuan:
+        dry_cost = drying_plan.estimated_cost_yuan
+        dry_duration = drying_plan.estimated_duration_minutes or 0
+        total_cost = round(wash_cost + dry_cost, 2)
+        total_duration = wash_duration + dry_duration
+        dry_breakdown = "；".join(
             f"{line.label} {line.amount_yuan} 元/{line.duration_minutes} 分钟"
-            for line in plan.cost_breakdown
+            for line in drying_plan.cost_breakdown
         )
-    else:
-        batch_text = "本次没有共享洗衣机或烘干机计费批次"
+        return (
+            f"洗涤费用 {wash_cost} 元（{wash_breakdown}）；"
+            f"烘干费用 {dry_cost} 元（{dry_breakdown}）；"
+            f"合计 {total_cost} 元，预计总时间 {total_duration} 分钟。"
+        )
+
     return (
-        f"预计费用 {plan.estimated_cost_yuan} 元，预计机器占用时间 {plan.estimated_duration_minutes} 分钟。"
-        f"计费批次：{batch_text}。"
+        f"预计费用 {wash_cost} 元，预计机器占用时间 {wash_duration} 分钟。"
+        f"计费批次：{wash_breakdown}。"
     )
 
 
@@ -370,31 +193,46 @@ def _risk_section(plan: LaundryPlan) -> str:
     return "\n".join(f"- {warning}" for warning in warnings)
 
 
-def _savings_notes(plan: LaundryPlan) -> list[str]:
+def _savings_notes(plan: LaundryPlan, drying_plan: DryingPlan | None) -> list[str]:
     notes: list[str] = []
     if any(bucket.dry_method == DryMethod.AIR_DRY for bucket in plan.buckets):
         notes.append("自然晾干批次减少烘干用电，也能降低缩水和变形风险。")
-    if any(bucket.bucket_id == "mixed-standard" for bucket in plan.buckets):
+    if any(bucket.bucket_id == "mixed-standard" or bucket.bucket_id.startswith("mixed-standard-") for bucket in plan.buckets):
         notes.append("用户允许混色且衣物无高掉色风险时合并标准批次，减少空筒和重复用水。")
-    if any(bucket.bucket_id in {"dark-standard", "hand-wash"} for bucket in plan.buckets):
+    base_ids = {b.bucket_id.replace(_suffix(b.bucket_id), "") for b in plan.buckets}
+    if "dark-standard" in base_ids or "hand-wash" in base_ids:
         notes.append("高风险衣物分开处理，能减少串色、返洗和重复用水。")
-    if any(bucket.bucket_id == "large-bedding" for bucket in plan.buckets):
+    if "large-bedding" in base_ids:
         notes.append("床品使用大件批次，减少普通筒过载造成的洗不净和返洗。")
+    if drying_plan and drying_plan.estimated_cost_yuan:
+        notes.append("烘干安排在洗涤完成后推荐，使用实时烘干机状态，避免无效等待。")
     return dedupe(notes)
 
 
-def _risk_notes(plan: LaundryPlan) -> list[str]:
+def _risk_notes(plan: LaundryPlan, drying_plan: DryingPlan | None) -> list[str]:
     notes: list[str] = []
     for bucket in plan.buckets:
-        if bucket.bucket_id == "dark-standard":
+        base = bucket.bucket_id.replace(_suffix(bucket.bucket_id), "")
+        if base == "dark-standard":
             notes.append("深色或掉色风险衣物不要与浅色衣物混洗。")
         if bucket.wash_method in {WashMethod.HAND_WASH, WashMethod.DRY_CLEAN, WashMethod.DO_NOT_WASH}:
             notes.append("非普通机洗衣物应按单独批次处理，不进入共享洗衣机。")
         notes.extend(bucket.warnings)
+    if drying_plan:
+        for step in drying_plan.steps:
+            notes.extend(step.warnings)
     return dedupe(notes)
 
 
+def _suffix(bucket_id: str) -> str:
+    """Return the trailing ``-N`` suffix or empty string."""
+    if bucket_id and bucket_id[-1].isdigit() and "-" in bucket_id:
+        return "-" + bucket_id.rsplit("-", 1)[-1]
+    return ""
+
+
 def _bucket_reason(bucket: LaundryBucket) -> str:
+    base = bucket.bucket_id.replace(_suffix(bucket.bucket_id), "")
     reasons = {
         "do-not-wash": "洗护标签或用户偏好提示不可水洗",
         "dry-clean": "该批次需要专业干洗",
@@ -404,7 +242,7 @@ def _bucket_reason(bucket: LaundryBucket) -> str:
         "light-standard": "浅色普通机洗衣物集中标准洗",
         "mixed-standard": "用户允许混色，低掉色风险普通衣物合并标准洗",
     }
-    return reasons.get(bucket.bucket_id, f"{bucket.bucket_id} 批次")
+    return reasons.get(base, f"{bucket.bucket_id} 批次")
 
 
 def _available_machine_locations(machines: list[MachineInfo]) -> str:

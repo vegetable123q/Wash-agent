@@ -12,7 +12,7 @@ import { listCampusTowerOptions } from "./campusTowerDirectory";
 import { buildProfileFromInput, storedToPlanItem, type StoredWardrobeItem } from "./clothingExtractor";
 import { adviseAllFrequencies } from "./frequencyAdvisor";
 import { estimatedWasherLoadCount, loadPercentForItems } from "./laundryLoad";
-import { planLaundry } from "./laundryPlanner";
+import { planLaundry, recommendDrying } from "./laundryPlanner";
 import { DRYING_CONTEXT, PRICING_RULES } from "./pricingRules";
 import { generateReport } from "./reportGenerator";
 import type {
@@ -24,6 +24,7 @@ import type {
   DirtyBasketAddedAtSource,
   DirtyBasketItem,
   DirtyBasketSummary,
+  DryingPlan,
   FrequencyAdvice,
   LaundryConstraints,
   LaundryPlan,
@@ -37,7 +38,7 @@ import type {
   WeatherSnapshot,
 } from "./types";
 import { fetchTsinghuaWeather } from "./weatherService";
-import type { UserProfile } from "../userProfile";
+import { normalizeDormFloor, type UserProfile } from "../userProfile";
 
 // ─── public types re-exported for screens ───────────────────────────────
 
@@ -56,8 +57,8 @@ interface DirtyBasketRecord {
   added_at_source: DirtyBasketAddedAtSource;
 }
 
-type MobileSummaryProfile = Partial<Pick<UserProfile, "dormName" | "allowDryer" | "budgetYuan" | "maxWaitMinutes">>;
-type LaundryPreferenceProfile = Partial<Pick<UserProfile, "allowDryer" | "budgetYuan" | "maxWaitMinutes">>;
+type MobileSummaryProfile = Partial<Pick<UserProfile, "dormName" | "dormFloor" | "allowDryer" | "budgetYuan" | "maxWaitMinutes">>;
+type LaundryPreferenceProfile = Partial<Pick<UserProfile, "dormFloor" | "allowDryer" | "budgetYuan" | "maxWaitMinutes">>;
 
 export async function fetchMobileSummary(profile?: MobileSummaryProfile): Promise<MobileSummary> {
   return buildIntegratedMobileSummary(profile);
@@ -84,7 +85,7 @@ export function rebuildMobileSummaryForSelection(
   const selectedSet = new Set(selectedLaundryItemIds);
   const selectedItems = storedItems.filter((item) => selectedSet.has(item.item_id));
   const campusContext = mobileSummaryCampusContextToPlanner(summary.campus_context);
-  const { frequencyAdvice, plan, report } = buildLaundryArtifacts(storedItems, selectedLaundryItemIds, campusContext, profile);
+  const { frequencyAdvice, plan, dryingPlan, report } = buildLaundryArtifacts(storedItems, selectedLaundryItemIds, campusContext, profile);
 
   return {
     ...summary,
@@ -92,6 +93,7 @@ export function rebuildMobileSummaryForSelection(
     dirty_basket: buildDirtyBasketSummary(selectedItems, dirtyBasketRecords),
     frequency_advice: frequencyAdvice,
     plan: toMobileLaundryPlan(plan),
+    drying_plan: dryingPlan,
     report,
   };
 }
@@ -203,7 +205,7 @@ async function buildIntegratedMobileSummary(profile?: MobileSummaryProfile): Pro
   }
   const selectedLaundryItemIds = dirtyBasketRecords.map((record) => record.item_id);
   const selectedItems = storedItems.filter((item) => selectedLaundryItemIds.includes(item.item_id));
-  const { frequencyAdvice, plan, report } = buildLaundryArtifacts(storedItems, selectedLaundryItemIds, campusContext, profile);
+  const { frequencyAdvice, plan, dryingPlan, report } = buildLaundryArtifacts(storedItems, selectedLaundryItemIds, campusContext, profile);
 
   // Build the summary for screens
   const allMachines: BackendMachine[] = campusContext.all_machines.map(toBackendMachine);
@@ -230,6 +232,7 @@ async function buildIntegratedMobileSummary(profile?: MobileSummaryProfile): Pro
       },
     },
     plan: toMobileLaundryPlan(plan),
+    drying_plan: dryingPlan,
     report,
   };
 }
@@ -239,7 +242,7 @@ function buildLaundryArtifacts(
   selectedLaundryItemIds: string[],
   campusContext: CampusContext,
   profile?: LaundryPreferenceProfile,
-): { frequencyAdvice: FrequencyAdvice[]; plan: LaundryPlan; report: WashReport } {
+): { frequencyAdvice: FrequencyAdvice[]; plan: LaundryPlan; dryingPlan?: DryingPlan; report: WashReport } {
   const planItems = storedItems.map(storedToPlanItem);
   const constraints: LaundryConstraints = {
     selected_item_ids: selectedLaundryItemIds,
@@ -249,6 +252,7 @@ function buildLaundryArtifacts(
     hygiene_sensitive: true,
     max_wait_minutes: profile?.maxWaitMinutes ?? null,
     budget_yuan: profile?.budgetYuan ?? null,
+    preferred_machine_floor: profileFloorNumber(profile?.dormFloor),
   };
   const frequencyAdvice = adviseAllFrequencies(planItems, constraints);
 
@@ -281,7 +285,12 @@ function buildLaundryArtifacts(
       selectedLaundryItemIds.includes(item.profile.item_id),
     );
     const plan = planLaundry(selectedPlanItems, constraints, campusContext);
-    return { frequencyAdvice, plan, report: generateReport(plan, selectedPlanItems, campusContext) };
+    const dryingPlan = recommendDrying(plan.buckets, campusContext, {
+      allowDryer: Boolean(profile?.allowDryer),
+      preferredMachineFloor: profileFloorNumber(profile?.dormFloor),
+      items: selectedPlanItems,
+    });
+    return { frequencyAdvice, plan, dryingPlan, report: generateReport(plan, selectedPlanItems, campusContext, dryingPlan) };
   } catch {
     return {
       frequencyAdvice,
@@ -314,10 +323,15 @@ function toMobileLaundryPlan(plan: LaundryPlan): MobileSummary["plan"] {
       item_ids: b.item_ids,
       wash_method: b.wash_method,
       machine_type: b.machine_type,
+      machine_id: b.machine_id,
+      machine_location: b.machine_location,
+      machine_floor: b.machine_floor,
       program: b.program,
       detergent_ml: b.detergent_ml,
       use_laundry_bag: b.use_laundry_bag,
       dry_method: b.dry_method,
+      estimated_cost_yuan: b.estimated_cost_yuan,
+      estimated_duration_minutes: b.estimated_duration_minutes,
       warnings: b.warnings,
     })),
     estimated_cost_yuan: plan.estimated_cost_yuan,
@@ -372,6 +386,7 @@ function fromBackendMachine(machine: BackendMachine): MachineInfo {
   return {
     machine_id: machine.machine_id,
     location: machine.location,
+    machine_floor: machine.machine_floor ?? null,
     machine_type: machine.machine_type as MachineInfo["machine_type"],
     status: machine.status as MachineInfo["status"],
     remaining_minutes: machine.remaining_minutes,
@@ -391,6 +406,11 @@ function fromBackendQueueEstimate(estimate: BackendQueueEstimate): MachineQueueE
     unknown_count: estimate.unknown_count,
     estimated_wait_minutes: estimate.estimated_wait_minutes,
   };
+}
+
+function profileFloorNumber(value: unknown): number | null {
+  const normalized = normalizeDormFloor(value);
+  return normalized ? Number(normalized) : null;
 }
 
 // ─── local storage ──────────────────────────────────────────────────────
@@ -751,6 +771,7 @@ function toBackendMachine(m: MachineInfo): BackendMachine {
   return {
     machine_id: m.machine_id,
     location: m.location,
+    machine_floor: m.machine_floor ?? null,
     machine_type: m.machine_type,
     status: m.status,
     remaining_minutes: m.remaining_minutes,

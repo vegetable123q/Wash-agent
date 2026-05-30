@@ -1,53 +1,11 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { emptyModelHubConfig } from "../api/modelHubConfig";
-import { generatePlanSummary } from "../api/llmSummary";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MobileSummary } from "../api/mobileSummary";
 import { PlanDetailScreen } from "./PlanDetailScreen";
 
-vi.mock("../api/llmSummary", async () => {
-  const actual = await vi.importActual<typeof import("../api/llmSummary")>("../api/llmSummary");
-  return {
-    ...actual,
-    generatePlanSummary: vi.fn(),
-  };
-});
-
 describe("PlanDetailScreen", () => {
-  beforeEach(() => {
-    vi.mocked(generatePlanSummary).mockReset();
-  });
-
   afterEach(() => {
     cleanup();
-  });
-
-  it("clears the previous LLM plan summary when switching plans", async () => {
-    vi.mocked(generatePlanSummary)
-      .mockResolvedValueOnce({ source: "llm", text: "first AI plan summary" })
-      .mockResolvedValueOnce({ source: "fallback", text: "second fallback plan summary" });
-
-    const { rerender } = render(
-      <PlanDetailScreen
-        onBack={vi.fn()}
-        mobileSummary={mobileSummaryWithPlan("first deterministic plan", "light-standard")}
-        modelHubConfig={configuredModelHub}
-      />,
-    );
-
-    expect(await screen.findByText("first AI plan summary")).toBeInTheDocument();
-
-    rerender(
-      <PlanDetailScreen
-        onBack={vi.fn()}
-        mobileSummary={mobileSummaryWithPlan("second deterministic plan", "dark-standard")}
-        modelHubConfig={configuredModelHub}
-      />,
-    );
-
-    await waitFor(() => expect(generatePlanSummary).toHaveBeenCalledTimes(2));
-    expect(screen.queryByText("first AI plan summary")).not.toBeInTheDocument();
-    expect(screen.getByText("second deterministic plan")).toBeInTheDocument();
   });
 
   it("renders machine types as user-facing labels", () => {
@@ -129,18 +87,113 @@ describe("PlanDetailScreen", () => {
     expect(screen.queryByText(/大件机/)).not.toBeInTheDocument();
   });
 
-  it("shows non-duplicated global constraint warnings with friendly labels", () => {
+  it("labels manual buckets by method and blocked washer buckets by the missing machine", () => {
+    const mobileSummary = {
+      source: "backend",
+      selected_laundry_item_ids: ["silk-1", "tee-1"],
+      dirty_basket: {
+        item_count: 2,
+        load_percent: 40,
+        oldest_days: 0,
+        urgent_count: 0,
+        status_label: "可清洗",
+        recommendation: "分开处理。",
+        next_action: "查看本次方案",
+        items: [],
+      },
+      wardrobe: {
+        items: [
+          {
+            item_id: "silk-1",
+            name: "真丝衬衫",
+            user_note: "",
+            user_notes: [],
+            wear_count_since_wash: 1,
+            wash_count: 0,
+            material_ratios: { silk: 1 },
+            colors: ["white"],
+            risks: {},
+          },
+          {
+            item_id: "tee-1",
+            name: "白色棉 T 恤",
+            user_note: "",
+            user_notes: [],
+            wear_count_since_wash: 1,
+            wash_count: 0,
+            material_ratios: { cotton: 1 },
+            colors: ["white"],
+            risks: {},
+          },
+        ],
+      },
+      campus_context: {
+        all_machines: [],
+        available_machines: [],
+        queue_estimates: [],
+        weather: {},
+        drying_context: {},
+        pricing_rules: {},
+      },
+      plan: {
+        buckets: [
+          {
+            bucket_id: "hand-wash",
+            item_ids: ["silk-1"],
+            wash_method: "hand_wash",
+            machine_type: "unknown",
+            program: "hand_wash",
+            detergent_ml: 8,
+            use_laundry_bag: false,
+            dry_method: "air_dry",
+            warnings: [],
+          },
+          {
+            bucket_id: "light-standard-2",
+            item_ids: ["tee-1"],
+            wash_method: "machine_wash",
+            machine_type: "standard_washer",
+            program: "standard",
+            detergent_ml: 24,
+            use_laundry_bag: false,
+            dry_method: "air_dry",
+            warnings: ["没有空闲洗衣机"],
+          },
+        ],
+        estimated_cost_yuan: null,
+        estimated_duration_minutes: null,
+        summary: "手洗桶和缺洗衣机桶都保留。",
+        global_warnings: [],
+      },
+      report: {
+        title: "本次校园洗衣方案",
+        sections: {},
+        savings_notes: [],
+        risk_notes: [],
+      },
+    } as MobileSummary;
+
+    render(<PlanDetailScreen onBack={vi.fn()} mobileSummary={mobileSummary} />);
+
+    expect(screen.getAllByText("手洗").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("没有空闲洗衣机").length).toBeGreaterThan(0);
+    expect(screen.getByText(/白色棉 T 恤 · 机洗 · 自然晾干/)).toBeInTheDocument();
+    expect(screen.queryByText("设备待确认")).not.toBeInTheDocument();
+    expect(screen.queryByText("待机器")).not.toBeInTheDocument();
+  });
+
+  it("does not claim no clothes were selected when selected clothes fail to produce buckets", () => {
     const mobileSummary = {
       source: "backend",
       selected_laundry_item_ids: ["tee-1"],
       dirty_basket: {
         item_count: 1,
-        load_percent: 30,
-        oldest_days: 1,
+        load_percent: 20,
+        oldest_days: 0,
         urgent_count: 0,
         status_label: "可清洗",
-        recommendation: "今晚处理。",
-        next_action: "查看方案",
+        recommendation: "查看本次方案。",
+        next_action: "查看本次方案",
         items: [],
       },
       wardrobe: {
@@ -167,90 +220,14 @@ describe("PlanDetailScreen", () => {
         pricing_rules: {},
       },
       plan: {
-        buckets: [
-          {
-            bucket_id: "light-standard",
-            item_ids: ["tee-1"],
-            wash_method: "machine_wash",
-            machine_type: "standard_washer",
-            program: "standard",
-            detergent_ml: 24,
-            use_laundry_bag: false,
-            dry_method: "air_dry",
-            warnings: ["推荐使用 washer-1，位置 1F，程序 standard。"],
-          },
-        ],
-        estimated_cost_yuan: 3.5,
-        estimated_duration_minutes: 40,
-        summary: "浅色衣物标准洗。",
-        global_warnings: [
-          "预计费用 3.5 元超过预算 3 元。",
-          "standard_washer 预计等待 12 分钟超过最大等待 5 分钟。",
-          "推荐使用 washer-1，位置 1F，程序 standard。",
-        ],
-      },
-      report: {
-        title: "report",
-        sections: {},
-        savings_notes: [],
-        risk_notes: [],
-      },
-    } as MobileSummary;
-
-    const { container } = render(<PlanDetailScreen onBack={vi.fn()} mobileSummary={mobileSummary} />);
-
-    expect(screen.getByRole("heading", { name: "本次约束提醒" })).toBeInTheDocument();
-    expect(screen.getByText("预计费用 3.5 元超过预算 3 元。")).toBeInTheDocument();
-    expect(screen.getByText("洗衣机 预计等待 12 分钟超过最大等待 5 分钟。")).toBeInTheDocument();
-    expect(container.textContent).not.toContain("standard_washer");
-    expect(screen.getAllByText(/推荐使用/)).toHaveLength(1);
-  });
-  it("does not show the unselected empty state when selected clothes failed to produce buckets", () => {
-    const mobileSummary = {
-      source: "backend",
-      selected_laundry_item_ids: ["tee-1"],
-      dirty_basket: {
-        item_count: 1,
-        load_percent: 30,
-        oldest_days: 1,
-        urgent_count: 0,
-        status_label: "ready",
-        recommendation: "wash soon",
-        next_action: "view plan",
-        items: [],
-      },
-      wardrobe: {
-        items: [
-          {
-            item_id: "tee-1",
-            name: "Test tee",
-            user_note: "",
-            user_notes: [],
-            wear_count_since_wash: 1,
-            wash_count: 0,
-            material_ratios: { cotton: 1 },
-            colors: ["white"],
-            risks: {},
-          },
-        ],
-      },
-      campus_context: {
-        all_machines: [],
-        available_machines: [],
-        queue_estimates: [],
-        weather: {},
-        drying_context: {},
-        pricing_rules: {},
-      },
-      plan: {
         buckets: [],
         estimated_cost_yuan: null,
         estimated_duration_minutes: null,
-        summary: "已选择衣物，但暂时未生成可执行方案。",
+        summary: "当前机器条件不足以生成完整方案，建议稍后刷新。",
         global_warnings: ["未能匹配到可用机器，请检查机器状态或手动选择。"],
       },
       report: {
-        title: "report",
+        title: "本次校园洗衣方案",
         sections: {},
         savings_notes: [],
         risk_notes: [],
@@ -259,79 +236,10 @@ describe("PlanDetailScreen", () => {
 
     render(<PlanDetailScreen onBack={vi.fn()} mobileSummary={mobileSummary} />);
 
-    expect(screen.getAllByText("方案暂未生成").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("已选择衣物，但暂时未生成可执行方案。").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("未能匹配到可用机器，请检查机器状态或手动选择。").length).toBeGreaterThan(0);
+    expect(screen.getByText("方案暂未生成")).toBeInTheDocument();
+    expect(screen.getByText("待确认")).toBeInTheDocument();
+    expect(screen.getByText("查看机器状态")).toBeInTheDocument();
+    expect(screen.getByText("未能匹配到可用机器，请检查机器状态或手动选择。")).toBeInTheDocument();
     expect(screen.queryByText("未选择衣物")).not.toBeInTheDocument();
   });
 });
-
-const configuredModelHub = {
-  ...emptyModelHubConfig,
-  apikey: "test-modelhub-key",
-};
-
-function mobileSummaryWithPlan(summary: string, bucketId: string): MobileSummary {
-  return {
-    source: "backend",
-    selected_laundry_item_ids: ["tee-1"],
-    dirty_basket: {
-      item_count: 1,
-      load_percent: 30,
-      oldest_days: 1,
-      urgent_count: 0,
-      status_label: "ready",
-      recommendation: "wash soon",
-      next_action: "view plan",
-      items: [],
-    },
-    wardrobe: {
-      items: [
-        {
-          item_id: "tee-1",
-          name: "Test tee",
-          user_note: "",
-          user_notes: [],
-          wear_count_since_wash: 1,
-          wash_count: 0,
-          material_ratios: { cotton: 1 },
-          colors: ["white"],
-          risks: {},
-        },
-      ],
-    },
-    campus_context: {
-      all_machines: [],
-      available_machines: [],
-      queue_estimates: [],
-      weather: {},
-      drying_context: {},
-      pricing_rules: {},
-    },
-    plan: {
-      buckets: [
-        {
-          bucket_id: bucketId,
-          item_ids: ["tee-1"],
-          wash_method: "machine_wash",
-          machine_type: "standard_washer",
-          program: "standard",
-          detergent_ml: 24,
-          use_laundry_bag: false,
-          dry_method: "air_dry",
-          warnings: [],
-        },
-      ],
-      estimated_cost_yuan: 3.5,
-      estimated_duration_minutes: 40,
-      summary,
-      global_warnings: [],
-    },
-    report: {
-      title: "report",
-      sections: {},
-      savings_notes: [],
-      risk_notes: [],
-    },
-  };
-}

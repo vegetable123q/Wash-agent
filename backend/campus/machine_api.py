@@ -390,6 +390,7 @@ def _machine_from_mock_dict(data: object) -> MachineInfo:
         "location",
         "machine_type",
         "status",
+        "machine_floor",
         "remaining_minutes",
         "price_yuan",
         "modes",
@@ -411,6 +412,7 @@ def _machine_from_mock_dict(data: object) -> MachineInfo:
         location=_required_mock_text(data, "location"),
         machine_type=_machine_type_from_value(data["machine_type"]),
         status=_machine_status_from_value(data["status"]),
+        machine_floor=_optional_int(data.get("machine_floor"), "machine_floor"),
         remaining_minutes=_optional_int(data.get("remaining_minutes"), "remaining_minutes"),
         price_yuan=_optional_number(data.get("price_yuan"), "price_yuan"),
         modes=modes,
@@ -533,6 +535,7 @@ def _machine_info_from_payload(
         location=f"{tower} {floor}",
         machine_type=machine_type,
         status=_machine_status(status_text),
+        machine_floor=_parse_machine_floor(floor),
         remaining_minutes=_remaining_minutes(status_text),
         price_yuan=_optional_float(
             rule_details.get("default_price_yuan"),
@@ -556,8 +559,46 @@ def _machine_info_from_haier_payload(
         location=location,
         machine_type=_haier_machine_type(category_code),
         status=_haier_machine_status(item.get("state")),
+        machine_floor=_parse_machine_floor(machine_name),
         provider="haier",
     )
+
+
+def _parse_machine_floor(value: str) -> int | None:
+    digit_match = re.search(r"(?:^|[^\d])([1-9]|[12]\d|30)\s*层", value)
+    if digit_match:
+        return int(digit_match.group(1))
+    chinese_match = re.search(r"([一二三四五六七八九十]{1,3})\s*层", value)
+    if chinese_match is None:
+        return None
+    floor = _chinese_floor_number(chinese_match.group(1))
+    if floor is None or floor < 1 or floor > 30:
+        return None
+    return floor
+
+
+def _chinese_floor_number(value: str) -> int | None:
+    digits = {
+        "一": 1,
+        "二": 2,
+        "三": 3,
+        "四": 4,
+        "五": 5,
+        "六": 6,
+        "七": 7,
+        "八": 8,
+        "九": 9,
+    }
+    if value == "十":
+        return 10
+    if value.startswith("十"):
+        return 10 + digits.get(value[1:], 0)
+    if "十" in value:
+        tens, _, ones = value.partition("十")
+        if tens not in digits:
+            return None
+        return digits[tens] * 10 + (digits.get(ones, 0) if ones else 0)
+    return digits.get(value)
 
 
 def _parse_mac_union_code(value: str) -> tuple[str, str]:

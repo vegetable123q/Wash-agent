@@ -99,7 +99,7 @@ Wash-agent/
 - ModelHub `baseUrl`、`apikey` 和 `model_name` 只能来自用户在移动端“我的”页输入；release APK 不内置真实 API key。为避免用户每次重新打开软件都重复输入，用户手动输入的配置保存在本机应用存储中，只在本设备使用，并必须提供清除入口。
 - `model_name` 使用选择控件，当前只允许 `gemini-3.1-pro-preview`。
 - 非识图功能不得依赖 ModelHub 配置；识图功能缺少 `baseUrl`、`apikey` 或允许的 `model_name` 时必须显式禁用或报错。
-- 保存仅限当前设备的界面偏好和个人洗衣上下文，例如宿舍楼、最晚取衣时间和烘干偏好；后续接入账号系统后再迁移到后端 profile API。
+- 保存仅限当前设备的界面偏好和个人洗衣上下文，例如宿舍楼、所在楼层、最晚取衣时间和烘干偏好；后续接入账号系统后再迁移到后端 profile API。所在楼层由用户手动输入，仅允许 `1` 到 `30` 的整数；该字段不参与 D 模块按楼栋请求机器 API，但会作为 E 模块的 `preferred_machine_floor`，用于在可用机器中优先推荐距离用户楼层最近的机器。
 - 宿舍楼下拉菜单使用前端本地产品目录；目录只向页面暴露宿舍楼名称，CleverSchool `towerKey` 和海乐 `positionId` 只能留在 API 配置层。
 - 用户保存宿舍楼后，移动端洗衣房通过真实 CleverSchool / 海乐生活接口读取机器状态；未选择宿舍楼时必须显示待配置状态，不请求机器接口，也不使用旧机器 mock。
 - 今日页天气和洗衣房机器状态的手动刷新共用 `fetchMobileSummary(userProfile)`；一次刷新会重新读取天气、机器上下文、方案和报告。刷新失败时页面保留上一次成功的摘要并显式提示错误，不清空旧天气或旧机器状态，也不新增自动轮询。
@@ -262,7 +262,7 @@ Wash-agent/
 - `context.py` 必须生成 `CampusContext.queue_estimates`。该字段按 `MachineType` 汇总总数、可用数、运行中数、异常数、未知数和 `estimated_wait_minutes`：有可用机器时为 `0`；无可用机器但运行中机器有剩余时间时取最短剩余时间；信息不足时保持 `None`。
 - `machine_api.py` 提供 `mock_transport_from_file("data/machines_mock.json")`，用于让交付 mock 文件通过正式 transport 入口参与测试；mock 缺少必要响应时应显式报错。
 - `machines_mock.json` 同时保留本地离线集成使用的 `machines` 列表，以及真实接口 transport 测试使用的 CleverSchool / 海乐响应片段。
-- `machine_rules.json` 保存 E 模块消费的 `pricing_rules`、晾晒上下文 `drying_context`、模式、价格和时长等配置。当前价格规则同时记录海乐生活和智慧校园：通用规划字段保留两家共有的洗衣/烘干/洗鞋程序，`provider_programs.haier` 记录海乐额外的单脱、桶清洁、加温和紫外项目，`provider_programs.cleverschool` 只记录用户确认过的智慧校园项目。机器容量不进入配置；D 模块的真实机器接口解析只产出外部接口明确给出的机器编号、位置、类型、状态和剩余时间，并保留内部 `provider` 用于集成层选择对应厂商的模式价格表；外部状态接口不提供的价格和模式不得在 D 模块内补齐，需由 E 模块或集成层显式注入。
+- `machine_rules.json` 保存 E 模块消费的 `pricing_rules`、晾晒上下文 `drying_context`、模式、价格和时长等配置。当前价格规则同时记录海乐生活和智慧校园：通用规划字段保留两家共有的洗衣/烘干/洗鞋程序，`provider_programs.haier` 记录海乐额外的单脱、桶清洁、加温和紫外项目，`provider_programs.cleverschool` 只记录用户确认过的智慧校园项目。机器容量不进入配置；D 模块的真实机器接口解析只产出外部接口明确给出的机器编号、位置、机器楼层、类型、状态和剩余时间，并保留内部 `provider` 用于集成层选择对应厂商的模式价格表；外部状态接口不提供的价格和模式不得在 D 模块内补齐，需由 E 模块或集成层显式注入。
 
 不应该做：
 
@@ -281,12 +281,13 @@ Wash-agent/
 
 - 根据衣物、用户约束和校园上下文生成 `LaundryPlan`。
 - 负责手洗、机洗、干洗判断，分桶规则，模式推荐，洗衣袋、洗衣液、烘干强度、防串色、防缩水和公共洗衣卫生策略。
-- 第一版确定性实现要求调用方显式传入所选衣物、可用机器和 `CampusContext.pricing_rules` 中的洗衣/烘干价格与时长；缺少所选衣物、机器、价格或时长时抛出错误，不生成默认方案。
+- 第一版确定性实现要求调用方显式传入所选衣物、可用机器和 `CampusContext.pricing_rules` 中的洗衣/烘干价格与时长；缺少所选衣物、价格或时长时抛出错误，不生成默认方案。若 `LaundryConstraints.preferred_machine_floor` 与机器的 `machine_floor` 同时存在，E 模块在候选可用机器中选择楼层距离最近的机器；楼层缺失时保持原有机器匹配顺序。
 - 当 `LaundryConstraints` 包含预算或最大等待时间时，在 `LaundryPlan.global_warnings` 中显式说明超预算、等待估算缺失、等待未知或等待超时，不能静默忽略这些约束。
 - 当前分桶规则按不可水洗、干洗、手洗、床品大件、深色/掉色风险、浅色标准和允许混色的低风险标准批次拆分。
 - `urgent_item_ids` 必须属于本次 `selected_item_ids`，否则抛出错误；planner 不会替用户把未选择的急用衣物加入方案。
-- 每个机洗桶必须记录推荐机器 id/位置、程序、本桶费用、本桶机器占用时间、洗衣液用量和是否使用洗衣袋；如果使用低温烘干，还必须记录烘干机 id/位置。
-- `LaundryPlan.cost_breakdown` 必须由真实机洗和烘干动作生成，金额和时长只能来自 `CampusContext.pricing_rules`。
+- 每个机洗桶必须记录程序、洗衣液用量和是否使用洗衣袋，并在有可用机器时记录推荐机器 id/位置、本桶费用和本桶机器占用时间；如果使用低温烘干，还必须记录烘干机 id/位置。
+- 分桶必须先于机器分配执行。可用洗衣机或烘干机不足时，E 模块保留已经生成的桶，在该桶 `warnings` 中显式写入“没有空闲洗衣机/烘干机”，并让对应机器 id/位置保持空值；不得因为机器不足清空 `LaundryPlan.buckets`。
+- `LaundryPlan.cost_breakdown` 必须由真实已分配的机洗和烘干动作生成，金额和时长只能来自 `CampusContext.pricing_rules`；只要存在未分配机器的桶，整份计划的总费用和总时长保持未知。
 
 不应该做：
 

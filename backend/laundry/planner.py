@@ -1,34 +1,39 @@
-"""Laundry decision and bucket planning implementation."""
+"""Laundry decision and bucket planning implementation.
+
+The planner produces a **wash-phase** plan: bucket assignment, washer
+machines, programs, detergent, and laundry-bag recommendations.  Drying
+is deferred to ``recommend_drying`` which should be called with fresh
+dryer availability after the wash plan is accepted.
+"""
 
 from __future__ import annotations
 
 import math
-import re
 
+from backend.laundry.load_estimator import split_items_by_load
 from backend.shared.models import (
     CampusContext,
-    ClothingProfile,
     DryMethod,
+    DryingPlan,
+    DryingStep,
     LaundryBucket,
     LaundryChargeLine,
     LaundryConstraints,
     LaundryPlan,
     MachineInfo,
-    MachineQueueEstimate,
     MachineStatus,
     MachineType,
     RiskLevel,
     WardrobeItem,
     WashMethod,
 )
-from backend.shared.utils import dedupe
-
+from backend.shared.utils import contains_any, dedupe
 
 _DARK_COLOR_TERMS = {"black", "dark", "navy", "indigo", "深色", "黑", "藏青", "靛蓝"}
 _LIGHT_COLOR_TERMS = {"white", "light", "gray", "grey", "浅色", "白", "灰"}
 _BEDDING_TERMS = {"bedding", "sheet", "duvet", "床单", "被套", "床品"}
 _WOOL_TERMS = {"wool", "羊毛", "cashmere", "羊绒"}
-_HAND_WASH_TERMS = {"hand_wash_only", "hand wash only", "只能手洗", "手洗"}
+_HAND_WASH_TERMS = {"hand_wash_only", "hand wash only", "只能手洗", "仅限手洗"}
 _DRY_CLEAN_TERMS = {"dry_clean_only", "dry clean only", "只能干洗", "干洗"}
 _DO_NOT_WASH_TERMS = {"do_not_wash", "不可水洗", "不能水洗"}
 _DO_NOT_DRY_TERMS = {"do_not_tumble_dry", "do_not_dry", "不可烘干", "不能烘干"}
@@ -39,7 +44,22 @@ _STANDARD_DETERGENT_ML_PER_ITEM = 6.0
 _LARGE_DETERGENT_ML_BASE = 32.0
 _LARGE_DETERGENT_ML_PER_ITEM = 8.0
 _STANDARD_BUCKET_IDS = {"dark-standard", "light-standard", "mixed-standard"}
-_ENGLISH_TERM_RE = re.compile(r"^[a-z0-9 _-]+$", re.IGNORECASE)
+
+# Bucket type categories that should NOT be split by capacity.
+_UNSPLITABLE_BUCKET_IDS = {"do-not-wash", "dry-clean", "hand-wash"}
+
+_BUCKET_ORDER = [
+    "do-not-wash",
+    "dry-clean",
+    "hand-wash",
+    "large-bedding",
+    "dark-standard",
+    "light-standard",
+    "mixed-standard",
+]
+
+
+# ─── wash-phase planning ──────────────────────────────────────────────
 
 
 def plan_laundry(
@@ -47,243 +67,203 @@ def plan_laundry(
     constraints: LaundryConstraints,
     campus_context: CampusContext,
 ) -> LaundryPlan:
-    """Create wash buckets, machine modes, drying advice, and risk warnings."""
+    """Create wash buckets, machine modes, and risk warnings.
 
-    _validate_items(items)
-    _validate_constraints(constraints)
-    _validate_campus_context(campus_context)
-    selected_item_ids = _normalized_item_ids(constraints.selected_item_ids)
-    urgent_item_ids = _normalized_item_ids(constraints.urgent_item_ids)
-    selected_items = _selected_items(items, selected_item_ids)
-    _validate_urgent_items(selected_item_ids, urgent_item_ids)
+    Returns a wash-only plan.  Use ``recommend_drying`` to obtain dryer
+    assignments after the user has reviewed the wash plan.
+    """
+
+    _validate_unique_item_ids(items)
+    selected_items = _selected_items(items, constraints.selected_item_ids)
+    _validate_urgent_items(constraints)
     bucket_inputs = _split_bucket_inputs(selected_items, constraints)
+    machine_pool = list(campus_context.available_machines)
     buckets = [
-        _build_bucket(bucket_id, bucket_items, constraints, campus_context)
-        for bucket_id, bucket_items in bucket_inputs
+        _build_bucket(bucket_id, base_bucket_id, bucket_items, constraints, campus_context, machine_pool)
+        for bucket_id, base_bucket_id, bucket_items in bucket_inputs
     ]
 
-    cost_breakdown = _cost_breakdown(buckets, campus_context)
-    estimated_cost = _estimate_cost(cost_breakdown)
-    estimated_duration = _estimate_duration(cost_breakdown)
+    cost_breakdown = _wash_cost_breakdown(buckets, campus_context)
+    estimated_cost = _estimate_cost(cost_breakdown, buckets)
+    estimated_duration = _estimate_duration(cost_breakdown, buckets)
     global_warnings = _global_warnings(buckets, constraints, estimated_cost, campus_context)
 
     return LaundryPlan(
         buckets=buckets,
         estimated_cost_yuan=estimated_cost,
         estimated_duration_minutes=estimated_duration,
-        summary=f"本次共 {len(buckets)} 个洗护批次，已按颜色、材质、床品和高风险衣物分开处理。",
+        summary=f"本次共 {len(buckets)} 个洗护批次，已按容量、颜色、材质、床品和高风险衣物分开处理。",
         cost_breakdown=cost_breakdown,
         global_warnings=global_warnings,
     )
 
 
-def _validate_items(value: object) -> None:
-    if not isinstance(value, list):
-        raise ValueError("items must be a list")
-    seen_item_ids: set[str] = set()
-    for index, item in enumerate(value):
-        if not isinstance(item, WardrobeItem):
-            raise ValueError(f"items[{index}] must be a WardrobeItem")
-        _validate_item(item, f"items[{index}]")
-        item_id = item.profile.item_id.strip()
-        if item_id in seen_item_ids:
-            raise ValueError(f"items duplicate item_id: {item_id}")
-        seen_item_ids.add(item_id)
+# ─── drying-phase recommendation ──────────────────────────────────────
 
 
-def _validate_item(item: WardrobeItem, field_name: str) -> None:
-    if not isinstance(item.profile, ClothingProfile):
-        raise ValueError(f"{field_name}.profile must be a ClothingProfile")
-    _non_empty_string(item.profile.item_id, f"{field_name}.profile.item_id")
-    _non_empty_string(item.profile.name, f"{field_name}.profile.name")
-    _string(item.profile.user_note, f"{field_name}.profile.user_note")
-    _string_key_dict(item.profile.material_ratios, f"{field_name}.profile.material_ratios")
-    _string_list(item.profile.colors, f"{field_name}.profile.colors")
-    _string_list(item.profile.care_warnings, f"{field_name}.profile.care_warnings")
-    _string_list(item.profile.care_recommendations, f"{field_name}.profile.care_recommendations")
-    _string_list(item.profile.care_forbidden, f"{field_name}.profile.care_forbidden")
-    _string_list(item.profile.source_notes, f"{field_name}.profile.source_notes")
-    _risk_map(item.profile.risks, f"{field_name}.profile.risks")
-    _string_list(item.user_notes, f"{field_name}.user_notes")
+def recommend_drying(
+    buckets: list[LaundryBucket],
+    campus_context: CampusContext,
+    *,
+    allow_dryer: bool = False,
+    preferred_machine_floor: int | None = None,
+    items: list[WardrobeItem] | None = None,
+) -> DryingPlan:
+    """Recommend drying for each wash bucket based on current dryer availability.
 
+    Call this after the wash plan is accepted.  It checks real-time dryer
+    availability so that the assigned dryer reflects the actual state when
+    the user is ready to dry.
+    """
+    items_by_id: dict[str, WardrobeItem] | None = None
+    if items is not None:
+        items_by_id = {item.profile.item_id: item for item in items}
 
-def _validate_constraints(constraints: LaundryConstraints) -> None:
-    if not isinstance(constraints, LaundryConstraints):
-        raise ValueError("constraints must be LaundryConstraints")
-    _item_id_list(constraints.selected_item_ids, "selected_item_ids")
-    _item_id_list(constraints.urgent_item_ids, "urgent_item_ids")
-    _boolean(constraints.allow_mixed_colors, "allow_mixed_colors")
-    _boolean(constraints.allow_dryer, "allow_dryer")
-    _boolean(constraints.hygiene_sensitive, "hygiene_sensitive")
-    _optional_non_negative_number(constraints.budget_yuan, "budget_yuan")
-    _optional_non_negative_int(constraints.max_wait_minutes, "max_wait_minutes")
+    steps: list[DryingStep] = []
+    cost_lines: list[LaundryChargeLine] = []
+    dryer_pool = list(campus_context.available_machines)
+    total_cost = 0.0
+    total_duration = 0
 
+    for bucket in buckets:
+        # Non-machine buckets already have their final dry_method.
+        if bucket.wash_method != WashMethod.MACHINE_WASH:
+            # Carry over dryer-safety warnings from the wash bucket.
+            dry_warnings: list[str] = []
+            if bucket.wash_method == WashMethod.HAND_WASH:
+                for warning in bucket.warnings:
+                    if "不可烘干" in warning or "高温" in warning:
+                        dry_warnings.append(warning)
+                if not dry_warnings and bucket.dry_method == DryMethod.AIR_DRY:
+                    bucket_items_for_warning = (
+                        [items_by_id[item_id] for item_id in bucket.item_ids if items_by_id and item_id in items_by_id]
+                        if items_by_id else []
+                    )
+                    unsafe_names = _dryer_unsafe_names(bucket_items_for_warning) if bucket_items_for_warning else []
+                    if unsafe_names:
+                        dry_warnings.append(f"{'、'.join(unsafe_names)} 不可烘干或存在高温损伤风险，改为自然晾干。")
+            steps.append(DryingStep(
+                bucket_id=bucket.bucket_id,
+                item_ids=bucket.item_ids,
+                dry_method=bucket.dry_method,
+                warnings=dry_warnings,
+            ))
+            continue
 
-def _validate_campus_context(value: object) -> None:
-    if not isinstance(value, CampusContext):
-        raise ValueError("campus_context must be a CampusContext")
-    _machine_info_list(value.all_machines, "all_machines")
-    _machine_info_list(value.available_machines, "available_machines")
-    _queue_estimate_list(value.queue_estimates, "queue_estimates")
-    _dict_field(value.weather, "weather")
-    _dict_field(value.drying_context, "drying_context")
-    _validate_drying_context(value.drying_context)
-    _dict_field(value.pricing_rules, "pricing_rules")
+        if not bucket.machine_id:
+            steps.append(DryingStep(
+                bucket_id=bucket.bucket_id,
+                item_ids=bucket.item_ids,
+                dry_method=bucket.dry_method,
+                warnings=["洗衣机未分配，暂不安排烘干。"],
+            ))
+            continue
 
+        # Determine dryer safety from item data.
+        bucket_items = (
+            [items_by_id[item_id] for item_id in bucket.item_ids if items_by_id and item_id in items_by_id]
+            if items_by_id
+            else []
+        )
+        unsafe_names = _dryer_unsafe_names(bucket_items) if bucket_items else []
+        can_dry = allow_dryer and not unsafe_names
 
-def _machine_info_list(value: object, field_name: str) -> None:
-    if not isinstance(value, list):
-        raise ValueError(f"campus_context.{field_name} must be a list of MachineInfo")
-    for index, item in enumerate(value):
-        if not isinstance(item, MachineInfo):
-            raise ValueError(f"campus_context.{field_name}[{index}] must be a MachineInfo")
-        _validate_machine_info(item, f"campus_context.{field_name}[{index}]")
+        if not can_dry:
+            warnings: list[str] = []
+            if not allow_dryer:
+                warnings.append("用户未允许烘干，本批次自然晾干。")
+            elif unsafe_names:
+                warnings.append(f"{'、'.join(unsafe_names)} 不可烘干或存在高温损伤风险，改为自然晾干。")
+            warnings.extend(_air_dry_context_warnings(campus_context))
+            steps.append(DryingStep(
+                bucket_id=bucket.bucket_id,
+                item_ids=bucket.item_ids,
+                dry_method=DryMethod.AIR_DRY,
+                warnings=warnings,
+            ))
+            continue
 
+        # Try to assign an available dryer.
+        dryer = _reserve_available_machine(
+            dryer_pool,
+            MachineType.DRYER,
+            "low",
+            preferred_machine_floor,
+        )
+        if dryer is None:
+            steps.append(DryingStep(
+                bucket_id=bucket.bucket_id,
+                item_ids=bucket.item_ids,
+                dry_method=DryMethod.AIR_DRY,
+                warnings=["没有空闲烘干机"],
+            ))
+            continue
 
-def _validate_machine_info(machine: MachineInfo, field_name: str) -> None:
-    _non_empty_string(machine.machine_id, f"{field_name}.machine_id")
-    _non_empty_string(machine.location, f"{field_name}.location")
-    _enum_field(machine.machine_type, MachineType, f"{field_name}.machine_type")
-    _enum_field(machine.status, MachineStatus, f"{field_name}.status")
-    _optional_non_negative_int(machine.remaining_minutes, f"{field_name}.remaining_minutes")
-    _optional_non_negative_number(machine.price_yuan, f"{field_name}.price_yuan")
-    _string_list(machine.modes, f"{field_name}.modes")
+        _require_dryer_program(campus_context, "low")
+        dryer_cost = _dryer_program_value(campus_context, "low", "price_yuan")
+        dryer_duration = int(_dryer_program_value(campus_context, "low", "duration_minutes"))
 
+        steps.append(DryingStep(
+            bucket_id=bucket.bucket_id,
+            item_ids=bucket.item_ids,
+            dry_method=DryMethod.LOW_HEAT_DRYER,
+            dryer_machine_id=dryer.machine_id,
+            dryer_machine_location=dryer.location,
+            dryer_machine_floor=dryer.machine_floor,
+            estimated_cost_yuan=round(dryer_cost, 2),
+            estimated_duration_minutes=dryer_duration,
+            warnings=[_machine_recommendation_warning(dryer, "low")],
+        ))
+        cost_lines.append(LaundryChargeLine(
+            bucket_id=bucket.bucket_id,
+            label=f"{bucket.bucket_id} 低温烘干",
+            amount_yuan=round(dryer_cost, 2),
+            duration_minutes=dryer_duration,
+            machine_id=dryer.machine_id,
+            machine_type=MachineType.DRYER,
+            program="low",
+        ))
+        total_cost += dryer_cost
+        total_duration += dryer_duration
 
-def _non_empty_string(value: object, field_name: str) -> None:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{field_name} must be a non-empty string")
-
-
-def _enum_field(value: object, enum_type: type[object], field_name: str) -> None:
-    if not isinstance(value, enum_type):
-        raise ValueError(f"{field_name} must be a {enum_type.__name__}")
-
-
-def _string_list(value: object, field_name: str) -> None:
-    if not isinstance(value, list):
-        raise ValueError(f"{field_name} must be a list of non-empty strings")
-    if not all(isinstance(item, str) and item.strip() for item in value):
-        raise ValueError(f"{field_name} must be a list of non-empty strings")
-
-
-def _string(value: object, field_name: str) -> None:
-    if not isinstance(value, str):
-        raise ValueError(f"{field_name} must be a string")
-
-
-def _string_key_dict(value: object, field_name: str) -> None:
-    if not isinstance(value, dict):
-        raise ValueError(f"{field_name} must be an object")
-    if not all(isinstance(key, str) and key.strip() for key in value):
-        raise ValueError(f"{field_name} must contain non-empty string keys")
-
-
-def _risk_map(value: object, field_name: str) -> None:
-    if not isinstance(value, dict):
-        raise ValueError(f"{field_name} must be an object")
-    for key, level in value.items():
-        if not isinstance(key, str) or not key.strip():
-            raise ValueError(f"{field_name} must contain non-empty string keys")
-        if not isinstance(level, RiskLevel):
-            raise ValueError(f"{field_name}.{key} must be a RiskLevel")
-
-
-def _queue_estimate_list(value: object, field_name: str) -> None:
-    if not isinstance(value, list):
-        raise ValueError(f"campus_context.{field_name} must be a list of MachineQueueEstimate")
-    for index, estimate in enumerate(value):
-        if not isinstance(estimate, MachineQueueEstimate):
-            raise ValueError(
-                f"campus_context.{field_name}[{index}] must be a MachineQueueEstimate"
-            )
-        _validate_queue_estimate(estimate, f"campus_context.{field_name}[{index}]")
-
-
-def _validate_queue_estimate(estimate: MachineQueueEstimate, field_name: str) -> None:
-    _enum_field(estimate.machine_type, MachineType, f"{field_name}.machine_type")
-    _non_negative_int(estimate.total_count, f"{field_name}.total_count")
-    _non_negative_int(estimate.available_count, f"{field_name}.available_count")
-    _non_negative_int(estimate.running_count, f"{field_name}.running_count")
-    _non_negative_int(
-        estimate.out_of_service_count,
-        f"{field_name}.out_of_service_count",
-    )
-    _non_negative_int(estimate.unknown_count, f"{field_name}.unknown_count")
-    _optional_non_negative_int(
-        estimate.estimated_wait_minutes,
-        f"{field_name}.estimated_wait_minutes",
+    return DryingPlan(
+        steps=steps,
+        estimated_cost_yuan=round(total_cost, 2) if total_cost else None,
+        estimated_duration_minutes=total_duration if total_duration else None,
+        cost_breakdown=cost_lines,
+        warnings=[],
     )
 
 
-def _validate_drying_context(value: dict[str, object]) -> None:
-    if "balcony_available" in value:
-        _boolean(value["balcony_available"], "campus_context.drying_context.balcony_available")
-    if "ventilation" in value:
-        _non_empty_string(value["ventilation"], "campus_context.drying_context.ventilation")
-
-
-def _non_negative_int(value: object, field_name: str) -> None:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ValueError(f"{field_name} must be a non-negative integer")
-
-
-def _dict_field(value: object, field_name: str) -> None:
-    if not isinstance(value, dict):
-        raise ValueError(f"campus_context.{field_name} must be a dict")
-
-
-def _item_id_list(value: object, field_name: str) -> list[str]:
-    if not isinstance(value, list):
-        raise ValueError(f"{field_name} must be a list of non-empty strings")
-    if not all(isinstance(item, str) and item.strip() for item in value):
-        raise ValueError(f"{field_name} must be a list of non-empty strings")
-    return value
-
-
-def _boolean(value: object, field_name: str) -> bool:
-    if not isinstance(value, bool):
-        raise ValueError(f"{field_name} must be a boolean")
-    return value
-
-
-def _optional_non_negative_number(value: object, field_name: str) -> float | None:
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        raise ValueError(f"{field_name} must be numeric")
-    number = float(value)
-    if not math.isfinite(number) or number < 0:
-        raise ValueError(f"{field_name} must be a non-negative finite number")
-    return number
-
-
-def _optional_non_negative_int(value: object, field_name: str) -> int | None:
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise ValueError(f"{field_name} must be a non-negative integer")
-    if value < 0:
-        raise ValueError(f"{field_name} must be a non-negative integer")
-    return value
+# ─── bucket splitting with capacity awareness ──────────────────────────
 
 
 def _selected_items(items: list[WardrobeItem], selected_item_ids: list[str]) -> list[WardrobeItem]:
-    if not selected_item_ids:
+    unique_ids = list(dict.fromkeys(item_id.strip() for item_id in selected_item_ids if item_id.strip()))
+    if not unique_ids:
         raise ValueError("selected_item_ids is required for laundry planning")
     items_by_id = {item.profile.item_id: item for item in items}
-    missing = [item_id for item_id in selected_item_ids if item_id not in items_by_id]
+    missing = [item_id for item_id in unique_ids if item_id not in items_by_id]
     if missing:
         raise ValueError(f"selected item ids not found: {', '.join(missing)}")
-    return [items_by_id[item_id] for item_id in selected_item_ids]
+    return [items_by_id[item_id] for item_id in unique_ids]
 
 
-def _normalized_item_ids(item_ids: list[str]) -> list[str]:
-    return dedupe([item_id.strip() for item_id in item_ids])
+def _validate_unique_item_ids(items: list[WardrobeItem]) -> None:
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for item in items:
+        item_id = item.profile.item_id
+        if item_id in seen:
+            duplicates.append(item_id)
+            continue
+        seen.add(item_id)
+    if duplicates:
+        raise ValueError(f"items duplicate item_id: {', '.join(dedupe(duplicates))}")
 
 
-def _validate_urgent_items(selected_item_ids: list[str], urgent_item_ids: list[str]) -> None:
-    missing = [item_id for item_id in urgent_item_ids if item_id not in selected_item_ids]
+def _validate_urgent_items(constraints: LaundryConstraints) -> None:
+    missing = [item_id for item_id in constraints.urgent_item_ids if item_id not in constraints.selected_item_ids]
     if missing:
         raise ValueError(f"urgent item ids must be selected for laundry planning: {', '.join(missing)}")
 
@@ -291,55 +271,72 @@ def _validate_urgent_items(selected_item_ids: list[str], urgent_item_ids: list[s
 def _split_bucket_inputs(
     items: list[WardrobeItem],
     constraints: LaundryConstraints,
-) -> list[tuple[str, list[WardrobeItem]]]:
+) -> list[tuple[str, str, list[WardrobeItem]]]:
+    """Group items by wash category, then split by capacity.
+
+    Returns ``(bucket_id, base_bucket_id, items)`` tuples.  When capacity
+    splitting produces multiple chunks the bucket_id gains a suffix
+    (e.g. ``dark-standard-1``, ``dark-standard-2``).
+    """
     groups: dict[str, list[WardrobeItem]] = {}
     for item in items:
         bucket_id = _bucket_id_for(item, constraints)
         groups.setdefault(bucket_id, []).append(item)
 
-    order = [
-        "do-not-wash",
-        "dry-clean",
-        "hand-wash",
-        "large-bedding",
-        "dark-standard",
-        "light-standard",
-        "mixed-standard",
-    ]
-    return [(bucket_id, groups[bucket_id]) for bucket_id in order if bucket_id in groups]
+    result: list[tuple[str, str, list[WardrobeItem]]] = []
+    for base_bucket_id in _BUCKET_ORDER:
+        if base_bucket_id not in groups:
+            continue
+        group_items = groups[base_bucket_id]
+
+        if base_bucket_id in _UNSPLITABLE_BUCKET_IDS:
+            chunks = [group_items]
+        else:
+            chunks = split_items_by_load(group_items)
+
+        for index, chunk in enumerate(chunks):
+            bucket_id = f"{base_bucket_id}-{index + 1}" if len(chunks) > 1 else base_bucket_id
+            result.append((bucket_id, base_bucket_id, chunk))
+
+    return result
 
 
 def _bucket_id_for(item: WardrobeItem, constraints: LaundryConstraints) -> str:
     search_text = _search_text(item)
-    if item.preferred_method == WashMethod.DO_NOT_WASH or _contains_term(search_text, _DO_NOT_WASH_TERMS):
+    if item.preferred_method == WashMethod.DO_NOT_WASH or contains_any(search_text, _DO_NOT_WASH_TERMS):
         return "do-not-wash"
-    if item.preferred_method == WashMethod.DRY_CLEAN or _contains_term(search_text, _DRY_CLEAN_TERMS):
+    if item.preferred_method == WashMethod.DRY_CLEAN or contains_any(search_text, _DRY_CLEAN_TERMS):
         return "dry-clean"
     if (
         item.preferred_method == WashMethod.HAND_WASH
-        or _contains_term(search_text, _HAND_WASH_TERMS)
+        or contains_any(search_text, _HAND_WASH_TERMS)
         or _has_material(item, _WOOL_TERMS)
-        or _has_high_risk(item, {"shrink", "deform"})
     ):
         return "hand-wash"
-    if _contains_term(search_text, _BEDDING_TERMS):
+    if contains_any(search_text, _BEDDING_TERMS):
         return "large-bedding"
-    if _contains_term(search_text, _DARK_COLOR_TERMS) or _has_high_risk(item, {"color_bleed"}):
-        if constraints.allow_mixed_colors and not _has_high_risk(item, {"color_bleed"}):
+    has_color_bleed_risk = _has_high_risk(item, {"color_bleed"})
+    if contains_any(search_text, _DARK_COLOR_TERMS) or has_color_bleed_risk:
+        if constraints.allow_mixed_colors and not has_color_bleed_risk:
             return "mixed-standard"
         return "dark-standard"
-    if _contains_term(search_text, _LIGHT_COLOR_TERMS):
+    if contains_any(search_text, _LIGHT_COLOR_TERMS):
         return "mixed-standard" if constraints.allow_mixed_colors else "light-standard"
-    raise ValueError(f"cannot assign laundry bucket from item data: {item.profile.item_id}")
+    return "dark-standard"
+
+
+# ─── bucket building (wash-only) ──────────────────────────────────────
 
 
 def _build_bucket(
     bucket_id: str,
+    base_bucket_id: str,
     items: list[WardrobeItem],
     constraints: LaundryConstraints,
     campus_context: CampusContext,
+    machine_pool: list[MachineInfo],
 ) -> LaundryBucket:
-    if bucket_id == "do-not-wash":
+    if base_bucket_id == "do-not-wash":
         return LaundryBucket(
             bucket_id=bucket_id,
             item_ids=_item_ids(items),
@@ -349,7 +346,7 @@ def _build_bucket(
             estimated_duration_minutes=0,
             warnings=["该批次含不可水洗衣物，不进入本次水洗流程。"],
         )
-    if bucket_id == "dry-clean":
+    if base_bucket_id == "dry-clean":
         return LaundryBucket(
             bucket_id=bucket_id,
             item_ids=_item_ids(items),
@@ -359,12 +356,12 @@ def _build_bucket(
             estimated_duration_minutes=0,
             warnings=["该批次建议送专业干洗，不进入共享洗衣机。"],
         )
-    if bucket_id == "hand-wash":
+    if base_bucket_id == "hand-wash":
         return LaundryBucket(
             bucket_id=bucket_id,
             item_ids=_item_ids(items),
             wash_method=WashMethod.HAND_WASH,
-            detergent_ml=_detergent_ml(bucket_id, items),
+            detergent_ml=_detergent_ml(base_bucket_id, items),
             use_laundry_bag=True,
             dry_method=DryMethod.AIR_DRY,
             estimated_cost_yuan=0.0,
@@ -372,20 +369,27 @@ def _build_bucket(
             warnings=_hand_wash_warnings(items, campus_context),
         )
 
-    program = "large" if bucket_id == "large-bedding" else "standard"
+    # Machine-wash buckets.
+    program = "large" if base_bucket_id == "large-bedding" else "standard"
     machine_type = MachineType.STANDARD_WASHER
-    machine = _require_available_machine(campus_context.available_machines, machine_type, program)
     _require_wash_program(campus_context, program)
+    machine = _reserve_available_machine(
+        machine_pool,
+        machine_type,
+        program,
+        constraints.preferred_machine_floor,
+    )
 
-    dry_method, dryer, dry_warnings = _drying_decision(items, constraints, campus_context)
     wash_cost = _wash_program_value(campus_context, program, "price_yuan")
     wash_duration = int(_wash_program_value(campus_context, program, "duration_minutes"))
-    dryer_cost = _dryer_program_value(campus_context, "low", "price_yuan") if dryer is not None else 0.0
-    dryer_duration = int(_dryer_program_value(campus_context, "low", "duration_minutes")) if dryer is not None else 0
+
+    # Include air-dry context warnings at plan time so the user knows
+    # about balcony/ventilation conditions before accepting the plan.
     warnings = (
-        _machine_bucket_warnings(bucket_id, items)
-        + [_machine_recommendation_warning(machine, program)]
-        + dry_warnings
+        _machine_bucket_warnings(base_bucket_id, items)
+        + _capacity_bucket_warnings(bucket_id, base_bucket_id)
+        + ([_machine_recommendation_warning(machine, program)] if machine else ["没有空闲洗衣机"])
+        + _air_dry_context_warnings(campus_context)
     )
 
     return LaundryBucket(
@@ -393,94 +397,84 @@ def _build_bucket(
         item_ids=_item_ids(items),
         wash_method=WashMethod.MACHINE_WASH,
         machine_type=machine_type,
-        machine_id=machine.machine_id,
-        machine_location=machine.location,
+        machine_id=machine.machine_id if machine else "",
+        machine_location=machine.location if machine else "",
+        machine_floor=machine.machine_floor if machine else None,
         program=program,
-        detergent_ml=_detergent_ml(bucket_id, items),
+        detergent_ml=_detergent_ml(base_bucket_id, items),
         use_laundry_bag=(
-            bucket_id == "dark-standard"
+            base_bucket_id == "dark-standard"
             or constraints.hygiene_sensitive
             or _any_recommends_bag(items)
+            or _any_high_shrink_deform(items)
         ),
-        dry_method=dry_method,
-        dryer_machine_id=dryer.machine_id if dryer is not None else "",
-        dryer_machine_location=dryer.location if dryer is not None else "",
-        estimated_cost_yuan=round(wash_cost + dryer_cost, 2),
-        estimated_duration_minutes=wash_duration + dryer_duration,
+        dry_method=DryMethod.AIR_DRY,  # safe default; overridden by recommend_drying
+        estimated_cost_yuan=round(wash_cost, 2) if machine else None,
+        estimated_duration_minutes=wash_duration if machine else None,
         warnings=warnings,
     )
 
 
-def _drying_decision(
-    items: list[WardrobeItem],
-    constraints: LaundryConstraints,
-    campus_context: CampusContext,
-) -> tuple[DryMethod, MachineInfo | None, list[str]]:
-    if not constraints.allow_dryer:
-        return DryMethod.AIR_DRY, None, ["用户未允许烘干，本批次自然晾干。"] + _air_dry_context_warnings(campus_context)
-    unsafe = [item.profile.name for item in items if _dryer_unsafe(item)]
-    if unsafe:
-        return DryMethod.AIR_DRY, None, [
-            f"{'、'.join(unsafe)} 不可烘干或存在高温损伤风险，改为自然晾干。"
-        ] + _air_dry_context_warnings(campus_context)
-    dryer = _require_available_machine(campus_context.available_machines, MachineType.DRYER, "low")
-    _require_dryer_program(campus_context, "low")
-    return DryMethod.LOW_HEAT_DRYER, dryer, [_machine_recommendation_warning(dryer, "low")]
+# ─── cost helpers ──────────────────────────────────────────────────────
 
 
-def _cost_breakdown(
+def _wash_cost_breakdown(
     buckets: list[LaundryBucket],
     campus_context: CampusContext,
 ) -> list[LaundryChargeLine]:
     lines: list[LaundryChargeLine] = []
     for bucket in buckets:
-        if bucket.wash_method == WashMethod.MACHINE_WASH:
-            lines.append(
-                LaundryChargeLine(
-                    bucket_id=bucket.bucket_id,
-                    label=f"{bucket.bucket_id} {bucket.program} 洗",
-                    amount_yuan=round(_wash_program_value(campus_context, bucket.program, "price_yuan"), 2),
-                    duration_minutes=int(_wash_program_value(campus_context, bucket.program, "duration_minutes")),
-                    machine_id=bucket.machine_id,
-                    machine_type=bucket.machine_type,
-                    program=bucket.program,
-                )
+        if bucket.wash_method != WashMethod.MACHINE_WASH:
+            continue
+        if not bucket.machine_id:
+            continue
+        program = bucket.program
+        lines.append(
+            LaundryChargeLine(
+                bucket_id=bucket.bucket_id,
+                label=f"{bucket.bucket_id} {program} 洗",
+                amount_yuan=round(_wash_program_value(campus_context, program, "price_yuan"), 2),
+                duration_minutes=int(_wash_program_value(campus_context, program, "duration_minutes")),
+                machine_id=bucket.machine_id,
+                machine_type=bucket.machine_type,
+                program=program,
             )
-        if bucket.dry_method == DryMethod.LOW_HEAT_DRYER:
-            lines.append(
-                LaundryChargeLine(
-                    bucket_id=bucket.bucket_id,
-                    label=f"{bucket.bucket_id} 低温烘干",
-                    amount_yuan=round(_dryer_program_value(campus_context, "low", "price_yuan"), 2),
-                    duration_minutes=int(_dryer_program_value(campus_context, "low", "duration_minutes")),
-                    machine_id=bucket.dryer_machine_id,
-                    machine_type=MachineType.DRYER,
-                    program="low",
-                )
-            )
+        )
     return lines
 
 
-def _estimate_cost(cost_breakdown: list[LaundryChargeLine]) -> float:
+def _has_unassigned_machine_wash_bucket(buckets: list[LaundryBucket]) -> bool:
+    return any(bucket.wash_method == WashMethod.MACHINE_WASH and not bucket.machine_id for bucket in buckets)
+
+
+def _estimate_cost(cost_breakdown: list[LaundryChargeLine], buckets: list[LaundryBucket]) -> float | None:
+    if _has_unassigned_machine_wash_bucket(buckets):
+        return None
     total = 0.0
     for line in cost_breakdown:
         total += line.amount_yuan
     return round(total, 2)
 
 
-def _estimate_duration(cost_breakdown: list[LaundryChargeLine]) -> int:
+def _estimate_duration(cost_breakdown: list[LaundryChargeLine], buckets: list[LaundryBucket]) -> int | None:
+    if _has_unassigned_machine_wash_bucket(buckets):
+        return None
     return sum(line.duration_minutes for line in cost_breakdown)
+
+
+# ─── warnings ──────────────────────────────────────────────────────────
 
 
 def _global_warnings(
     buckets: list[LaundryBucket],
     constraints: LaundryConstraints,
-    estimated_cost: float,
+    estimated_cost: float | None,
     campus_context: CampusContext,
 ) -> list[str]:
     warnings: list[str] = []
-    if constraints.budget_yuan is not None and estimated_cost > constraints.budget_yuan:
-        warnings.append(f"预计费用 {estimated_cost} 元超过预算 {constraints.budget_yuan} 元。")
+    budget_yuan = _non_negative_number_or_none(constraints.budget_yuan)
+    if budget_yuan is not None and estimated_cost is not None and estimated_cost > budget_yuan:
+        warnings.append(f"预计费用 {estimated_cost} 元超过预算 {budget_yuan} 元。")
         warnings.append("若需压低费用，可推迟非急用标准洗批次，并优先保留手洗、自然晾干和高卫生需求衣物。")
     warnings.extend(_wait_constraint_warnings(buckets, constraints, campus_context))
     for bucket in buckets:
@@ -493,22 +487,32 @@ def _wait_constraint_warnings(
     constraints: LaundryConstraints,
     campus_context: CampusContext,
 ) -> list[str]:
-    if constraints.max_wait_minutes is None:
+    max_wait_minutes = _non_negative_integer_or_none(constraints.max_wait_minutes)
+    if max_wait_minutes is None:
         return []
     queue_by_type = {estimate.machine_type: estimate for estimate in campus_context.queue_estimates}
     warnings: list[str] = []
     for machine_type in _required_machine_types(buckets):
         estimate = queue_by_type.get(machine_type)
         if estimate is None:
-            warnings.append(f"缺少 {machine_type.value} 等待时间估算，无法确认是否满足最大等待 {constraints.max_wait_minutes} 分钟。")
+            warnings.append(f"缺少 {machine_type.value} 等待时间估算，无法确认是否满足最大等待 {max_wait_minutes} 分钟。")
             continue
         wait_minutes = estimate.estimated_wait_minutes
         if wait_minutes is None:
-            warnings.append(f"{machine_type.value} 等待时间未知，无法确认是否满足最大等待 {constraints.max_wait_minutes} 分钟。")
+            warnings.append(f"{machine_type.value} 等待时间未知，无法确认是否满足最大等待 {max_wait_minutes} 分钟。")
             continue
-        if wait_minutes > constraints.max_wait_minutes:
-            warnings.append(f"{machine_type.value} 预计等待 {wait_minutes} 分钟超过最大等待 {constraints.max_wait_minutes} 分钟。")
+        if wait_minutes > max_wait_minutes:
+            warnings.append(f"{machine_type.value} 预计等待 {wait_minutes} 分钟超过最大等待 {max_wait_minutes} 分钟。")
     return warnings
+
+
+def _non_negative_number_or_none(value: object) -> float | None:
+    return float(value) if isinstance(value, int | float) and math.isfinite(value) and value >= 0 else None
+
+
+def _non_negative_integer_or_none(value: object) -> int | None:
+    number = _non_negative_number_or_none(value)
+    return int(number) if number is not None and float(number).is_integer() else None
 
 
 def _required_machine_types(buckets: list[LaundryBucket]) -> list[MachineType]:
@@ -517,19 +521,106 @@ def _required_machine_types(buckets: list[LaundryBucket]) -> list[MachineType]:
         if bucket.wash_method != WashMethod.MACHINE_WASH or bucket.machine_type is None:
             continue
         machine_types.append(bucket.machine_type)
-        if bucket.dry_method == DryMethod.LOW_HEAT_DRYER:
-            machine_types.append(MachineType.DRYER)
     return list(dict.fromkeys(machine_types))
 
 
-def _require_available_machine(machines: list[MachineInfo], machine_type: MachineType, program: str) -> MachineInfo:
-    for machine in machines:
-        if machine.machine_type != machine_type or machine.status != MachineStatus.AVAILABLE:
-            continue
-        if not machine.modes or program not in machine.modes:
-            continue
-        return machine
-    raise ValueError(f"no available machine for {machine_type.value} program {program}")
+def _machine_bucket_warnings(bucket_id: str, items: list[WardrobeItem]) -> list[str]:
+    warnings: list[str] = []
+    if bucket_id == "dark-standard":
+        warnings.append("深色或高掉色风险衣物已单独成桶，减少串色和返洗。")
+    if bucket_id == "mixed-standard":
+        warnings.append("用户允许混色，低掉色风险普通衣物合并成标准批次。")
+    if bucket_id == "large-bedding":
+        warnings.append("床品使用大件批次，避免普通筒过载导致洗不净。")
+    for item in items:
+        if _has_high_risk(item, {"color_bleed"}):
+            warnings.append(f"{item.profile.name} 掉色风险高，避免与浅色衣物混洗。")
+        if _has_high_risk(item, {"shrink"}):
+            warnings.append(f"{item.profile.name} 有缩水风险，建议使用洗衣袋并自然晾干。")
+        if _has_high_risk(item, {"deform"}):
+            warnings.append(f"{item.profile.name} 有变形风险，建议使用洗衣袋并选轻柔程序。")
+    return dedupe(warnings)
+
+
+def _capacity_bucket_warnings(bucket_id: str, base_bucket_id: str) -> list[str]:
+    if bucket_id == base_bucket_id:
+        return []
+    return ["同类衣物数量较多，已按洗衣机容量拆成多桶，避免过载和洗不净。"]
+
+
+def _hand_wash_warnings(items: list[WardrobeItem], campus_context: CampusContext) -> list[str]:
+    warnings = ["该批次不进入共享洗衣机，建议冷水轻柔手洗并自然晾干。"]
+    for item in items:
+        if contains_any(_search_text(item), _DO_NOT_DRY_TERMS) or _dryer_unsafe(item):
+            warnings.append(f"{item.profile.name} 不可烘干或高温风险较高。")
+    warnings.extend(_air_dry_context_warnings(campus_context))
+    return dedupe(warnings)
+
+
+def _air_dry_context_warnings(campus_context: CampusContext) -> list[str]:
+    context = campus_context.drying_context
+    warnings: list[str] = []
+    if not context:
+        return warnings
+    if context.get("balcony_available") is False:
+        warnings.append("当前晾晒条件显示无阳台，自然晾干批次需要预留更长时间或选择通风位置。")
+    ventilation = str(context.get("ventilation") or "").strip().lower()
+    if ventilation and ventilation not in {"normal", "good", "strong", "良好", "通风良好"}:
+        warnings.append(f"当前通风条件为 {context['ventilation']}，自然晾干可能变慢。")
+    return warnings
+
+
+def _machine_recommendation_warning(machine: MachineInfo, program: str) -> str:
+    return f"推荐使用 {machine.machine_id}，位置 {machine.location}，程序 {program}。"
+
+
+# ─── detergent ─────────────────────────────────────────────────────────
+
+
+def _detergent_ml(bucket_id: str, items: list[WardrobeItem]) -> float | None:
+    item_count = len(items)
+    if bucket_id == "hand-wash":
+        return round(item_count * _HAND_WASH_DETERGENT_ML_PER_ITEM, 1)
+    if bucket_id == "large-bedding":
+        return round(_LARGE_DETERGENT_ML_BASE + item_count * _LARGE_DETERGENT_ML_PER_ITEM, 1)
+    if bucket_id in _STANDARD_BUCKET_IDS:
+        return round(_STANDARD_DETERGENT_ML_BASE + item_count * _STANDARD_DETERGENT_ML_PER_ITEM, 1)
+    return None
+
+
+# ─── machine matching ──────────────────────────────────────────────────
+
+
+def _reserve_available_machine(
+    machines: list[MachineInfo],
+    machine_type: MachineType,
+    program: str,
+    preferred_floor: int | None = None,
+) -> MachineInfo | None:
+    candidates = [
+        machine
+        for machine in machines
+        if machine.machine_type == machine_type
+        and machine.status == MachineStatus.AVAILABLE
+        and (not machine.modes or program in machine.modes)
+    ]
+    if not candidates:
+        return None
+    selected = _best_machine_for_floor(candidates, preferred_floor)
+    machines.remove(selected)
+    return selected
+
+
+def _best_machine_for_floor(machines: list[MachineInfo], preferred_floor: int | None) -> MachineInfo:
+    if preferred_floor is None:
+        return machines[0]
+    return min(machines, key=lambda machine: _machine_floor_rank(machine, preferred_floor))
+
+
+def _machine_floor_rank(machine: MachineInfo, preferred_floor: int) -> float:
+    if machine.machine_floor is None:
+        return float("inf")
+    return abs(machine.machine_floor - preferred_floor)
 
 
 def _require_wash_program(campus_context: CampusContext, program: str) -> None:
@@ -549,7 +640,7 @@ def _wash_program_value(campus_context: CampusContext, program: str, key: str) -
     program_rules = programs[program]
     if not isinstance(program_rules, dict) or key not in program_rules:
         raise ValueError(f"missing wash program {key}: {program}")
-    return _program_number(program_rules[key], f"wash program {program} {key}", key)
+    return _number(program_rules[key], f"wash program {program} {key}")
 
 
 def _dryer_program_value(campus_context: CampusContext, program: str, key: str) -> float:
@@ -559,104 +650,46 @@ def _dryer_program_value(campus_context: CampusContext, program: str, key: str) 
     program_rules = programs[program]
     if not isinstance(program_rules, dict) or key not in program_rules:
         raise ValueError(f"missing dryer program {key}: {program}")
-    return _program_number(program_rules[key], f"dryer program {program} {key}", key)
-
-
-def _program_number(value: object, field_name: str, key: str) -> float:
-    number = _number(value, field_name)
-    if key == "duration_minutes" and (number <= 0 or not number.is_integer()):
-        raise ValueError(f"{field_name} must be a positive integer")
-    return number
+    return _number(program_rules[key], f"dryer program {program} {key}")
 
 
 def _number(value: object, field_name: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        raise ValueError(f"{field_name} must be numeric")
-    number = float(value)
-    if not math.isfinite(number):
-        raise ValueError(f"{field_name} must be finite")
-    if number < 0:
+    if not isinstance(value, int | float) or not math.isfinite(value):
+        raise ValueError(f"{field_name} must be a finite number")
+    if "duration_minutes" in field_name and (not float(value).is_integer() or value <= 0):
+        raise ValueError(f"{field_name} must be a positive integer")
+    if "price_yuan" in field_name and value < 0:
         raise ValueError(f"{field_name} must be non-negative")
-    return number
+    return float(value)
 
 
-def _machine_bucket_warnings(bucket_id: str, items: list[WardrobeItem]) -> list[str]:
-    warnings: list[str] = []
-    if bucket_id == "dark-standard":
-        warnings.append("深色或高掉色风险衣物已单独成桶，减少串色和返洗。")
-    if bucket_id == "mixed-standard":
-        warnings.append("用户允许混色，低掉色风险普通衣物合并成标准批次。")
-    if bucket_id == "large-bedding":
-        warnings.append("床品使用大件批次，避免普通筒过载导致洗不净。")
-    for item in items:
-        if _has_high_risk(item, {"color_bleed"}):
-            warnings.append(f"{item.profile.name} 掉色风险高，避免与浅色衣物混洗。")
-    return dedupe(warnings)
-
-
-def _hand_wash_warnings(items: list[WardrobeItem], campus_context: CampusContext) -> list[str]:
-    warnings = ["该批次不进入共享洗衣机，建议冷水轻柔手洗并自然晾干。"]
-    for item in items:
-        if _contains_term(_search_text(item), _DO_NOT_DRY_TERMS) or _dryer_unsafe(item):
-            warnings.append(f"{item.profile.name} 不可烘干或高温风险较高。")
-    warnings.extend(_air_dry_context_warnings(campus_context))
-    return dedupe(warnings)
-
-
-def _detergent_ml(bucket_id: str, items: list[WardrobeItem]) -> float | None:
-    item_count = len(items)
-    if bucket_id == "hand-wash":
-        return round(item_count * _HAND_WASH_DETERGENT_ML_PER_ITEM, 1)
-    if bucket_id == "large-bedding":
-        return round(_LARGE_DETERGENT_ML_BASE + item_count * _LARGE_DETERGENT_ML_PER_ITEM, 1)
-    if bucket_id in _STANDARD_BUCKET_IDS:
-        return round(_STANDARD_DETERGENT_ML_BASE + item_count * _STANDARD_DETERGENT_ML_PER_ITEM, 1)
-    return None
-
-
-def _machine_recommendation_warning(machine: MachineInfo, program: str) -> str:
-    return f"推荐使用 {machine.machine_id}，位置 {machine.location}，程序 {program}。"
-
-
-def _air_dry_context_warnings(campus_context: CampusContext) -> list[str]:
-    context = campus_context.drying_context
-    warnings: list[str] = []
-    if not context:
-        return warnings
-    if context.get("balcony_available") is False:
-        warnings.append("当前晾晒条件显示无阳台，自然晾干批次需要预留更长时间或选择通风位置。")
-    ventilation = str(context.get("ventilation") or "").strip().lower()
-    if ventilation and ventilation not in {"normal", "good", "strong", "良好", "通风良好"}:
-        warnings.append(f"当前通风条件为 {context['ventilation']}，自然晾干可能变慢。")
-    return warnings
+# ─── item analysis helpers ─────────────────────────────────────────────
 
 
 def _dryer_unsafe(item: WardrobeItem) -> bool:
     search_text = _search_text(item)
     return (
-        _contains_term(search_text, _DO_NOT_DRY_TERMS)
+        contains_any(search_text, _DO_NOT_DRY_TERMS)
         or _has_material(item, _WOOL_TERMS)
         or _has_high_risk(item, _HIGH_DRY_RISK_KEYS)
     )
+
+
+def _dryer_unsafe_names(items: list[WardrobeItem]) -> list[str]:
+    return [item.profile.name for item in items if _dryer_unsafe(item)]
 
 
 def _any_recommends_bag(items: list[WardrobeItem]) -> bool:
     return any("laundry_bag" in _search_text(item) or "洗衣袋" in _search_text(item) for item in items)
 
 
+def _any_high_shrink_deform(items: list[WardrobeItem]) -> bool:
+    return any(_has_high_risk(item, {"shrink", "deform"}) for item in items)
+
+
 def _has_material(item: WardrobeItem, terms: set[str]) -> bool:
     materials = " ".join(item.profile.material_ratios.keys()).lower()
-    return _contains_term(materials, terms)
-
-
-def _contains_term(text: str, terms: set[str]) -> bool:
-    return any(_term_matches(text, term) for term in terms)
-
-
-def _term_matches(text: str, term: str) -> bool:
-    if _ENGLISH_TERM_RE.fullmatch(term):
-        return re.search(rf"(^|[^a-z0-9]){re.escape(term)}([^a-z0-9]|$)", text) is not None
-    return term in text
+    return contains_any(materials, terms)
 
 
 def _has_high_risk(item: WardrobeItem, keys: set[str]) -> bool:

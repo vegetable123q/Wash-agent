@@ -27,13 +27,11 @@ interface ExclusionItem {
 
 export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: PlanDetailScreenProps) {
   const planBuckets = mobileSummary?.plan.buckets ?? [];
+  const dryingPlan = mobileSummary?.drying_plan;
   const hasSummary = Boolean(mobileSummary);
   const hasBuckets = planBuckets.length > 0;
   const hasSelectedItems = (mobileSummary?.selected_laundry_item_ids.length ?? 0) > 0;
   const hasSelectedEmptyPlan = hasSummary && hasSelectedItems && !hasBuckets;
-  const emptyPlanTags = (mobileSummary?.plan.global_warnings ?? [])
-    .map(userFacingWarning)
-    .map((warning) => ({ label: warning, tone: "orange" as const }));
   const nameMap = useMemo(() => {
     const map = new Map<string, string>();
     if (mobileSummary?.wardrobe.items) {
@@ -43,50 +41,47 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
     }
     return map;
   }, [mobileSummary?.wardrobe.items]);
+  const emptyPlanTags = mobileSummary?.plan.global_warnings.length
+    ? mobileSummary.plan.global_warnings.map((warning) => ({ label: userFacingWarning(warning), tone: "orange" as const }))
+    : [{ label: hasSelectedEmptyPlan ? "方案暂未生成" : "未选择衣物", tone: "orange" as const }];
   const bucketRows = hasBuckets
-    ? planBuckets.map((bucket) => ({
-        id: bucket.bucket_id,
-        title: `${bucketDisplayName(bucket.bucket_id)} · ${bucket.program ? programLabel(bucket.program) : methodLabel(bucket.wash_method)}`,
-        machine: machineTypeLabel(bucket.machine_type),
-        detail: `衣物：${bucket.item_ids.map((id) => nameMap.get(id) || "本批衣物").join("、") || "未列出衣物"} · ${methodLabel(bucket.wash_method)} · ${dryLabel(bucket.dry_method)}`,
-        tags: bucket.warnings.length
-          ? bucket.warnings.map((warning) => ({ label: userFacingWarning(warning), tone: "orange" as const }))
-          : [{ label: "已整理", tone: "teal" as const }],
-        accent: bucket.wash_method === "hand_wash" || bucket.wash_method === "dry_clean" || bucket.wash_method === "do_not_wash" ? ("orange" as const) : ("purple" as const),
-      }))
+    ? planBuckets.map((bucket) => {
+        const missingWasher = bucketUnavailableWasherReason(bucket);
+        const method = methodLabel(bucket.wash_method);
+        const dryMethod = bucketDryMethod(dryingPlan, bucket.bucket_id, bucket.dry_method);
+        const isManual = bucket.wash_method === "hand_wash" || bucket.wash_method === "dry_clean" || bucket.wash_method === "do_not_wash";
+        return {
+          id: bucket.bucket_id,
+          title: `${bucketDisplayName(bucket.bucket_id)} · ${bucket.wash_method === "machine_wash" && bucket.program ? programLabel(bucket.program) : method}`,
+          machine: bucket.wash_method === "machine_wash"
+            ? missingWasher ?? machineTypeLabel(bucket.machine_type)
+            : method,
+          detail: `衣物：${bucket.item_ids.map((id) => nameMap.get(id) || "本批衣物").join("、") || "未列出衣物"} · ${method} · ${dryLabel(dryMethod)}`,
+          tags: bucket.warnings.length
+            ? bucket.warnings.map((warning) => ({ label: userFacingWarning(warning), tone: "orange" as const }))
+            : [{ label: "已整理", tone: "teal" as const }],
+          accent: missingWasher || isManual ? ("orange" as const) : ("purple" as const),
+        };
+      })
     : hasSummary
-      ? hasSelectedItems
-        ? [{
-            id: "empty-plan",
-            title: "方案暂未生成",
-            machine: "待确认",
-            detail: mobileSummary?.plan.summary || "已选择衣物，但暂时未生成可执行方案。",
-            tags: emptyPlanTags.length ? emptyPlanTags : [{ label: "等待机器状态刷新", tone: "orange" as const }],
-            accent: "purple" as const,
-          }]
-        : [{
+      ? [{
           id: "empty-plan",
-          title: "暂无本次分桶",
-          machine: "待选择",
-          detail: "请先在衣柜勾选这批要清洗的衣物。",
-          tags: [{ label: "未选择衣物", tone: "orange" as const }],
+          title: hasSelectedEmptyPlan ? "暂无可执行分桶" : "暂无本次分桶",
+          machine: hasSelectedEmptyPlan ? "待处理" : "待选择",
+          detail: hasSelectedEmptyPlan
+            ? mobileSummary?.plan.summary ?? "已选择衣物，但当前机器或约束条件暂时无法生成可执行分桶。"
+            : "请先在衣柜勾选本次要清洗的衣物。",
+          tags: emptyPlanTags,
           accent: "purple" as const,
-          }]
+        }]
       : bucketPlans;
-  const globalWarningRows = useMemo(() => {
-    const bucketWarnings = new Set(planBuckets.flatMap((bucket) => bucket.warnings));
-    const warnings = (mobileSummary?.plan.global_warnings ?? [])
-      .filter((warning) => !bucketWarnings.has(warning))
-      .map(userFacingWarning);
-    return [...new Set(warnings)];
-  }, [mobileSummary?.plan.global_warnings, planBuckets]);
 
   const preparationSteps: PreparationStep[] = useMemo(() => {
     if (!hasSummary) return defaultPreparationSteps();
-    if (!hasBuckets && hasSelectedItems) {
-      return [{ icon: "blue", title: "查看机器状态", description: "已选择衣物，但暂时没有生成可执行分桶；请查看上方提醒或刷新机器状态。" }];
-    }
     if (!hasBuckets) {
+      if (hasSelectedItems) {
+        return [{ icon: "amber", title: "查看机器状态", description: "当前衣物已选中，但还没有可执行分桶；请刷新机器状态或手动确认可用洗衣机。" }];
+      }
       return [{ icon: "blue", title: "先选择衣物", description: "回到衣柜勾选本次要清洗的衣物后，再查看分桶、费用和时长。" }];
     }
     const steps: PreparationStep[] = [];
@@ -108,26 +103,31 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
       });
     }
 
-    const dryBuckets = planBuckets.filter((b) => b.dry_method === "low_heat_dryer");
-    if (dryBuckets.length > 0) {
+    return steps.length > 0 ? steps : defaultPreparationSteps();
+  }, [planBuckets, hasBuckets, hasSummary, hasSelectedItems]);
+
+  // Drying-phase preparation steps.
+  const dryingSteps: PreparationStep[] = useMemo(() => {
+    if (!dryingPlan || !dryingPlan.steps.length) return [];
+    const drySteps = dryingPlan.steps.filter((s) => s.dry_method === "low_heat_dryer");
+    const airSteps = dryingPlan.steps.filter((s) => s.dry_method === "air_dry");
+    const steps: PreparationStep[] = [];
+    if (drySteps.length) {
       steps.push({
         icon: "amber",
         title: "烘干安排",
-        description: `${dryBuckets.map((b) => bucketDisplayName(b.bucket_id)).join("、")}使用低温烘干，注意不可高温的衣物已改为晾干。`,
+        description: `${drySteps.map((s) => bucketDisplayName(s.bucket_id)).join("、")}洗完后使用低温烘干。`,
       });
     }
-
-    const airDryBuckets = planBuckets.filter((b) => b.dry_method === "air_dry");
-    if (airDryBuckets.length > 0 && dryBuckets.length === 0) {
+    if (airSteps.length && !drySteps.length) {
       steps.push({
         icon: "teal",
         title: "自然晾干",
         description: "本批次全部自然晾干，建议选择通风位置或阳台。",
       });
     }
-
-    return steps.length > 0 ? steps : defaultPreparationSteps();
-  }, [planBuckets, hasBuckets, hasSummary, hasSelectedItems]);
+    return steps;
+  }, [dryingPlan]);
 
   const exclusionItems: ExclusionItem[] = useMemo(() => {
     if (!hasSummary) return defaultExclusionItems();
@@ -145,7 +145,6 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
   // LLM-enhanced summary
   const [llmSummary, setLlmSummary] = useState<string | null>(null);
   useEffect(() => {
-    setLlmSummary(null);
     if (!mobileSummary?.plan || !modelHubConfig) return;
     let cancelled = false;
     generatePlanSummary(mobileSummary.plan, modelHubConfig).then((result) => {
@@ -165,27 +164,6 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
         </div>
         <Chip tone={hasBuckets ? "teal" : "orange"}>{hasBuckets ? "已生成" : hasSelectedEmptyPlan ? "待确认" : hasSummary ? "待选择" : "可执行"}</Chip>
       </Card>
-
-      {globalWarningRows.length > 0 ? (
-        <Section title="本次约束提醒">
-          <div className="list-stack">
-            {globalWarningRows.map((warning) => (
-              <Card key={warning} accent="orange" className="warning-surface">
-                <div className="row-between">
-                  <div>
-                    <h3>需要确认</h3>
-                    <p>{warning}</p>
-                  </div>
-                  <Chip tone="orange">
-                    <AlertTriangle size={14} />
-                    提醒
-                  </Chip>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </Section>
-      ) : null}
 
       <Section title="洗衣顺序">
         <div className="timeline">
@@ -228,6 +206,26 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
           </div>
         </Card>
       </Section>
+
+      {dryingSteps.length > 0 && (
+        <Section title="洗完后烘干">
+          <Card>
+            <div className="list-stack">
+              {dryingSteps.map((step) => (
+                <div className="dense-row" key={step.title}>
+                  <span className={`round-icon round-icon-${step.icon}`}>
+                    <CheckCircle2 size={18} />
+                  </span>
+                  <div>
+                    <h3>{step.title}</h3>
+                    <p>{step.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </Section>
+      )}
 
       {exclusionItems.length > 0 ? (
         <Section title="排除与提醒">
@@ -307,6 +305,18 @@ function machineTypeLabel(machineType: string) {
   return "设备待确认";
 }
 
+function bucketUnavailableWasherReason(bucket: { warnings: string[] }): string | null {
+  return bucket.warnings.find((warning) => warning === "没有空闲洗衣机" || warning === "没有空闲洗鞋机") ?? null;
+}
+
+function bucketDryMethod(
+  dryingPlan: MobileSummary["drying_plan"] | undefined,
+  bucketId: string,
+  fallback: MobileSummary["plan"]["buckets"][number]["dry_method"],
+): MobileSummary["plan"]["buckets"][number]["dry_method"] {
+  return dryingPlan?.steps.find((step) => step.bucket_id === bucketId)?.dry_method ?? fallback;
+}
+
 function bucketDisplayName(bucketId: string): string {
   const labels: Record<string, string> = {
     "do-not-wash": "不可水洗衣物",
@@ -317,7 +327,8 @@ function bucketDisplayName(bucketId: string): string {
     "light-standard": "浅色标准洗",
     "mixed-standard": "混色标准洗",
   };
-  return labels[bucketId] ?? "本批衣物";
+  const base = bucketId.replace(/-\d+$/, "");
+  return labels[base] ?? labels[bucketId] ?? "本批衣物";
 }
 
 function userFacingWarning(text: string): string {
