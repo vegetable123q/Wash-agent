@@ -95,4 +95,73 @@ describe("generateReport", () => {
     expect(text).toContain("洗衣机 等待时间未知");
     expect(text).not.toMatch(/large-bedding|standard_washer|程序 standard/);
   });
+
+  it("rejects duplicate plan item ids before rendering", () => {
+    const plan = minimalPlan();
+    plan.buckets = [
+      { ...plan.buckets[0], bucket_id: "first", item_ids: ["bedding"] },
+      { ...plan.buckets[0], bucket_id: "second", item_ids: ["bedding"] },
+    ];
+
+    expect(() => generateReport(plan, minimalItems(), minimalCampusContext())).toThrow(/duplicate.*bedding/);
+  });
 });
+
+function minimalPlan(): LaundryPlan {
+  return {
+    buckets: [
+      {
+        bucket_id: "large-bedding",
+        item_ids: ["bedding"],
+        wash_method: "machine_wash",
+        machine_type: "standard_washer",
+        program: "standard",
+        detergent_ml: 35,
+        use_laundry_bag: false,
+        dry_method: "air_dry",
+        warnings: [],
+      },
+    ],
+    estimated_cost_yuan: 4,
+    estimated_duration_minutes: 40,
+    summary: "",
+    global_warnings: [],
+  };
+}
+
+function minimalItems(): WardrobeItemForPlan[] {
+  return [
+    {
+      profile: {
+        item_id: "bedding",
+        name: "搴婂崟琚",
+        user_note: "",
+        material_ratios: { cotton: 1 },
+        colors: ["white"],
+        care_warnings: [],
+        care_recommendations: [],
+        care_forbidden: [],
+        care_symbols: {},
+        risks: {},
+        recommended_wash: "machine_wash",
+      },
+      wear_count_since_wash: 1,
+      preferred_method: "machine_wash",
+      user_notes: [],
+    },
+  ];
+}
+
+function minimalCampusContext(): CampusContext {
+  return {
+    all_machines: [],
+    available_machines: [],
+    queue_estimates: [],
+    weather: {},
+    drying_context: {},
+    pricing_rules: {
+      wash_programs: {},
+      dryer_programs: {},
+    },
+  };
+}

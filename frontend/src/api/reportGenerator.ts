@@ -21,6 +21,7 @@ export function generateReport(
   items: WardrobeItemForPlan[],
   campusContext: CampusContext,
 ): WashReport {
+  validatePlanItemIdsUnique(plan);
   const itemNames = new Map(items.map((item) => [item.profile.item_id, item.profile.name]));
   return {
     title: "本次校园洗衣报告",
@@ -222,6 +223,23 @@ function itemName(id: string, names: Map<string, string>): string {
   const name = names.get(id);
   if (!name) throw new Error(`report item id not found: ${id}`);
   return name;
+}
+
+function validatePlanItemIdsUnique(plan: LaundryPlan): void {
+  const seen = new Set<string>();
+  const duplicates: string[] = [];
+  for (const bucket of plan.buckets) {
+    for (const itemId of bucket.item_ids) {
+      if (seen.has(itemId)) {
+        duplicates.push(itemId);
+        continue;
+      }
+      seen.add(itemId);
+    }
+  }
+  if (duplicates.length) {
+    throw new Error(`plan duplicate item ids: ${dedupe(duplicates).join(", ")}`);
+  }
 }
 
 function washMethodText(method: WashMethod): string {
