@@ -135,11 +135,11 @@ def _optional_string_map(inputs: dict[str, object], key: str) -> dict[str, str]:
         raise ValueError(f"{key} must be an object")
     normalized: dict[str, str] = {}
     for map_key, map_value in value.items():
-        key_text = str(map_key or "").strip()
-        value_text = str(map_value or "").strip()
-        if not key_text or not value_text:
+        if not isinstance(map_key, str) or not map_key.strip():
             raise ValueError(f"{key} must contain non-empty string keys and values")
-        normalized[key_text] = value_text
+        if not isinstance(map_value, str) or not map_value.strip():
+            raise ValueError(f"{key} must contain non-empty string keys and values")
+        normalized[map_key.strip()] = map_value.strip()
     return normalized
 
 

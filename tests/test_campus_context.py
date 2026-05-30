@@ -485,6 +485,21 @@ class CampusContextTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "tower_key"):
             build_campus_context(client, {})
 
+    def test_build_campus_context_rejects_non_string_tower_keys(self) -> None:
+        client = FakeMachineClient([])
+        invalid_maps: list[dict[object, object]] = [
+            {True: "nq21"},
+            {"cleverschool": True},
+            {"cleverschool": 123},
+        ]
+        for tower_keys in invalid_maps:
+            with self.subTest(tower_keys=tower_keys):
+                with self.assertRaisesRegex(ValueError, "tower_keys"):
+                    build_campus_context(
+                        client,
+                        {"tower_name": "nq21", "tower_keys": tower_keys},
+                    )
+
     def test_build_campus_context_rejects_non_object_weather(self) -> None:
         client = FakeMachineClient([])
 
