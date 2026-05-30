@@ -32,6 +32,7 @@ describe("computeRecommendedStartTime", () => {
     vi.setSystemTime(new Date("2026-05-29T19:00:00.000+08:00"));
 
     expect(computeRecommendedStartTime(-30, "22:30")).toBe("21:15");
+    expect(computeRecommendedStartTime(1.5, "22:30")).toBe("21:15");
   });
 
   it("labels mixed standard buckets without leaking internal ids", () => {

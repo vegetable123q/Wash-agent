@@ -250,5 +250,5 @@ function isValidTimePart(value: number, max: number): boolean {
 }
 
 function isValidDuration(value: number | null): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0;
+  return typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value > 0;
 }
