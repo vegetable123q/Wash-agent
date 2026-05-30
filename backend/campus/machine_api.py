@@ -661,6 +661,8 @@ def _optional_float(value: Any, field_name: str) -> float | None:
         raise ValueError(f"machine_rules {field_name} must be numeric") from exc
     if not math.isfinite(number):
         raise ValueError(f"machine_rules {field_name} must be finite")
+    if number < 0:
+        raise ValueError(f"machine_rules {field_name} must be non-negative")
     return number
 
 
