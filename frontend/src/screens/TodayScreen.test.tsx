@@ -101,7 +101,7 @@ describe("TodayScreen", () => {
         running_count: 1,
         out_of_service_count: 0,
         unknown_count: 0,
-        estimated_wait_minutes: Number.POSITIVE_INFINITY,
+        estimated_wait_minutes: 1.25,
       },
     ];
     mobileSummary.weather = {
@@ -131,6 +131,7 @@ describe("TodayScreen", () => {
 
     expect(container.textContent).not.toMatch(/NaN|Infinity/);
     expect(container.textContent).not.toContain("1.5");
+    expect(container.textContent).not.toContain("1.25");
     expect(screen.getAllByText(/待确认/).length).toBeGreaterThan(0);
   });
 

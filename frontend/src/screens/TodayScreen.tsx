@@ -193,7 +193,7 @@ export function TodayScreen({
     if (!connected || !mobileSummary) return todaySummary.stats;
     const available = mobileSummary.campus_context.available_machines.length;
     const waits = mobileSummary.campus_context.queue_estimates
-      .filter((q) => isPositiveFiniteNumber(q.estimated_wait_minutes))
+      .filter((q) => isPositiveFiniteInteger(q.estimated_wait_minutes))
       .sort((a, b) => (a.estimated_wait_minutes ?? 0) - (b.estimated_wait_minutes ?? 0));
     const minWait = waits[0]?.estimated_wait_minutes;
     return [
