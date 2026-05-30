@@ -271,6 +271,29 @@ describe("planLaundry", () => {
     }, invalidContext)).toThrow("invalid wash program price_yuan: standard");
   });
 
+  it("rejects negative pricing values instead of returning negative totals", () => {
+    const invalidContext: CampusContext = {
+      ...context,
+      pricing_rules: {
+        ...context.pricing_rules,
+        wash_programs: {
+          ...context.pricing_rules.wash_programs,
+          standard: { price_yuan: -1, duration_minutes: 40 },
+        },
+      },
+    };
+
+    expect(() => planLaundry([standardItem("tee-1", "white tee")], {
+      selected_item_ids: ["tee-1"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, invalidContext)).toThrow("invalid wash program price_yuan: standard");
+  });
+
   it("ignores invalid budget and wait constraints", () => {
     const plan = planLaundry([standardItem("tee-1", "white tee")], {
       selected_item_ids: ["tee-1"],

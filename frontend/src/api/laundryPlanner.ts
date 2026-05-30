@@ -449,7 +449,7 @@ function washProgramValue(context: CampusContext, program: string, key: "price_y
     throw new Error(`missing wash program ${key}: ${program}`);
   }
   const value = Number(rule[key]);
-  if (!Number.isFinite(value)) {
+  if (!Number.isFinite(value) || value < 0) {
     throw new Error(`invalid wash program ${key}: ${program}`);
   }
   return value;
@@ -465,7 +465,7 @@ function dryerProgramValue(context: CampusContext, program: string, key: "price_
     throw new Error(`missing dryer program ${key}: ${program}`);
   }
   const value = Number(rule[key]);
-  if (!Number.isFinite(value)) {
+  if (!Number.isFinite(value) || value < 0) {
     throw new Error(`invalid dryer program ${key}: ${program}`);
   }
   return value;
