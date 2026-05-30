@@ -1167,6 +1167,19 @@ class EModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, field_name):
                     generate_report(plan, items, campus_context)
 
+    def test_report_requires_valid_queue_estimate_list(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        plan = plan_laundry(items, LaundryConstraints(selected_item_ids=["white-tee"]), _campus_context())
+        invalid_contexts = [
+            ("queue_estimates", CampusContext(queue_estimates="queues")),  # type: ignore[arg-type]
+            (r"queue_estimates\[0\]", CampusContext(queue_estimates=[object()])),  # type: ignore[list-item]
+        ]
+
+        for field_name, campus_context in invalid_contexts:
+            with self.subTest(field_name=field_name, campus_context=campus_context):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    generate_report(plan, items, campus_context)
+
     def test_report_describes_plan_without_mutating_it(self) -> None:
         items = [
             _item("white-tee", "白色纯棉 T 恤", colors=["white"], materials={"cotton": 1.0}),

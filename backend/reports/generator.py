@@ -173,6 +173,7 @@ def _validate_campus_context(value: object) -> None:
         raise ValueError("campus_context must be a CampusContext")
     _machine_info_list(value.all_machines, "all_machines")
     _machine_info_list(value.available_machines, "available_machines")
+    _queue_estimate_list(value.queue_estimates)
 
 
 def _machine_info_list(value: object, field_name: str) -> None:
@@ -188,6 +189,14 @@ def _validate_machine_info(machine: MachineInfo, field_name: str) -> None:
     _non_empty_string(machine.machine_id, f"{field_name}.machine_id")
     _non_empty_string(machine.location, f"{field_name}.location")
     _enum_field(machine.machine_type, MachineType, f"{field_name}.machine_type")
+
+
+def _queue_estimate_list(value: object) -> None:
+    if not isinstance(value, list):
+        raise ValueError("campus_context.queue_estimates must be a list of MachineQueueEstimate")
+    for index, estimate in enumerate(value):
+        if not isinstance(estimate, MachineQueueEstimate):
+            raise ValueError(f"campus_context.queue_estimates[{index}] must be a MachineQueueEstimate")
 
 
 def _steps_section(plan: LaundryPlan, item_names: dict[str, str]) -> str:
