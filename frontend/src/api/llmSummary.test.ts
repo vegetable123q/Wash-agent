@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { bucketLabel, computeRecommendedStartTime } from "./llmSummary";
+import { bucketLabel, computeRecommendedStartTime, generatePlanSummary } from "./llmSummary";
+import { emptyModelHubConfig } from "./modelHubConfig";
+import type { LaundryPlan } from "./types";
 
 describe("computeRecommendedStartTime", () => {
   afterEach(() => {
@@ -38,5 +40,32 @@ describe("computeRecommendedStartTime", () => {
   it("labels mixed standard buckets without leaking internal ids", () => {
     expect(bucketLabel("mixed-standard")).toBe("混色标准");
     expect(bucketLabel("mixed-standard-2")).toBe("混色标准");
+  });
+
+  it("hides invalid estimates in fallback plan summaries", async () => {
+    const plan = {
+      buckets: [
+        {
+          bucket_id: "light-standard",
+          item_ids: ["tee-1"],
+          wash_method: "machine_wash",
+          machine_type: "standard_washer",
+          program: "standard",
+          detergent_ml: 24,
+          use_laundry_bag: false,
+          dry_method: "air_dry",
+          warnings: [],
+        },
+      ],
+      estimated_cost_yuan: Number.NaN,
+      estimated_duration_minutes: 1.5,
+      summary: "light standard wash",
+      global_warnings: [],
+    } satisfies LaundryPlan;
+
+    const result = await generatePlanSummary(plan, emptyModelHubConfig);
+
+    expect(result.source).toBe("fallback");
+    expect(result.text).not.toMatch(/NaN|1\.5/);
   });
 });

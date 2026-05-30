@@ -91,8 +91,8 @@ function fallbackPlanSummary(plan: LaundryPlan): string {
     const m = b.wash_method === "hand_wash" ? "手洗" : b.wash_method === "machine_wash" ? "机洗" : b.wash_method === "dry_clean" ? "干洗" : "不水洗";
     return `${bucketLabel(b.bucket_id)}(${m})`;
   });
-  const cost = plan.estimated_cost_yuan != null ? `预计费用 ¥${plan.estimated_cost_yuan}` : "费用待确认";
-  const duration = plan.estimated_duration_minutes != null ? `，机器占用约 ${plan.estimated_duration_minutes} 分钟` : "";
+  const cost = isFiniteNonNegativeNumber(plan.estimated_cost_yuan) ? `预计费用 ¥${plan.estimated_cost_yuan}` : "费用待确认";
+  const duration = isValidDuration(plan.estimated_duration_minutes) ? `，机器占用约 ${plan.estimated_duration_minutes} 分钟` : "";
   return `本次共 ${plan.buckets.length} 个批次：${methods.join("、")}。${cost}${duration}。`;
 }
 
@@ -247,6 +247,10 @@ export function computeRecommendedStartTime(
 
 function isValidTimePart(value: number, max: number): boolean {
   return Number.isInteger(value) && value >= 0 && value <= max;
+}
+
+function isFiniteNonNegativeNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
 function isValidDuration(value: number | null): value is number {
