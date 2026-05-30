@@ -33,6 +33,7 @@ def generate_report(
     _validate_plan(plan)
     _validate_items(items)
     _validate_plan_item_ids_present(plan, items)
+    _validate_plan_item_ids_unique(plan)
     _validate_campus_context(campus_context)
     item_names = {item.profile.item_id: item.profile.name for item in items}
     sections = {
@@ -131,6 +132,19 @@ def _validate_plan_item_ids_present(plan: LaundryPlan, items: list[WardrobeItem]
     ]
     if missing:
         raise ValueError(f"items missing plan item ids: {', '.join(dedupe(missing))}")
+
+
+def _validate_plan_item_ids_unique(plan: LaundryPlan) -> None:
+    seen_item_ids: set[str] = set()
+    duplicates: list[str] = []
+    for bucket in plan.buckets:
+        for item_id in bucket.item_ids:
+            if item_id in seen_item_ids:
+                duplicates.append(item_id)
+                continue
+            seen_item_ids.add(item_id)
+    if duplicates:
+        raise ValueError(f"plan duplicate item ids: {', '.join(dedupe(duplicates))}")
 
 
 def _non_empty_string(value: object, field_name: str) -> None:

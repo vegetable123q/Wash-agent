@@ -1171,6 +1171,30 @@ class EModuleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, r"missing-a.*missing-b"):
             generate_report(plan, items, _campus_context())
 
+    def test_report_requires_unique_plan_item_ids(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        plan = LaundryPlan(
+            buckets=[
+                LaundryBucket(
+                    bucket_id="first",
+                    item_ids=["white-tee"],
+                    wash_method=WashMethod.HAND_WASH,
+                    dry_method=DryMethod.AIR_DRY,
+                ),
+                LaundryBucket(
+                    bucket_id="second",
+                    item_ids=["white-tee"],
+                    wash_method=WashMethod.HAND_WASH,
+                    dry_method=DryMethod.AIR_DRY,
+                ),
+            ],
+            estimated_cost_yuan=0,
+            estimated_duration_minutes=0,
+        )
+
+        with self.assertRaisesRegex(ValueError, "duplicate.*white-tee"):
+            generate_report(plan, items, _campus_context())
+
     def test_report_requires_campus_context(self) -> None:
         items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
         plan = plan_laundry(items, LaundryConstraints(selected_item_ids=["white-tee"]), _campus_context())
