@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { bucketLabel, computeRecommendedStartTime, generatePlanSummary, generateTodayAdvice } from "./llmSummary";
+import { bucketLabel, computeRecommendedStartTime, generatePlanSummary, generateRiskDescription, generateTodayAdvice } from "./llmSummary";
 import { emptyModelHubConfig } from "./modelHubConfig";
 import type { LaundryPlan } from "./types";
 
@@ -146,5 +146,27 @@ describe("computeRecommendedStartTime", () => {
     const adviceBody = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
     const advicePrompt = String(adviceBody.contents[0].parts[0].text);
     expect(advicePrompt).not.toContain("NaN");
+  });
+
+  it("filters invalid material ratios from risk summaries and prompts", async () => {
+    const materialRatios = { cotton: Number.NaN, wool: -0.2, silk: 0.4 };
+
+    const fallback = await generateRiskDescription({ shrink: "high" }, "silk scarf", materialRatios, emptyModelHubConfig);
+
+    expect(fallback.source).toBe("fallback");
+    expect(fallback.text).not.toContain("NaN");
+    expect(fallback.text).not.toContain("-20%");
+    expect(fallback.text).toContain("silk 40%");
+
+    const fetchMock = vi.fn().mockResolvedValue(modelHubTextResponse("risk summary"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await generateRiskDescription({ shrink: "high" }, "silk scarf", materialRatios, configuredModelHub);
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    const prompt = String(body.contents[0].parts[0].text);
+    expect(prompt).not.toContain("NaN");
+    expect(prompt).not.toContain("-20%");
+    expect(prompt).toContain("silk 40%");
   });
 });

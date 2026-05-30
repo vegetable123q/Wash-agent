@@ -108,9 +108,7 @@ export async function generateRiskDescription(
     return { text: fallbackRiskDescription(risks, itemName, materialRatios), source: "fallback" };
   }
   try {
-    const materials = Object.entries(materialRatios)
-      .map(([m, r]) => `${m} ${Math.round(r * 100)}%`)
-      .join("、") || "未知";
+    const materials = materialRatioText(materialRatios, "未知");
     const riskText = Object.entries(risks)
       .map(([k, v]) => `${riskKeyLabel(k)}：${riskLevelText(v)}`)
       .join("、");
@@ -141,7 +139,7 @@ export function fallbackRiskDescription(
   const parts: string[] = [];
   if (high.length) parts.push(`${high.join("、")}风险较高，需特别注意`);
   if (medium.length) parts.push(`${medium.join("、")}有一定风险`);
-  const materials = Object.entries(materialRatios).map(([m, r]) => `${m} ${Math.round(r * 100)}%`);
+  const materials = materialRatioParts(materialRatios);
   if (materials.length) parts.push(`主要材质为${materials.join("、")}`);
   if (!parts.length) return `${itemName}未检测到明显洗护风险。`;
   return `${itemName}：${parts.join("；")}。`;
@@ -254,6 +252,10 @@ function isFiniteNonNegativeNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
+function isPositiveFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
 function isValidDuration(value: number | null): value is number {
   return typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value > 0;
 }
@@ -272,4 +274,14 @@ function sanitizePlanEstimates(plan: LaundryPlan): LaundryPlan {
     estimated_cost_yuan: validPlanCost(plan.estimated_cost_yuan),
     estimated_duration_minutes: validPlanDuration(plan.estimated_duration_minutes),
   };
+}
+
+function materialRatioParts(materialRatios: Record<string, number>): string[] {
+  return Object.entries(materialRatios)
+    .filter(([, ratio]) => isPositiveFiniteNumber(ratio))
+    .map(([material, ratio]) => `${material} ${Math.round(ratio * 100)}%`);
+}
+
+function materialRatioText(materialRatios: Record<string, number>, fallback: string): string {
+  return materialRatioParts(materialRatios).join("\u3001") || fallback;
 }
