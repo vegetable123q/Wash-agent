@@ -171,6 +171,23 @@ describe("planLaundry", () => {
     expect(plan.summary).toContain("2 个洗护批次");
   });
 
+  it("requires machines to explicitly support the selected wash program", () => {
+    const noModeContext: CampusContext = {
+      ...context,
+      available_machines: [{ ...standardWasher, modes: [] }],
+    };
+
+    expect(() => planLaundry([standardItem("tee-1", "white tee")], {
+      selected_item_ids: ["tee-1"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: 10,
+      budget_yuan: null,
+    }, noModeContext)).toThrow("no available machine for standard_washer program standard");
+  });
+
   it("falls back to air dry when dryer is allowed but no dryer is available", () => {
     const item = standardItem("tee-1", "白色棉 T 恤");
     const plan = planLaundry([item], {

@@ -419,7 +419,7 @@ function findAvailableMachine(
   program: string,
 ): MachineInfo | null {
   return available.find(
-    (m) => m.machine_type === machineType && m.status === "available" && (!m.modes.length || m.modes.includes(program)),
+    (m) => m.machine_type === machineType && m.status === "available" && m.modes.includes(program),
   ) ?? null;
 }
 
