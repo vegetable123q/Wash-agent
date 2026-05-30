@@ -171,6 +171,16 @@ def _optional_non_negative_int(value: object, field_name: str) -> None:
 def _validate_campus_context(value: object) -> None:
     if not isinstance(value, CampusContext):
         raise ValueError("campus_context must be a CampusContext")
+    _machine_info_list(value.all_machines, "all_machines")
+    _machine_info_list(value.available_machines, "available_machines")
+
+
+def _machine_info_list(value: object, field_name: str) -> None:
+    if not isinstance(value, list):
+        raise ValueError(f"campus_context.{field_name} must be a list of MachineInfo")
+    for index, machine in enumerate(value):
+        if not isinstance(machine, MachineInfo):
+            raise ValueError(f"campus_context.{field_name}[{index}] must be a MachineInfo")
 
 
 def _steps_section(plan: LaundryPlan, item_names: dict[str, str]) -> str:
