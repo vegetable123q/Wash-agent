@@ -550,6 +550,27 @@ class EModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, field_name):
                     plan_laundry(items, constraints, context)
 
+    def test_plan_requires_valid_drying_context_fields(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        invalid_contexts = [
+            ("balcony_available", {"balcony_available": "yes"}),
+            ("balcony_available", {"balcony_available": 1}),
+            ("ventilation", {"ventilation": True}),
+            ("ventilation", {"ventilation": ""}),
+        ]
+
+        for field_name, drying_context in invalid_contexts:
+            with self.subTest(field_name=field_name, drying_context=drying_context):
+                context = _campus_context()
+                context.drying_context = drying_context
+
+                with self.assertRaisesRegex(ValueError, field_name):
+                    plan_laundry(
+                        items,
+                        LaundryConstraints(selected_item_ids=["white-tee"], allow_dryer=False),
+                        context,
+                    )
+
     def test_plan_requires_valid_campus_machine_fields(self) -> None:
         items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
         cases: list[tuple[str, object]] = [
