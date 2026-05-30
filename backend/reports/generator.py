@@ -184,6 +184,7 @@ def _validate_campus_context(value: object) -> None:
     _queue_estimate_list(value.queue_estimates)
     _dict_field(value.weather, "weather")
     _dict_field(value.drying_context, "drying_context")
+    _validate_drying_context(value.drying_context)
     _dict_field(value.pricing_rules, "pricing_rules")
 
 
@@ -231,6 +232,13 @@ def _validate_queue_estimate(estimate: MachineQueueEstimate, field_name: str) ->
 def _dict_field(value: object, field_name: str) -> None:
     if not isinstance(value, dict):
         raise ValueError(f"campus_context.{field_name} must be a dictionary")
+
+
+def _validate_drying_context(value: dict[str, object]) -> None:
+    if "balcony_available" in value:
+        _boolean(value["balcony_available"], "campus_context.drying_context.balcony_available")
+    if "ventilation" in value:
+        _non_empty_string(value["ventilation"], "campus_context.drying_context.ventilation")
 
 
 def _steps_section(plan: LaundryPlan, item_names: dict[str, str]) -> str:
