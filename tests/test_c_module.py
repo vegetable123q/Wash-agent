@@ -646,6 +646,7 @@ class CModuleTests(unittest.TestCase):
             {"": 0.5},
             {"cotton": True},
             {"cotton": -0.1},
+            {"cotton": 0},
             {"cotton": 1.5},
             {"cotton": float("nan")},
         ]

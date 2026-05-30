@@ -231,10 +231,10 @@ def _ratio_map(value: Any) -> dict[str, float]:
         if not isinstance(key, str) or not key.strip():
             raise ValueError("material_ratios must contain non-empty string keys")
         if isinstance(item_value, bool) or not isinstance(item_value, (int, float)):
-            raise ValueError(f"material_ratios.{key} must be a ratio from 0 to 1")
+            raise ValueError(f"material_ratios.{key} must be a ratio greater than 0 and up to 1")
         ratio = float(item_value)
-        if not math.isfinite(ratio) or ratio < 0 or ratio > 1:
-            raise ValueError(f"material_ratios.{key} must be a ratio from 0 to 1")
+        if not math.isfinite(ratio) or ratio <= 0 or ratio > 1:
+            raise ValueError(f"material_ratios.{key} must be a ratio greater than 0 and up to 1")
         ratios[key.strip()] = ratio
     return ratios
 
