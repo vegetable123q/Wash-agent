@@ -45,6 +45,7 @@ export function planLaundry(
   constraints: LaundryConstraints,
   campusContext: CampusContext,
 ): LaundryPlan {
+  validateUniqueItemIds(items);
   const selected = selectedItems(items, constraints.selected_item_ids);
   const bucketInputs = splitBucketInputs(selected);
   const buckets = bucketInputs.map(({ bucketId, baseBucketId, items: bucketItems }) =>
@@ -65,6 +66,22 @@ export function planLaundry(
 }
 
 // ─── item selection ─────────────────────────────────────────────────────
+
+function validateUniqueItemIds(items: WardrobeItemForPlan[]): void {
+  const seen = new Set<string>();
+  const duplicates: string[] = [];
+  for (const item of items) {
+    const itemId = item.profile.item_id;
+    if (seen.has(itemId)) {
+      duplicates.push(itemId);
+      continue;
+    }
+    seen.add(itemId);
+  }
+  if (duplicates.length) {
+    throw new Error(`items duplicate item_id: ${dedupe(duplicates).join(", ")}`);
+  }
+}
 
 function selectedItems(items: WardrobeItemForPlan[], ids: string[]): WardrobeItemForPlan[] {
   const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];

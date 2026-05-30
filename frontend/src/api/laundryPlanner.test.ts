@@ -180,6 +180,18 @@ describe("planLaundry", () => {
     expect(plan.buckets[0].item_ids).toEqual(["tee-1"]);
   });
 
+  it("rejects duplicate item ids before planning", () => {
+    expect(() => planLaundry([standardItem("tee-1", "white tee"), standardItem("tee-1", "duplicate tee")], {
+      selected_item_ids: ["tee-1"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, context)).toThrow(/duplicate.*tee-1/);
+  });
+
   it("rejects invalid pricing values instead of returning NaN totals", () => {
     const invalidContext: CampusContext = {
       ...context,
