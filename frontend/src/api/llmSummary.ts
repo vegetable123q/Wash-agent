@@ -195,7 +195,7 @@ function fallbackTodayAdvice(
     }
   }
   if (plan.buckets.length > 0) {
-    const cost = plan.estimated_cost_yuan != null ? `预计 ¥${plan.estimated_cost_yuan}` : "费用待确认";
+    const cost = isFiniteNonNegativeNumber(plan.estimated_cost_yuan) ? `预计 ¥${plan.estimated_cost_yuan}` : "费用待确认";
     parts.push(`本次 ${plan.buckets.length} 个批次，${cost}。`);
   }
   const urgent = (frequencyAdvice ?? []).filter((a) => a.priority_score >= 75);

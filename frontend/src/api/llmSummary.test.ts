@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { bucketLabel, computeRecommendedStartTime, generatePlanSummary } from "./llmSummary";
+import { bucketLabel, computeRecommendedStartTime, generatePlanSummary, generateTodayAdvice } from "./llmSummary";
 import { emptyModelHubConfig } from "./modelHubConfig";
 import type { LaundryPlan } from "./types";
 
@@ -67,5 +67,32 @@ describe("computeRecommendedStartTime", () => {
 
     expect(result.source).toBe("fallback");
     expect(result.text).not.toMatch(/NaN|1\.5/);
+  });
+
+  it("hides invalid costs in fallback today advice", async () => {
+    const plan = {
+      buckets: [
+        {
+          bucket_id: "light-standard",
+          item_ids: ["tee-1"],
+          wash_method: "machine_wash",
+          machine_type: "standard_washer",
+          program: "standard",
+          detergent_ml: 24,
+          use_laundry_bag: false,
+          dry_method: "air_dry",
+          warnings: [],
+        },
+      ],
+      estimated_cost_yuan: Number.NaN,
+      estimated_duration_minutes: 40,
+      summary: "light standard wash",
+      global_warnings: [],
+    } satisfies LaundryPlan;
+
+    const result = await generateTodayAdvice(plan, undefined, undefined, emptyModelHubConfig);
+
+    expect(result.source).toBe("fallback");
+    expect(result.text).not.toContain("NaN");
   });
 });
