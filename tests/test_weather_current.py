@@ -62,6 +62,25 @@ class CurrentWeatherTests(unittest.TestCase):
         self.assertIn("invalid current weather", weather["error"])
         self.assertIn("temperature_2m", weather["error"])
 
+    def test_fetch_tsinghua_weather_rejects_invalid_timeout_before_transport(self) -> None:
+        calls: list[object] = []
+
+        def unused_transport(url: str, timeout_seconds: float) -> dict[str, object]:
+            calls.append(timeout_seconds)
+            raise RuntimeError("transport called unexpectedly")
+
+        for timeout_seconds in (True, 0, -1, float("inf"), "8"):
+            with self.subTest(timeout_seconds=timeout_seconds):
+                calls.clear()
+                weather = fetch_tsinghua_weather(
+                    transport=unused_transport,
+                    timeout_seconds=timeout_seconds,  # type: ignore[arg-type]
+                )
+
+                self.assertEqual(calls, [])
+                self.assertEqual(weather["status"], "unavailable")
+                self.assertIn("invalid timeout_seconds", weather["error"])
+
     def test_fetch_tsinghua_weather_trims_and_filters_units(self) -> None:
         def fake_transport(url: str, timeout_seconds: float) -> dict[str, object]:
             return {

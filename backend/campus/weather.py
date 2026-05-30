@@ -35,7 +35,8 @@ def fetch_tsinghua_weather(
     fetcher = transport or _urllib_transport
     url = _open_meteo_url()
     try:
-        payload = fetcher(url, timeout_seconds)
+        timeout = _validate_timeout_seconds(timeout_seconds)
+        payload = fetcher(url, timeout)
         current = payload.get("current")
         if not isinstance(current, dict):
             raise ValueError("Open-Meteo response missing current weather")
@@ -78,6 +79,15 @@ def _open_meteo_url() -> str:
         }
     )
     return f"{OPEN_METEO_FORECAST_URL}?{query}"
+
+
+def _validate_timeout_seconds(timeout_seconds: object) -> float:
+    if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, int | float):
+        raise ValueError("invalid timeout_seconds")
+    timeout = float(timeout_seconds)
+    if timeout <= 0 or not math.isfinite(timeout):
+        raise ValueError("invalid timeout_seconds")
+    return timeout
 
 
 def _validate_current_weather(current: dict[str, Any]) -> None:
