@@ -448,8 +448,8 @@ function washProgramValue(context: CampusContext, program: string, key: "price_y
   if (!(key in rule)) {
     throw new Error(`missing wash program ${key}: ${program}`);
   }
-  const value = Number(rule[key]);
-  if (!Number.isFinite(value) || value < 0) {
+  const value = rule[key];
+  if (!validProgramValue(value, key)) {
     throw new Error(`invalid wash program ${key}: ${program}`);
   }
   return value;
@@ -464,14 +464,20 @@ function dryerProgramValue(context: CampusContext, program: string, key: "price_
   if (!(key in rule)) {
     throw new Error(`missing dryer program ${key}: ${program}`);
   }
-  const value = Number(rule[key]);
-  if (!Number.isFinite(value) || value < 0) {
+  const value = rule[key];
+  if (!validProgramValue(value, key)) {
     throw new Error(`invalid dryer program ${key}: ${program}`);
   }
   return value;
 }
 
 // ─── item analysis helpers ──────────────────────────────────────────────
+
+function validProgramValue(value: unknown, key: "price_yuan" | "duration_minutes"): value is number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return false;
+  if (key === "duration_minutes") return Number.isInteger(value) && value > 0;
+  return value >= 0;
+}
 
 function dryerUnsafe(item: WardrobeItemForPlan): boolean {
   return (
