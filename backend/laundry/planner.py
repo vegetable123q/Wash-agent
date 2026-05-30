@@ -76,10 +76,15 @@ def plan_laundry(
 def _validate_items(value: object) -> None:
     if not isinstance(value, list):
         raise ValueError("items must be a list")
+    seen_item_ids: set[str] = set()
     for index, item in enumerate(value):
         if not isinstance(item, WardrobeItem):
             raise ValueError(f"items[{index}] must be a WardrobeItem")
         _validate_item(item, f"items[{index}]")
+        item_id = item.profile.item_id.strip()
+        if item_id in seen_item_ids:
+            raise ValueError(f"items duplicate item_id: {item_id}")
+        seen_item_ids.add(item_id)
 
 
 def _validate_item(item: WardrobeItem, field_name: str) -> None:

@@ -341,6 +341,19 @@ class EModuleTests(unittest.TestCase):
                         _campus_context(),
                     )
 
+    def test_plan_requires_unique_item_ids(self) -> None:
+        items = [
+            _item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0}),
+            _item("white-tee", "duplicate white tee", colors=["white"], materials={"cotton": 1.0}),
+        ]
+
+        with self.assertRaisesRegex(ValueError, "duplicate.*white-tee"):
+            plan_laundry(
+                items,
+                LaundryConstraints(selected_item_ids=["white-tee"]),
+                _campus_context(),
+            )
+
     def test_plan_requires_valid_item_search_fields(self) -> None:
         invalid_items = [
             (
