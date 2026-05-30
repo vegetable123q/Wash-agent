@@ -218,6 +218,31 @@ describe("planLaundry", () => {
     expect(warningText).not.toContain("-1");
     expect(warningText).not.toContain("-5");
   });
+
+  it("honors zero budget and wait constraints", () => {
+    const constrainedContext: CampusContext = {
+      ...context,
+      queue_estimates: [
+        {
+          ...context.queue_estimates[0],
+          estimated_wait_minutes: 1,
+        },
+      ],
+    };
+
+    const plan = planLaundry([standardItem("tee-1", "white tee")], {
+      selected_item_ids: ["tee-1"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: 0,
+      budget_yuan: 0,
+    }, constrainedContext);
+
+    expect(plan.global_warnings.some((warning) => warning.includes("3.5") && warning.includes("0"))).toBe(true);
+    expect(plan.global_warnings.some((warning) => warning.includes("1") && warning.includes("0"))).toBe(true);
+  });
 });
 
 function standardItem(itemId: string, name: string): WardrobeItemForPlan {

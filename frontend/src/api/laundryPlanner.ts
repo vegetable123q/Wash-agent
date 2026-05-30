@@ -263,7 +263,7 @@ function buildGlobalWarnings(
   context: CampusContext,
 ): string[] {
   const warnings: string[] = [];
-  const budgetYuan = positiveConstraintNumber(constraints.budget_yuan);
+  const budgetYuan = nonNegativeConstraintNumber(constraints.budget_yuan);
   if (budgetYuan != null && estimatedCost > budgetYuan) {
     warnings.push(`预计费用 ${estimatedCost} 元超过预算 ${budgetYuan} 元。`);
     warnings.push("若需压低费用，可推迟非急用标准洗批次，并优先保留手洗、自然晾干和高卫生需求衣物。");
@@ -280,7 +280,7 @@ function waitConstraintWarnings(
   constraints: LaundryConstraints,
   context: CampusContext,
 ): string[] {
-  const maxWaitMinutes = positiveConstraintNumber(constraints.max_wait_minutes);
+  const maxWaitMinutes = nonNegativeConstraintNumber(constraints.max_wait_minutes);
   if (maxWaitMinutes == null) return [];
   const queueByType = new Map(context.queue_estimates.map((e) => [e.machine_type, e]));
   const warnings: string[] = [];
@@ -303,8 +303,8 @@ function waitConstraintWarnings(
   return warnings;
 }
 
-function positiveConstraintNumber(value: number | null): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+function nonNegativeConstraintNumber(value: number | null): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
 function requiredMachineTypes(buckets: LaundryBucket[]): MachineType[] {
