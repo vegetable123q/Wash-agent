@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createWardrobeItem, fetchMobileSummary, rebuildMobileSummaryForSelection, setLaundrySelection, type MobileSummary } from "./mobileSummary";
+import {
+  clearLaundrySelection,
+  clearWardrobeItems,
+  createWardrobeItem,
+  fetchMobileSummary,
+  rebuildMobileSummaryForSelection,
+  setLaundrySelection,
+  type MobileSummary,
+} from "./mobileSummary";
 import { PRICING_RULES } from "./pricingRules";
 
 const wardrobeStorageKey = "washmate.localWardrobe";
@@ -109,6 +117,64 @@ describe("mobileSummary wardrobe selection", () => {
     });
     expect(summary.dirty_basket.recommendation).toContain("可继续攒");
     expect(summary.wardrobe.items.map((item) => item.item_id)).toEqual(["tee-1", "hoodie-1"]);
+  });
+
+  it("clears the dirty basket without deleting wardrobe items", async () => {
+    localStorage.setItem(
+      wardrobeStorageKey,
+      JSON.stringify([
+        {
+          item_id: "tee-1",
+          name: "白色棉 T 恤",
+          user_note: "",
+          user_notes: [],
+          wear_count_since_wash: 1,
+          wash_count: 0,
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          risks: {},
+        },
+      ]),
+    );
+    await setLaundrySelection(["tee-1"]);
+
+    const result = await clearLaundrySelection();
+    const summary = await fetchMobileSummary();
+
+    expect(result).toEqual({ status: "cleared", selected_item_ids: [] });
+    expect(summary.wardrobe.items.map((item) => item.item_id)).toEqual(["tee-1"]);
+    expect(summary.selected_laundry_item_ids).toEqual([]);
+    expect(summary.dirty_basket.item_count).toBe(0);
+    expect(summary.plan.buckets).toEqual([]);
+  });
+
+  it("clears wardrobe items and removes dirty-basket selections", async () => {
+    localStorage.setItem(
+      wardrobeStorageKey,
+      JSON.stringify([
+        {
+          item_id: "tee-1",
+          name: "白色棉 T 恤",
+          user_note: "",
+          user_notes: [],
+          wear_count_since_wash: 1,
+          wash_count: 0,
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          risks: {},
+        },
+      ]),
+    );
+    await setLaundrySelection(["tee-1"]);
+
+    const result = await clearWardrobeItems();
+    const summary = await fetchMobileSummary();
+
+    expect(result).toEqual({ status: "cleared", deleted_count: 1 });
+    expect(summary.wardrobe.items).toEqual([]);
+    expect(summary.selected_laundry_item_ids).toEqual([]);
+    expect(summary.dirty_basket.item_count).toBe(0);
+    expect(summary.plan.buckets).toEqual([]);
   });
 
   it("persists wardrobe category and uploaded photo data for inventory display", async () => {

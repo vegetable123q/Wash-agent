@@ -335,6 +335,14 @@ p {
   margin-bottom: 9px;
 }
 
+.section-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .card {
   width: 100%;
   position: relative;
@@ -592,6 +600,7 @@ button.card {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
@@ -599,6 +608,11 @@ button.card {
   font-size: 13px;
   font-weight: 850;
   padding: 0 12px;
+}
+
+.danger-secondary-button {
+  color: var(--red);
+  border-color: #f2c4c0;
 }
 
 .button-row {

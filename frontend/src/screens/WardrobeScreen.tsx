@@ -11,6 +11,7 @@ interface WardrobeScreenProps {
   onNavigate: (screen: ScreenId) => void;
   onViewItem?: (itemId: string) => void;
   onDeleteItem?: (itemId: string) => Promise<void>;
+  onClearWardrobe?: () => void | Promise<void>;
 }
 
 interface WardrobeCardModel {
@@ -23,7 +24,7 @@ interface WardrobeCardModel {
   photoDataUrl: string;
 }
 
-export function WardrobeScreen({ mobileSummary, onNavigate, onViewItem, onDeleteItem }: WardrobeScreenProps) {
+export function WardrobeScreen({ mobileSummary, onNavigate, onViewItem, onDeleteItem, onClearWardrobe }: WardrobeScreenProps) {
   const [deletingId, setDeletingId] = useState("");
   const [deleteMessage, setDeleteMessage] = useState("");
   const [deleteError, setDeleteError] = useState("");
@@ -61,7 +62,27 @@ export function WardrobeScreen({ mobileSummary, onNavigate, onViewItem, onDelete
         <MetricCard value={categoryCount} label="类衣物分类" />
       </div>
 
-      <Section title="衣物分类" action={<Chip tone="teal">{categoryGroups.length} 类</Chip>}>
+      <Section
+        title="衣物分类"
+        action={
+          !isEmptyWardrobe && onClearWardrobe ? (
+            <button
+              type="button"
+              className="secondary-button danger-secondary-button"
+              onClick={() => {
+                if (window.confirm("确定删除衣柜里的所有衣物吗？")) {
+                  void onClearWardrobe();
+                }
+              }}
+            >
+              <Trash2 size={15} />
+              清空衣柜
+            </button>
+          ) : (
+            <Chip tone="teal">{categoryGroups.length} 类</Chip>
+          )
+        }
+      >
         {deleteMessage ? <p className="form-status form-status-ok">{deleteMessage}</p> : null}
         {deleteError ? <p className="form-status form-status-error">{deleteError}</p> : null}
         {isEmptyWardrobe ? (

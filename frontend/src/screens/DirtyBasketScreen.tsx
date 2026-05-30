@@ -1,4 +1,4 @@
-import { ArrowRight, Clock3 } from "lucide-react";
+import { ArrowRight, Clock3, ListChecks, Trash2 } from "lucide-react";
 import type { MobileSummary } from "../api/mobileSummary";
 import { Card, Chip, Page, Section, TopBar } from "../components/AppChrome";
 import type { ScreenId, Tone } from "../data/washMateContent";
@@ -8,9 +8,18 @@ interface DirtyBasketScreenProps {
   onBack: () => void;
   onNavigate: (screen: ScreenId) => void;
   onToggleItem?: (itemId: string) => void | Promise<void>;
+  onClearBasket?: () => void | Promise<void>;
+  onSelectAll?: () => void | Promise<void>;
 }
 
-export function DirtyBasketScreen({ mobileSummary, onBack, onNavigate, onToggleItem }: DirtyBasketScreenProps) {
+export function DirtyBasketScreen({
+  mobileSummary,
+  onBack,
+  onNavigate,
+  onToggleItem,
+  onClearBasket,
+  onSelectAll,
+}: DirtyBasketScreenProps) {
   const wardrobeItems = mobileSummary?.wardrobe.items ?? [];
   const selectedIds = new Set(mobileSummary?.selected_laundry_item_ids ?? []);
   const dirtyBasket = mobileSummary?.dirty_basket ?? {
@@ -24,6 +33,10 @@ export function DirtyBasketScreen({ mobileSummary, onBack, onNavigate, onToggleI
     items: [],
   };
   const dirtyById = new Map(dirtyBasket.items.map((item) => [item.item_id, item]));
+  const allWardrobeItemsSelected =
+    wardrobeItems.length > 0 && wardrobeItems.every((item) => selectedIds.has(item.item_id));
+  const canSelectAll = Boolean(onSelectAll && wardrobeItems.length > 0 && !allWardrobeItemsSelected);
+  const canClearBasket = Boolean(onClearBasket && dirtyBasket.item_count > 0);
 
   return (
     <Page compact>
@@ -49,7 +62,29 @@ export function DirtyBasketScreen({ mobileSummary, onBack, onNavigate, onToggleI
         </div>
       </Card>
 
-      <Section title="选择脏衣服" action={<Chip tone={dirtyBasket.item_count ? "teal" : "amber"}>{dirtyBasket.status_label}</Chip>}>
+      <Section
+        title="选择脏衣服"
+        action={
+          canSelectAll || canClearBasket ? (
+            <div className="section-action-row">
+              {canSelectAll ? (
+                <button type="button" className="secondary-button" onClick={() => void onSelectAll?.()}>
+                  <ListChecks size={15} />
+                  全选
+                </button>
+              ) : null}
+              {canClearBasket ? (
+                <button type="button" className="secondary-button danger-secondary-button" onClick={() => void onClearBasket?.()}>
+                  <Trash2 size={15} />
+                  清空脏衣篮
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <Chip tone={dirtyBasket.item_count ? "teal" : "amber"}>{dirtyBasket.status_label}</Chip>
+          )
+        }
+      >
         {wardrobeItems.length ? (
           <div className="basket-check-list">
             {wardrobeItems.map((item) => {

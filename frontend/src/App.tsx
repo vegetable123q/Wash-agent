@@ -5,7 +5,17 @@ import {
   saveModelHubConfig,
   type ModelHubConfig,
 } from "./api/modelHubConfig";
-import { deleteWardrobeItem, fetchMobileSummary, rebuildMobileSummaryForSelection, setLaundrySelection, type BackendMachine, type MobileSummary, type WardrobeSummaryItem } from "./api/mobileSummary";
+import {
+  clearLaundrySelection,
+  clearWardrobeItems,
+  deleteWardrobeItem,
+  fetchMobileSummary,
+  rebuildMobileSummaryForSelection,
+  setLaundrySelection,
+  type BackendMachine,
+  type MobileSummary,
+  type WardrobeSummaryItem,
+} from "./api/mobileSummary";
 import { BottomNav } from "./components/AppChrome";
 import { machines, wardrobeItems, type MachineView, type ScreenId, type TabId, type WardrobeItemView } from "./data/washMateContent";
 import { AddClothingScreen } from "./screens/AddClothingScreen";
@@ -150,6 +160,12 @@ export default function App() {
     await refreshMobileSummary();
   };
 
+  const handleClearWardrobe = async () => {
+    await clearWardrobeItems();
+    setSelectedClothingId("");
+    await refreshMobileSummary();
+  };
+
   const handleToggleLaundrySelection = async (itemId: string) => {
     if (!mobileSummary) {
       return;
@@ -161,6 +177,23 @@ export default function App() {
       selected.add(itemId);
     }
     const result = await setLaundrySelection([...selected]);
+    setMobileSummary((current) =>
+      current ? rebuildMobileSummaryForSelection(current, result.selected_item_ids, userProfile) : current,
+    );
+  };
+
+  const handleClearLaundrySelection = async () => {
+    const result = await clearLaundrySelection();
+    setMobileSummary((current) =>
+      current ? rebuildMobileSummaryForSelection(current, result.selected_item_ids, userProfile) : current,
+    );
+  };
+
+  const handleSelectAllLaundrySelection = async () => {
+    if (!mobileSummary) {
+      return;
+    }
+    const result = await setLaundrySelection(mobileSummary.wardrobe.items.map((item) => item.item_id));
     setMobileSummary((current) =>
       current ? rebuildMobileSummaryForSelection(current, result.selected_item_ids, userProfile) : current,
     );
@@ -241,6 +274,8 @@ export default function App() {
             onBack={goBack}
             onNavigate={navigate}
             onToggleItem={handleToggleLaundrySelection}
+            onClearBasket={handleClearLaundrySelection}
+            onSelectAll={handleSelectAllLaundrySelection}
           />
         );
       case "wardrobe":
@@ -250,6 +285,7 @@ export default function App() {
             onNavigate={navigate}
             onViewItem={viewClothingDetail}
             onDeleteItem={handleDeleteWardrobeItem}
+            onClearWardrobe={handleClearWardrobe}
           />
         );
       case "addClothing":

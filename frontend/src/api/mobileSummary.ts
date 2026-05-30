@@ -143,6 +143,13 @@ export async function deleteWardrobeItem(itemId: string): Promise<{ status: stri
   return { status: "deleted", item_id: normalizedItemId };
 }
 
+export async function clearWardrobeItems(): Promise<{ status: string; deleted_count: number }> {
+  const deletedCount = readLocalWardrobeItems().length;
+  writeLocalWardrobeItems([]);
+  writeDirtyBasketRecords([]);
+  return { status: "cleared", deleted_count: deletedCount };
+}
+
 export async function setLaundrySelection(itemIds: string[]): Promise<{ status: string; selected_item_ids: string[] }> {
   const wardrobeItems = readLocalWardrobeItems();
   const validIds = new Set(wardrobeItems.map((item) => item.item_id));
@@ -155,6 +162,11 @@ export async function setLaundrySelection(itemIds: string[]): Promise<{ status: 
     added_at_source: "known",
   }));
   return { status: "updated", selected_item_ids: selected };
+}
+
+export async function clearLaundrySelection(): Promise<{ status: string; selected_item_ids: string[] }> {
+  writeDirtyBasketRecords([]);
+  return { status: "cleared", selected_item_ids: [] };
 }
 
 // ─── integrated summary builder ─────────────────────────────────────────

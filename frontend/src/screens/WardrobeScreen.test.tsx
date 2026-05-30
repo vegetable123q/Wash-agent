@@ -123,6 +123,7 @@ const selectableSummary: MobileSummary = {
 describe("WardrobeScreen", () => {
   afterEach(() => {
     cleanup();
+    vi.unstubAllGlobals();
   });
 
   it("shows an empty state when the connected backend has no wardrobe items", () => {
@@ -191,5 +192,41 @@ describe("WardrobeScreen", () => {
 
     resolveDelete();
     await waitFor(() => expect(deleteButtons[0]).not.toBeDisabled());
+  });
+
+  it("asks for confirmation before clearing the entire wardrobe", () => {
+    const onClearWardrobe = vi.fn();
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirm);
+
+    render(
+      <WardrobeScreen
+        mobileSummary={selectableSummary}
+        onNavigate={vi.fn()}
+        onClearWardrobe={onClearWardrobe}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "清空衣柜" }));
+
+    expect(confirm).toHaveBeenCalledWith("确定删除衣柜里的所有衣物吗？");
+    expect(onClearWardrobe).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps wardrobe data when the clear confirmation is cancelled", () => {
+    const onClearWardrobe = vi.fn();
+    vi.stubGlobal("confirm", vi.fn(() => false));
+
+    render(
+      <WardrobeScreen
+        mobileSummary={selectableSummary}
+        onNavigate={vi.fn()}
+        onClearWardrobe={onClearWardrobe}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "清空衣柜" }));
+
+    expect(onClearWardrobe).not.toHaveBeenCalled();
   });
 });

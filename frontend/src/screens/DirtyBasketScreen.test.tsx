@@ -78,6 +78,8 @@ describe("DirtyBasketScreen", () => {
   it("lets the user manage dirty clothes and see how long they have waited", () => {
     const onToggleItem = vi.fn();
     const onNavigate = vi.fn();
+    const onClearBasket = vi.fn();
+    const onSelectAll = vi.fn();
 
     render(
       <DirtyBasketScreen
@@ -85,6 +87,8 @@ describe("DirtyBasketScreen", () => {
         onBack={vi.fn()}
         onNavigate={onNavigate}
         onToggleItem={onToggleItem}
+        onClearBasket={onClearBasket}
+        onSelectAll={onSelectAll}
       />,
     );
 
@@ -95,11 +99,17 @@ describe("DirtyBasketScreen", () => {
     expect(screen.getByText("久放易有味")).toBeInTheDocument();
     expect(screen.getByText("已放 3 天")).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: "全选" }));
+    expect(onSelectAll).toHaveBeenCalledTimes(1);
+
     fireEvent.click(screen.getByRole("checkbox", { name: "移出脏衣篮 运动速干短袖" }));
     expect(onToggleItem).toHaveBeenCalledWith("sport-tee-1");
 
     fireEvent.click(screen.getByRole("checkbox", { name: "加入脏衣篮 黑色牛仔裤" }));
     expect(onToggleItem).toHaveBeenCalledWith("jeans-1");
+
+    fireEvent.click(screen.getByRole("button", { name: "清空脏衣篮" }));
+    expect(onClearBasket).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("button", { name: "查看本次方案" }));
     expect(onNavigate).toHaveBeenCalledWith("planDetail");
