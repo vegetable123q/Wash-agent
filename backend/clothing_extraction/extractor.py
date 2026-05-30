@@ -265,7 +265,7 @@ def _normalize_ratio(value: Any) -> float | None:
         return None
     if ratio > 1:
         ratio = ratio / 100
-    if ratio < 0:
+    if ratio <= 0:
         return None
     return min(ratio, 1.0)
 

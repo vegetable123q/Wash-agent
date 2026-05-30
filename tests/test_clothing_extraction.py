@@ -942,6 +942,23 @@ class ClothingExtractionTests(unittest.TestCase):
 
         self.assertEqual(profile.material_ratios, {"cotton": 0.8})
 
+    def test_llm_material_ratios_ignore_zero_values(self) -> None:
+        response = {
+            "name": "test sweater",
+            "material_ratios": {"cotton": 0, "wool": 70},
+            "colors": ["black"],
+            "care_forbidden": [],
+            "risks": {},
+            "confidence": 0.7,
+        }
+
+        profile = extract_clothing_info(
+            ClothingInput(name="test sweater"),
+            llm_client=FakeLLMClient(json.dumps(response, ensure_ascii=False)),
+        )
+
+        self.assertEqual(profile.material_ratios, {"wool": 0.7})
+
     def test_manual_material_ratios_trim_and_ignore_invalid_keys(self) -> None:
         profile = extract_clothing_info(
             ClothingInput(
