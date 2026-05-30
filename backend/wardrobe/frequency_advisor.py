@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import math
+import re
 
 from backend.shared.models import ClothingProfile, FrequencyAdvice, LaundryConstraints, RiskLevel, WardrobeItem
-from backend.shared.utils import contains_any, dedupe
+from backend.shared.utils import dedupe
 
 
 _FREQUENCY_THRESHOLDS = {
@@ -45,6 +46,7 @@ _LOW_FREQUENCY_TERMS = {"jeans", "denim", "sweater", "wool", "coat", "牛仔", "
 _SPORT_TERMS = {"sport", "sports", "运动", "速干", "sweat", "出汗"}
 _STAIN_TERMS = {"stain", "污渍", "油渍"}
 _FREQUENCY_RISK_KEYS = {"shrink", "color_bleed", "deform", "pilling", "dryer_damage"}
+_ENGLISH_TERM_RE = re.compile(r"^[a-z0-9 -]+$", re.IGNORECASE)
 
 
 def advise_frequency(
@@ -71,15 +73,15 @@ def advise_frequency(
         score += 25
         reasons.append("该衣物被标记为本次急用，优先级提高。")
 
-    if contains_any(search_text, _SPORT_TERMS):
+    if _contains_term(search_text, _SPORT_TERMS):
         score += 35
         reasons.append("运动后或出汗后穿着，建议及时清洗。")
 
-    if contains_any(search_text, _STAIN_TERMS):
+    if _contains_term(search_text, _STAIN_TERMS):
         score += 35
         reasons.append("用户记录有明显污渍，建议本次优先处理。")
 
-    if contains_any(search_text, _LOW_FREQUENCY_TERMS) and item.wear_count_since_wash < threshold:
+    if _contains_term(search_text, _LOW_FREQUENCY_TERMS) and item.wear_count_since_wash < threshold:
         score -= 15
         reasons.append("牛仔、羊毛或外套类衣物可适当少洗，减少褪色、缩水和变形。")
 
@@ -88,7 +90,7 @@ def advise_frequency(
         score -= penalty
         reasons.append("历史或抽取结果提示存在缩水、掉色、变形等风险，频率建议不会强行要求机洗。")
 
-    if constraints.hygiene_sensitive and contains_any(search_text, {"underwear", "sock", "内衣", "贴身", "袜"}):
+    if constraints.hygiene_sensitive and _contains_term(search_text, {"underwear", "sock", "内衣", "贴身", "袜"}):
         score += 20
         reasons.append("贴身或高卫生敏感衣物，建议提高换洗频率。")
 
@@ -135,11 +137,21 @@ def _threshold_for(text: str) -> int:
     matches = [
         threshold
         for term, threshold in _FREQUENCY_THRESHOLDS.items()
-        if term in text
+        if _term_matches(text, term)
     ]
     if not matches:
         raise ValueError("cannot infer wash-frequency threshold from wardrobe item data")
     return min(matches)
+
+
+def _contains_term(text: str, terms: set[str]) -> bool:
+    return any(_term_matches(text, term) for term in terms)
+
+
+def _term_matches(text: str, term: str) -> bool:
+    if _ENGLISH_TERM_RE.fullmatch(term):
+        return re.search(rf"(^|[^a-z0-9]){re.escape(term)}([^a-z0-9]|$)", text) is not None
+    return term in text
 
 
 def _validate_item(value: object) -> None:
