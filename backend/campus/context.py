@@ -25,6 +25,8 @@ def build_campus_context_from_user_input(
     timeout_seconds: float = 20.0,
 ) -> CampusContext:
     """Build campus context directly from page/user input."""
+    if not isinstance(user_inputs, dict):
+        raise ValueError("user_inputs must be an object")
     client = LaundryMachineClient(
         machine_rules_path=machine_rules_path,
         transport=transport,

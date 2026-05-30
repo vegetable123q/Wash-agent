@@ -140,6 +140,12 @@ def _write_rules(tmp_dir: str) -> Path:
 
 
 class CampusContextTests(unittest.TestCase):
+    def test_build_campus_context_from_user_input_requires_object_input(self) -> None:
+        for user_inputs in (None, "tower", [("tower_key", "nq21")]):
+            with self.subTest(user_inputs=user_inputs):
+                with self.assertRaisesRegex(ValueError, "user_inputs must be an object"):
+                    build_campus_context_from_user_input(user_inputs)  # type: ignore[arg-type]
+
     def test_build_campus_context_from_user_input_resolves_tower_name_to_key(
         self,
     ) -> None:
