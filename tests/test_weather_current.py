@@ -45,6 +45,23 @@ class CurrentWeatherTests(unittest.TestCase):
         self.assertEqual(weather["status"], "unavailable")
         self.assertIn("network timeout", weather["error"])
 
+    def test_fetch_tsinghua_weather_returns_unavailable_on_invalid_current_values(self) -> None:
+        def fake_transport(url: str, timeout_seconds: float) -> dict[str, object]:
+            return {
+                "current": {
+                    "temperature_2m": "warm",
+                    "relative_humidity_2m": 71,
+                    "precipitation": 0.0,
+                    "weather_code": 0,
+                }
+            }
+
+        weather = fetch_tsinghua_weather(transport=fake_transport)
+
+        self.assertEqual(weather["status"], "unavailable")
+        self.assertIn("invalid current weather", weather["error"])
+        self.assertIn("temperature_2m", weather["error"])
+
 
 if __name__ == "__main__":
     unittest.main()

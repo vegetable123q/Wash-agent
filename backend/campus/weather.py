@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import Any, Callable
 from urllib.parse import urlencode
 from urllib.request import urlopen
@@ -16,6 +17,12 @@ TSINGHUA_LOCATION = {
     "latitude": 40.0023,
     "longitude": 116.3268,
 }
+CURRENT_NUMERIC_FIELDS = (
+    "temperature_2m",
+    "relative_humidity_2m",
+    "precipitation",
+    "weather_code",
+)
 
 
 def fetch_tsinghua_weather(
@@ -32,6 +39,7 @@ def fetch_tsinghua_weather(
         current = payload.get("current")
         if not isinstance(current, dict):
             raise ValueError("Open-Meteo response missing current weather")
+        _validate_current_weather(current)
         units = payload.get("current_units")
         if not isinstance(units, dict):
             units = {}
@@ -70,6 +78,15 @@ def _open_meteo_url() -> str:
         }
     )
     return f"{OPEN_METEO_FORECAST_URL}?{query}"
+
+
+def _validate_current_weather(current: dict[str, Any]) -> None:
+    for field_name in CURRENT_NUMERIC_FIELDS:
+        value = current.get(field_name)
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            raise ValueError(f"Open-Meteo response invalid current weather: {field_name}")
+        if not math.isfinite(float(value)):
+            raise ValueError(f"Open-Meteo response invalid current weather: {field_name}")
 
 
 def _urllib_transport(url: str, timeout_seconds: float) -> dict[str, Any]:
