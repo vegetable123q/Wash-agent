@@ -158,10 +158,7 @@ export async function generateTodayAdvice(
   }
   try {
     plan = sanitizePlanEstimates(plan);
-    const weatherText =
-      weather?.status === "live" && weather.current
-        ? `温度 ${weather.current.temperature_2m}°C，湿度 ${weather.current.relative_humidity_2m}%，降水 ${weather.current.precipitation}mm`
-        : "天气信息暂不可用";
+    const weatherText = weatherPromptText(weather);
     const urgentItems = (frequencyAdvice ?? []).filter((a) => a.priority_score >= 75);
     const prompt = [
       `当前校园洗衣情况：`,
@@ -248,12 +245,16 @@ function isValidTimePart(value: number, max: number): boolean {
   return Number.isInteger(value) && value >= 0 && value <= max;
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
 function isFiniteNonNegativeNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+  return isFiniteNumber(value) && value >= 0;
 }
 
 function isPositiveFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0;
+  return isFiniteNumber(value) && value > 0;
 }
 
 function isValidDuration(value: number | null): value is number {
@@ -284,4 +285,15 @@ function materialRatioParts(materialRatios: Record<string, number>): string[] {
 
 function materialRatioText(materialRatios: Record<string, number>, fallback: string): string {
   return materialRatioParts(materialRatios).join("\u3001") || fallback;
+}
+
+function weatherPromptText(weather: WeatherSnapshot | undefined): string {
+  if (weather?.status !== "live" || !weather.current) return "天气信息暂不可用";
+  const temperature = weather.current.temperature_2m;
+  const humidity = weather.current.relative_humidity_2m;
+  const precipitation = weather.current.precipitation;
+  if (!isFiniteNumber(temperature) || !isFiniteNumber(humidity) || !isFiniteNumber(precipitation)) {
+    return "天气信息暂不可用";
+  }
+  return `温度 ${temperature}°C，湿度 ${humidity}%，降水 ${precipitation}mm`;
 }

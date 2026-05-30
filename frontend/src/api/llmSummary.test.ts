@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { bucketLabel, computeRecommendedStartTime, generatePlanSummary, generateRiskDescription, generateTodayAdvice } from "./llmSummary";
 import { emptyModelHubConfig } from "./modelHubConfig";
-import type { LaundryPlan } from "./types";
+import type { LaundryPlan, WeatherSnapshot } from "./types";
 
 const configuredModelHub = {
   ...emptyModelHubConfig,
@@ -168,5 +168,46 @@ describe("computeRecommendedStartTime", () => {
     expect(prompt).not.toContain("NaN");
     expect(prompt).not.toContain("-20%");
     expect(prompt).toContain("silk 40%");
+  });
+
+  it("sanitizes invalid weather values before sending today advice prompts", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(modelHubTextResponse("today advice"));
+    vi.stubGlobal("fetch", fetchMock);
+    const plan = {
+      buckets: [
+        {
+          bucket_id: "light-standard",
+          item_ids: ["tee-1"],
+          wash_method: "machine_wash",
+          machine_type: "standard_washer",
+          program: "standard",
+          detergent_ml: 24,
+          use_laundry_bag: false,
+          dry_method: "air_dry",
+          warnings: [],
+        },
+      ],
+      estimated_cost_yuan: 3.5,
+      estimated_duration_minutes: 40,
+      summary: "light standard wash",
+      global_warnings: [],
+    } satisfies LaundryPlan;
+    const weather = {
+      source: "test",
+      status: "live",
+      current: {
+        time: "2026-05-30T08:00",
+        temperature_2m: Number.NaN,
+        relative_humidity_2m: Number.NaN,
+        precipitation: Number.NaN,
+      },
+    } satisfies WeatherSnapshot;
+
+    await generateTodayAdvice(plan, weather, undefined, configuredModelHub);
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    const prompt = String(body.contents[0].parts[0].text);
+    expect(prompt).not.toContain("NaN");
+    expect(prompt).not.toContain("undefined");
   });
 });
