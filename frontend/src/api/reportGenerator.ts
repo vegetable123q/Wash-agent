@@ -24,6 +24,7 @@ export function generateReport(
   validateReportItemsUnique(items);
   validatePlanItemIdsPresent(plan, items);
   validatePlanItemIdsUnique(plan);
+  validateBucketNumbers(plan);
   const itemNames = new Map(items.map((item) => [item.profile.item_id, item.profile.name]));
   return {
     title: "本次校园洗衣报告",
@@ -272,6 +273,14 @@ function validatePlanItemIdsPresent(plan: LaundryPlan, items: WardrobeItemForPla
   if (missing.length) {
     throw new Error(`items missing plan item ids: ${dedupe(missing).join(", ")}`);
   }
+}
+
+function validateBucketNumbers(plan: LaundryPlan): void {
+  plan.buckets.forEach((bucket, index) => {
+    if (bucket.detergent_ml != null) {
+      requiredNonNegativeNumber(bucket.detergent_ml, `plan.buckets[${index}].detergent_ml`);
+    }
+  });
 }
 
 function washMethodText(method: WashMethod): string {

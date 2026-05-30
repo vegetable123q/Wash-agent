@@ -138,6 +138,13 @@ describe("generateReport", () => {
       minimalCampusContext(),
     )).toThrow(/estimated_duration_minutes/);
   });
+
+  it("rejects invalid bucket detergent before rendering", () => {
+    const plan = minimalPlan();
+    plan.buckets = [{ ...plan.buckets[0], detergent_ml: -1 }];
+
+    expect(() => generateReport(plan, minimalItems(), minimalCampusContext())).toThrow(/detergent_ml/);
+  });
 });
 
 function minimalPlan(): LaundryPlan {
