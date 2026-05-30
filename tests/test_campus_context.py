@@ -479,6 +479,27 @@ class CampusContextTests(unittest.TestCase):
             ],
         )
 
+    def test_build_campus_context_ignores_invalid_fractional_remaining_minutes(self) -> None:
+        machines = [
+            MachineInfo(
+                machine_id="washer-busy-1",
+                location="南区21号楼 一层",
+                machine_type=MachineType.STANDARD_WASHER,
+                status=MachineStatus.RUNNING,
+                remaining_minutes=1.5,  # type: ignore[arg-type]
+            ),
+        ]
+        client = FakeMachineClient(machines)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            context = build_campus_context(
+                client,
+                {"tower_key": "nq21", "tower_provider": "cleverschool"},
+                machine_rules_path=_write_rules(tmp_dir),
+            )
+
+        self.assertEqual(context.queue_estimates[0].running_count, 1)
+        self.assertIsNone(context.queue_estimates[0].estimated_wait_minutes)
+
     def test_build_campus_context_requires_provider_with_direct_tower_key(self) -> None:
         client = FakeMachineClient([])
 

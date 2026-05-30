@@ -168,7 +168,7 @@ def _queue_estimates(machines: list[MachineInfo]) -> list[MachineQueueEstimate]:
             machine.remaining_minutes
             for machine in typed_machines
             if machine.status == MachineStatus.RUNNING
-            and machine.remaining_minutes is not None
+            and _is_non_negative_int(machine.remaining_minutes)
         ]
         if available_count > 0:
             estimated_wait_minutes = 0
@@ -192,6 +192,10 @@ def _queue_estimates(machines: list[MachineInfo]) -> list[MachineQueueEstimate]:
 
 def _status_count(machines: list[MachineInfo], status: MachineStatus) -> int:
     return sum(1 for machine in machines if machine.status == status)
+
+
+def _is_non_negative_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
 def _resolve_tower_from_name(
