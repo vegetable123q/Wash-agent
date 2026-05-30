@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildCampusContextForDorm, type CampusMachineTransport } from "./campusMachineApi";
+import { buildCampusContextForDorm, buildQueueEstimates, type CampusMachineTransport } from "./campusMachineApi";
 
 describe("campusMachineApi", () => {
   afterEach(() => {
@@ -197,6 +197,23 @@ describe("campusMachineApi", () => {
 
     expect(context.all_machines[0].remaining_minutes).toBe(80);
     expect(context.queue_estimates[0].estimated_wait_minutes).toBe(80);
+  });
+
+  it("ignores invalid running remaining times in queue estimates", () => {
+    const estimates = buildQueueEstimates([
+      {
+        machine_id: "washer-1",
+        location: "1F",
+        machine_type: "standard_washer",
+        status: "running",
+        remaining_minutes: 1.5,
+        price_yuan: null,
+        modes: [],
+      },
+    ]);
+
+    expect(estimates[0].running_count).toBe(1);
+    expect(estimates[0].estimated_wait_minutes).toBeNull();
   });
 
   it("classifies usable and unavailable status text explicitly", async () => {

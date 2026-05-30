@@ -174,7 +174,7 @@ export function buildQueueEstimates(machines: MachineInfo[]): MachineQueueEstima
     const typedMachines = grouped.get(machineType)!;
     const availableCount = statusCount(typedMachines, "available");
     const remaining = typedMachines
-      .filter((machine) => machine.status === "running" && machine.remaining_minutes !== null)
+      .filter((machine) => machine.status === "running" && isFiniteNonNegativeInteger(machine.remaining_minutes))
       .map((machine) => machine.remaining_minutes!);
     return {
       machine_type: machineType,
@@ -201,6 +201,10 @@ function haierItems(response: unknown, context: string): unknown[] {
   const data = requiredObject(root.data, `${context}.data`);
   if (!Array.isArray(data.items)) throw new Error(`${context} data.items must be a list`);
   return data.items;
+}
+
+function isFiniteNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value >= 0;
 }
 
 function requiredObject(value: unknown, context: string): Record<string, unknown> {
