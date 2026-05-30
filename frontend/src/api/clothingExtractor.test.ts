@@ -14,4 +14,24 @@ describe("clothingExtractor", () => {
     expect(profile.care_recommendations).not.toContain("gentle_cycle");
     expect(profile.care_warnings).not.toContain("do_not_bleach");
   });
+
+  it("filters explicit zero material ratios", () => {
+    const mixed = buildProfileFromInput({
+      item_id: "item-1",
+      name: "wool scarf",
+      material_text: "cotton 0%, wool 100%",
+      colors_text: "gray",
+      user_note: "",
+    });
+    const zeroOnly = buildProfileFromInput({
+      item_id: "item-2",
+      name: "unknown scarf",
+      material_text: "cotton 0%",
+      colors_text: "gray",
+      user_note: "",
+    });
+
+    expect(mixed.material_ratios).toEqual({ wool: 1 });
+    expect(zeroOnly.material_ratios).toEqual({});
+  });
 });

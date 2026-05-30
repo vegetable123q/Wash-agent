@@ -152,15 +152,19 @@ function parseMaterialRatios(text: string): Record<string, number> {
   if (!materials.length) return {};
 
   const parsed: Record<string, number> = {};
+  let sawExplicitRatio = false;
   for (const raw of materials) {
     const match = raw.match(/^(.+?)\s*(\d+(?:\.\d+)?)\s*%?\s*$/);
     if (match) {
+      sawExplicitRatio = true;
       const name = match[1].trim().toLowerCase();
       let ratio = Number(match[2]);
       if (ratio > 1) ratio = ratio / 100;
-      parsed[name] = Math.min(ratio, 1);
+      if (ratio > 0) parsed[name] = Math.min(ratio, 1);
     }
   }
+
+  if (!Object.keys(parsed).length && sawExplicitRatio) return {};
 
   // If no explicit percentages, distribute equally
   if (!Object.keys(parsed).length) {
