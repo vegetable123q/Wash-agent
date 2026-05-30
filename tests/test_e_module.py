@@ -731,6 +731,30 @@ class EModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, field_name):
                     generate_report(plan, items, _campus_context())
 
+    def test_report_requires_valid_plan_estimates(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        bucket = LaundryBucket(
+            bucket_id="light-standard",
+            item_ids=["white-tee"],
+            wash_method=WashMethod.MACHINE_WASH,
+        )
+        invalid_plans = [
+            ("estimated_cost_yuan", LaundryPlan(buckets=[bucket], estimated_cost_yuan=True, estimated_duration_minutes=0)),
+            (
+                "estimated_cost_yuan",
+                LaundryPlan(buckets=[bucket], estimated_cost_yuan=float("inf"), estimated_duration_minutes=0),
+            ),
+            ("estimated_cost_yuan", LaundryPlan(buckets=[bucket], estimated_cost_yuan=-1, estimated_duration_minutes=0)),
+            ("estimated_duration_minutes", LaundryPlan(buckets=[bucket], estimated_cost_yuan=0, estimated_duration_minutes=True)),
+            ("estimated_duration_minutes", LaundryPlan(buckets=[bucket], estimated_cost_yuan=0, estimated_duration_minutes=1.5)),
+            ("estimated_duration_minutes", LaundryPlan(buckets=[bucket], estimated_cost_yuan=0, estimated_duration_minutes=-1)),
+        ]
+
+        for field_name, plan in invalid_plans:
+            with self.subTest(field_name=field_name, plan=plan):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    generate_report(plan, items, _campus_context())
+
     def test_report_requires_valid_bucket_item_ids(self) -> None:
         items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
         invalid_plans = [

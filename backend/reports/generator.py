@@ -56,6 +56,8 @@ def _validate_plan(value: object) -> None:
         if not isinstance(bucket, LaundryBucket):
             raise ValueError(f"plan.buckets[{index}] must be a LaundryBucket")
         _validate_bucket(bucket, f"plan.buckets[{index}]")
+    _required_non_negative_number(value.estimated_cost_yuan, "plan.estimated_cost_yuan")
+    _required_non_negative_int(value.estimated_duration_minutes, "plan.estimated_duration_minutes")
 
 
 def _validate_bucket(bucket: LaundryBucket, field_name: str) -> None:
@@ -117,6 +119,18 @@ def _enum_field(value: object, enum_type: type[object], field_name: str) -> None
 def _boolean(value: object, field_name: str) -> None:
     if not isinstance(value, bool):
         raise ValueError(f"{field_name} must be a boolean")
+
+
+def _required_non_negative_number(value: object, field_name: str) -> None:
+    if value is None:
+        raise ValueError(f"{field_name} is required")
+    _optional_non_negative_number(value, field_name)
+
+
+def _required_non_negative_int(value: object, field_name: str) -> None:
+    if value is None:
+        raise ValueError(f"{field_name} is required")
+    _optional_non_negative_int(value, field_name)
 
 
 def _optional_non_negative_number(value: object, field_name: str) -> None:
