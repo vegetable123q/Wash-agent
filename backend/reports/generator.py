@@ -197,6 +197,14 @@ def _queue_estimate_list(value: object) -> None:
     for index, estimate in enumerate(value):
         if not isinstance(estimate, MachineQueueEstimate):
             raise ValueError(f"campus_context.queue_estimates[{index}] must be a MachineQueueEstimate")
+        _validate_queue_estimate(estimate, f"campus_context.queue_estimates[{index}]")
+
+
+def _validate_queue_estimate(estimate: MachineQueueEstimate, field_name: str) -> None:
+    _enum_field(estimate.machine_type, MachineType, f"{field_name}.machine_type")
+    _required_non_negative_int(estimate.total_count, f"{field_name}.total_count")
+    _required_non_negative_int(estimate.available_count, f"{field_name}.available_count")
+    _optional_non_negative_int(estimate.estimated_wait_minutes, f"{field_name}.estimated_wait_minutes")
 
 
 def _steps_section(plan: LaundryPlan, item_names: dict[str, str]) -> str:

@@ -1180,6 +1180,42 @@ class EModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, field_name):
                     generate_report(plan, items, campus_context)
 
+    def test_report_requires_valid_queue_estimate_fields(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        plan = plan_laundry(items, LaundryConstraints(selected_item_ids=["white-tee"]), _campus_context())
+
+        def invalid_context(**overrides: object) -> CampusContext:
+            estimate_values = {
+                "machine_type": MachineType.STANDARD_WASHER,
+                "total_count": 1,
+                "available_count": 1,
+                "running_count": 0,
+                "out_of_service_count": 0,
+                "unknown_count": 0,
+            }
+            estimate_values.update(overrides)
+            return CampusContext(
+                queue_estimates=[MachineQueueEstimate(**estimate_values)],  # type: ignore[arg-type]
+            )
+
+        invalid_contexts = [
+            ("machine_type", invalid_context(machine_type="standard_washer")),
+            ("total_count", invalid_context(total_count=True)),
+            ("total_count", invalid_context(total_count=1.5)),
+            ("total_count", invalid_context(total_count=-1)),
+            ("available_count", invalid_context(available_count=True)),
+            ("available_count", invalid_context(available_count=1.5)),
+            ("available_count", invalid_context(available_count=-1)),
+            ("estimated_wait_minutes", invalid_context(estimated_wait_minutes=True)),
+            ("estimated_wait_minutes", invalid_context(estimated_wait_minutes=1.5)),
+            ("estimated_wait_minutes", invalid_context(estimated_wait_minutes=-1)),
+        ]
+
+        for field_name, campus_context in invalid_contexts:
+            with self.subTest(field_name=field_name, campus_context=campus_context):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    generate_report(plan, items, campus_context)
+
     def test_report_describes_plan_without_mutating_it(self) -> None:
         items = [
             _item("white-tee", "白色纯棉 T 恤", colors=["white"], materials={"cotton": 1.0}),
