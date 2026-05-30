@@ -549,7 +549,7 @@ def _wash_program_value(campus_context: CampusContext, program: str, key: str) -
     program_rules = programs[program]
     if not isinstance(program_rules, dict) or key not in program_rules:
         raise ValueError(f"missing wash program {key}: {program}")
-    return _number(program_rules[key], f"wash program {program} {key}")
+    return _program_number(program_rules[key], f"wash program {program} {key}", key)
 
 
 def _dryer_program_value(campus_context: CampusContext, program: str, key: str) -> float:
@@ -559,7 +559,14 @@ def _dryer_program_value(campus_context: CampusContext, program: str, key: str) 
     program_rules = programs[program]
     if not isinstance(program_rules, dict) or key not in program_rules:
         raise ValueError(f"missing dryer program {key}: {program}")
-    return _number(program_rules[key], f"dryer program {program} {key}")
+    return _program_number(program_rules[key], f"dryer program {program} {key}", key)
+
+
+def _program_number(value: object, field_name: str, key: str) -> float:
+    number = _number(value, field_name)
+    if key == "duration_minutes" and (number <= 0 or not number.is_integer()):
+        raise ValueError(f"{field_name} must be a positive integer")
+    return number
 
 
 def _number(value: object, field_name: str) -> float:

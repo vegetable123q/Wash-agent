@@ -752,6 +752,18 @@ class EModuleTests(unittest.TestCase):
                 context,
             )
 
+    def test_fractional_program_duration_is_explicit_error(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        context = _campus_context()
+        context.pricing_rules["wash_programs"]["standard"]["duration_minutes"] = 1.5
+
+        with self.assertRaisesRegex(ValueError, "wash program standard duration_minutes"):
+            plan_laundry(
+                items,
+                LaundryConstraints(selected_item_ids=["white-tee"]),
+                context,
+            )
+
     def test_budget_and_max_wait_constraints_are_explicit_warnings(self) -> None:
         items = [_item("white-tee", "白色纯棉 T 恤", colors=["white"], materials={"cotton": 1.0})]
         context = _campus_context()
