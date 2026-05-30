@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 
 from backend.shared.models import (
     CampusContext,
@@ -20,7 +21,7 @@ from backend.shared.models import (
     WardrobeItem,
     WashMethod,
 )
-from backend.shared.utils import contains_any, dedupe
+from backend.shared.utils import dedupe
 
 
 _DARK_COLOR_TERMS = {"black", "dark", "navy", "indigo", "深色", "黑", "藏青", "靛蓝"}
@@ -38,6 +39,7 @@ _STANDARD_DETERGENT_ML_PER_ITEM = 6.0
 _LARGE_DETERGENT_ML_BASE = 32.0
 _LARGE_DETERGENT_ML_PER_ITEM = 8.0
 _STANDARD_BUCKET_IDS = {"dark-standard", "light-standard", "mixed-standard"}
+_ENGLISH_TERM_RE = re.compile(r"^[a-z0-9 _-]+$", re.IGNORECASE)
 
 
 def plan_laundry(
@@ -309,24 +311,24 @@ def _split_bucket_inputs(
 
 def _bucket_id_for(item: WardrobeItem, constraints: LaundryConstraints) -> str:
     search_text = _search_text(item)
-    if item.preferred_method == WashMethod.DO_NOT_WASH or contains_any(search_text, _DO_NOT_WASH_TERMS):
+    if item.preferred_method == WashMethod.DO_NOT_WASH or _contains_term(search_text, _DO_NOT_WASH_TERMS):
         return "do-not-wash"
-    if item.preferred_method == WashMethod.DRY_CLEAN or contains_any(search_text, _DRY_CLEAN_TERMS):
+    if item.preferred_method == WashMethod.DRY_CLEAN or _contains_term(search_text, _DRY_CLEAN_TERMS):
         return "dry-clean"
     if (
         item.preferred_method == WashMethod.HAND_WASH
-        or contains_any(search_text, _HAND_WASH_TERMS)
+        or _contains_term(search_text, _HAND_WASH_TERMS)
         or _has_material(item, _WOOL_TERMS)
         or _has_high_risk(item, {"shrink", "deform"})
     ):
         return "hand-wash"
-    if contains_any(search_text, _BEDDING_TERMS):
+    if _contains_term(search_text, _BEDDING_TERMS):
         return "large-bedding"
-    if contains_any(search_text, _DARK_COLOR_TERMS) or _has_high_risk(item, {"color_bleed"}):
+    if _contains_term(search_text, _DARK_COLOR_TERMS) or _has_high_risk(item, {"color_bleed"}):
         if constraints.allow_mixed_colors and not _has_high_risk(item, {"color_bleed"}):
             return "mixed-standard"
         return "dark-standard"
-    if contains_any(search_text, _LIGHT_COLOR_TERMS):
+    if _contains_term(search_text, _LIGHT_COLOR_TERMS):
         return "mixed-standard" if constraints.allow_mixed_colors else "light-standard"
     raise ValueError(f"cannot assign laundry bucket from item data: {item.profile.item_id}")
 
@@ -588,7 +590,7 @@ def _machine_bucket_warnings(bucket_id: str, items: list[WardrobeItem]) -> list[
 def _hand_wash_warnings(items: list[WardrobeItem], campus_context: CampusContext) -> list[str]:
     warnings = ["该批次不进入共享洗衣机，建议冷水轻柔手洗并自然晾干。"]
     for item in items:
-        if contains_any(_search_text(item), _DO_NOT_DRY_TERMS) or _dryer_unsafe(item):
+        if _contains_term(_search_text(item), _DO_NOT_DRY_TERMS) or _dryer_unsafe(item):
             warnings.append(f"{item.profile.name} 不可烘干或高温风险较高。")
     warnings.extend(_air_dry_context_warnings(campus_context))
     return dedupe(warnings)
@@ -625,7 +627,7 @@ def _air_dry_context_warnings(campus_context: CampusContext) -> list[str]:
 def _dryer_unsafe(item: WardrobeItem) -> bool:
     search_text = _search_text(item)
     return (
-        contains_any(search_text, _DO_NOT_DRY_TERMS)
+        _contains_term(search_text, _DO_NOT_DRY_TERMS)
         or _has_material(item, _WOOL_TERMS)
         or _has_high_risk(item, _HIGH_DRY_RISK_KEYS)
     )
@@ -637,7 +639,17 @@ def _any_recommends_bag(items: list[WardrobeItem]) -> bool:
 
 def _has_material(item: WardrobeItem, terms: set[str]) -> bool:
     materials = " ".join(item.profile.material_ratios.keys()).lower()
-    return contains_any(materials, terms)
+    return _contains_term(materials, terms)
+
+
+def _contains_term(text: str, terms: set[str]) -> bool:
+    return any(_term_matches(text, term) for term in terms)
+
+
+def _term_matches(text: str, term: str) -> bool:
+    if _ENGLISH_TERM_RE.fullmatch(term):
+        return re.search(rf"(^|[^a-z0-9]){re.escape(term)}([^a-z0-9]|$)", text) is not None
+    return term in text
 
 
 def _has_high_risk(item: WardrobeItem, keys: set[str]) -> bool:

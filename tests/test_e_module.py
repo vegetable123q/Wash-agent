@@ -171,6 +171,24 @@ class EModuleTests(unittest.TestCase):
             "light-standard standard 洗",
         ])
 
+    def test_planner_does_not_match_color_terms_inside_unrelated_english_words(self) -> None:
+        items = [
+            _item(
+                "berry-tee",
+                "blackberry cotton t-shirt",
+                colors=["white"],
+                materials={"cotton": 1.0},
+            )
+        ]
+
+        plan = plan_laundry(
+            items,
+            LaundryConstraints(selected_item_ids=["berry-tee"], allow_dryer=False),
+            _campus_context(),
+        )
+
+        self.assertEqual(plan.buckets[0].bucket_id, "light-standard")
+
     def test_dryer_is_used_only_when_allowed_and_safe(self) -> None:
         items = [
             _item("white-tee", "白色纯棉 T 恤", colors=["white"], materials={"cotton": 1.0}),
