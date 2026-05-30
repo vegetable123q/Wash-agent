@@ -55,6 +55,14 @@ def _write_rules(tmp_dir: str) -> Path:
 
 
 class CampusMachineApiTests(unittest.TestCase):
+    def test_machine_client_rejects_invalid_timeout_seconds(self) -> None:
+        for timeout_seconds in (True, 0, -1, float("inf"), "20"):
+            with self.subTest(timeout_seconds=timeout_seconds):
+                with self.assertRaisesRegex(ValueError, "timeout_seconds"):
+                    LaundryMachineClient(
+                        timeout_seconds=timeout_seconds,  # type: ignore[arg-type]
+                    )
+
     def test_list_towers_returns_cleverschool_tower_contracts(self) -> None:
         transport = FakeCleverSchoolTransport(
             {

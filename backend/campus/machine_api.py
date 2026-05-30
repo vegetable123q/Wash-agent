@@ -54,7 +54,7 @@ class LaundryMachineClient:
         self.status_url = status_url
         self.haier_position_url = haier_position_url
         self.haier_detail_url = haier_detail_url
-        self.timeout_seconds = timeout_seconds
+        self.timeout_seconds = _validate_timeout_seconds(timeout_seconds)
 
     def list_towers(self) -> list[MachineTower]:
         """Return dormitory/tower choices from all supported machine services."""
@@ -315,6 +315,15 @@ def _required_identifier(item: dict[str, Any], key: str, context: str) -> str:
     if isinstance(value, (str, int)) and str(value).strip():
         return str(value).strip()
     raise ValueError(f"Missing required {context}.{key}")
+
+
+def _validate_timeout_seconds(timeout_seconds: object) -> float:
+    if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, int | float):
+        raise ValueError("timeout_seconds must be a positive finite number")
+    timeout = float(timeout_seconds)
+    if timeout <= 0 or not math.isfinite(timeout):
+        raise ValueError("timeout_seconds must be a positive finite number")
+    return timeout
 
 
 def _required_payload_text(
