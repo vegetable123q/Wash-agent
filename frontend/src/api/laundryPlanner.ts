@@ -36,7 +36,7 @@ const STANDARD_DETERGENT_ML_PER_ITEM = 6.0;
 const LARGE_DETERGENT_ML_BASE = 32.0;
 const LARGE_DETERGENT_ML_PER_ITEM = 8.0;
 
-const BUCKET_ORDER = ["do-not-wash", "dry-clean", "hand-wash", "large-bedding", "dark-standard", "light-standard"];
+const BUCKET_ORDER = ["do-not-wash", "dry-clean", "hand-wash", "large-bedding", "dark-standard", "light-standard", "mixed-standard"];
 
 // ─── main entry ─────────────────────────────────────────────────────────
 
@@ -47,7 +47,7 @@ export function planLaundry(
 ): LaundryPlan {
   validateUniqueItemIds(items);
   const selected = selectedItems(items, constraints.selected_item_ids);
-  const bucketInputs = splitBucketInputs(selected);
+  const bucketInputs = splitBucketInputs(selected, constraints);
   const buckets = bucketInputs.map(({ bucketId, baseBucketId, items: bucketItems }) =>
     buildBucket(bucketId, baseBucketId, bucketItems, constraints, campusContext),
   );
@@ -104,10 +104,10 @@ interface BucketInput {
   items: WardrobeItemForPlan[];
 }
 
-function splitBucketInputs(items: WardrobeItemForPlan[]): BucketInput[] {
+function splitBucketInputs(items: WardrobeItemForPlan[], constraints: LaundryConstraints): BucketInput[] {
   const groups = new Map<string, WardrobeItemForPlan[]>();
   for (const item of items) {
-    const bucketId = bucketIdFor(item);
+    const bucketId = bucketIdFor(item, constraints);
     if (!groups.has(bucketId)) groups.set(bucketId, []);
     groups.get(bucketId)!.push(item);
   }
@@ -121,7 +121,7 @@ function splitBucketInputs(items: WardrobeItemForPlan[]): BucketInput[] {
   });
 }
 
-function bucketIdFor(item: WardrobeItemForPlan): string {
+function bucketIdFor(item: WardrobeItemForPlan, constraints: LaundryConstraints): string {
   const text = searchText(item);
   if (item.preferred_method === "do_not_wash" || containsAny(text, DO_NOT_WASH_TERMS)) return "do-not-wash";
   if (item.preferred_method === "dry_clean" || containsAny(text, DRY_CLEAN_TERMS)) return "dry-clean";
@@ -134,8 +134,12 @@ function bucketIdFor(item: WardrobeItemForPlan): string {
     return "hand-wash";
   }
   if (containsAny(text, BEDDING_TERMS)) return "large-bedding";
-  if (containsAny(text, DARK_COLOR_TERMS) || hasHighRisk(item, new Set(["color_bleed"]))) return "dark-standard";
-  if (containsAny(text, LIGHT_COLOR_TERMS)) return "light-standard";
+  const hasColorBleedRisk = hasHighRisk(item, new Set(["color_bleed"]));
+  if (containsAny(text, DARK_COLOR_TERMS) || hasColorBleedRisk) {
+    if (constraints.allow_mixed_colors && !hasColorBleedRisk) return "mixed-standard";
+    return "dark-standard";
+  }
+  if (containsAny(text, LIGHT_COLOR_TERMS)) return constraints.allow_mixed_colors ? "mixed-standard" : "light-standard";
   return "dark-standard"; // default: treat unknown as dark for safety
 }
 
@@ -339,6 +343,9 @@ function machineBucketWarnings(bucketId: string, items: WardrobeItemForPlan[]): 
   if (bucketId === "dark-standard") {
     warnings.push("深色或高掉色风险衣物已单独成桶，减少串色和返洗。");
   }
+  if (bucketId === "mixed-standard") {
+    warnings.push("用户允许混色，低掉色风险普通衣物合并成标准批次。");
+  }
   if (bucketId === "large-bedding") {
     warnings.push("床品已单独成桶，使用标准洗衣机时不要与衣物混洗，避免过载导致洗不净。");
   }
@@ -387,7 +394,7 @@ function detergentMl(bucketId: string, items: WardrobeItemForPlan[]): number | n
   if (bucketId === "hand-wash") return Math.round(count * HAND_WASH_DETERGENT_ML_PER_ITEM * 10) / 10;
   if (bucketId === "large-bedding")
     return Math.round((LARGE_DETERGENT_ML_BASE + count * LARGE_DETERGENT_ML_PER_ITEM) * 10) / 10;
-  if (bucketId === "dark-standard" || bucketId === "light-standard")
+  if (bucketId === "dark-standard" || bucketId === "light-standard" || bucketId === "mixed-standard")
     return Math.round((STANDARD_DETERGENT_ML_BASE + count * STANDARD_DETERGENT_ML_PER_ITEM) * 10) / 10;
   return null;
 }

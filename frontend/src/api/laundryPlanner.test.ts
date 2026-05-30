@@ -95,6 +95,31 @@ describe("planLaundry", () => {
     expect(plan.buckets[0].program).toBe("standard");
   });
 
+  it("combines low-risk light and dark items when mixed colors are allowed", () => {
+    const items = [
+      standardItem("white-tee", "white cotton tee", ["white"]),
+      standardItem("navy-tee", "navy cotton tee", ["navy"]),
+    ];
+
+    const plan = planLaundry(items, {
+      selected_item_ids: ["white-tee", "navy-tee"],
+      urgent_item_ids: [],
+      allow_mixed_colors: true,
+      allow_dryer: false,
+      hygiene_sensitive: false,
+      max_wait_minutes: 10,
+      budget_yuan: null,
+    }, context);
+
+    expect(plan.buckets).toHaveLength(1);
+    expect(plan.buckets[0]).toMatchObject({
+      bucket_id: "mixed-standard",
+      item_ids: ["white-tee", "navy-tee"],
+      detergent_ml: 30,
+      program: "standard",
+    });
+  });
+
   it("splits many same-color standard items across multiple washer loads", () => {
     const items: WardrobeItemForPlan[] = Array.from({ length: 12 }, (_, index) => ({
       profile: {
@@ -257,14 +282,14 @@ describe("planLaundry", () => {
   });
 });
 
-function standardItem(itemId: string, name: string): WardrobeItemForPlan {
+function standardItem(itemId: string, name: string, colors: string[] = ["white"]): WardrobeItemForPlan {
   return {
     profile: {
       item_id: itemId,
       name,
       user_note: "",
       material_ratios: { cotton: 1 },
-      colors: ["white"],
+      colors,
       care_warnings: [],
       care_recommendations: [],
       care_forbidden: [],
