@@ -22,6 +22,7 @@ export function generateReport(
   campusContext: CampusContext,
 ): WashReport {
   validatePlanItemIdsUnique(plan);
+  validateReportItemsUnique(items);
   const itemNames = new Map(items.map((item) => [item.profile.item_id, item.profile.name]));
   return {
     title: "本次校园洗衣报告",
@@ -239,6 +240,22 @@ function validatePlanItemIdsUnique(plan: LaundryPlan): void {
   }
   if (duplicates.length) {
     throw new Error(`plan duplicate item ids: ${dedupe(duplicates).join(", ")}`);
+  }
+}
+
+function validateReportItemsUnique(items: WardrobeItemForPlan[]): void {
+  const seen = new Set<string>();
+  const duplicates: string[] = [];
+  for (const item of items) {
+    const itemId = item.profile.item_id;
+    if (seen.has(itemId)) {
+      duplicates.push(itemId);
+      continue;
+    }
+    seen.add(itemId);
+  }
+  if (duplicates.length) {
+    throw new Error(`items duplicate item_id: ${dedupe(duplicates).join(", ")}`);
   }
 }
 

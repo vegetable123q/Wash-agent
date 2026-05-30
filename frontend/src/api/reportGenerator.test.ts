@@ -105,6 +105,16 @@ describe("generateReport", () => {
 
     expect(() => generateReport(plan, minimalItems(), minimalCampusContext())).toThrow(/duplicate.*bedding/);
   });
+
+  it("rejects duplicate report item ids before rendering", () => {
+    const baseItem = minimalItems()[0];
+    const items = [
+      baseItem,
+      { ...baseItem, profile: { ...baseItem.profile, name: "duplicate bedding" } },
+    ];
+
+    expect(() => generateReport(minimalPlan(), items, minimalCampusContext())).toThrow(/duplicate.*bedding/);
+  });
 });
 
 function minimalPlan(): LaundryPlan {
