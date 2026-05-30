@@ -1174,6 +1174,15 @@ class EModuleTests(unittest.TestCase):
             ("location", invalid_context(location=True)),
             ("location", invalid_context(location="")),
             ("machine_type", invalid_context(machine_type="standard_washer")),
+            ("status", invalid_context(status="available")),
+            ("remaining_minutes", invalid_context(remaining_minutes=True)),
+            ("remaining_minutes", invalid_context(remaining_minutes=1.5)),
+            ("remaining_minutes", invalid_context(remaining_minutes=-1)),
+            ("price_yuan", invalid_context(price_yuan=True)),
+            ("price_yuan", invalid_context(price_yuan=float("nan"))),
+            ("price_yuan", invalid_context(price_yuan=-1)),
+            ("modes", invalid_context(modes="standard")),
+            ("modes", invalid_context(modes=["standard", 1])),
         ]
 
         for field_name, campus_context in invalid_contexts:
