@@ -199,6 +199,25 @@ describe("mobileSummary wardrobe selection", () => {
     expect(summary.wardrobe.items[0].material_ratios).toEqual({ wool: 0.5 });
   });
 
+  it("normalizes fractional legacy wardrobe counts to zero", async () => {
+    localStorage.setItem(
+      wardrobeStorageKey,
+      JSON.stringify([
+        {
+          item_id: "legacy-tee",
+          name: "legacy tee",
+          wear_count_since_wash: 2.5,
+          wash_count: 1.5,
+        },
+      ]),
+    );
+
+    const summary = await fetchMobileSummary();
+
+    expect(summary.wardrobe.items[0].wear_count_since_wash).toBe(0);
+    expect(summary.wardrobe.items[0].wash_count).toBe(0);
+  });
+
   it("trims legacy stored risk levels before validation", async () => {
     localStorage.setItem(
       wardrobeStorageKey,

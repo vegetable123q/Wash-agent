@@ -440,7 +440,7 @@ function stringArray(value: unknown): string[] {
 
 function nonNegativeInteger(value: unknown): number {
   const numeric = typeof value === "string" && value.trim() ? Number(value) : value;
-  return typeof numeric === "number" && Number.isFinite(numeric) && numeric > 0 ? Math.floor(numeric) : 0;
+  return typeof numeric === "number" && Number.isFinite(numeric) && Number.isInteger(numeric) && numeric >= 0 ? numeric : 0;
 }
 
 function normalizeMaterialRatioRecord(value: unknown): Record<string, number> {
