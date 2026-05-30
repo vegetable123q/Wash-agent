@@ -204,6 +204,12 @@ def _validate_queue_estimate(estimate: MachineQueueEstimate, field_name: str) ->
     _enum_field(estimate.machine_type, MachineType, f"{field_name}.machine_type")
     _required_non_negative_int(estimate.total_count, f"{field_name}.total_count")
     _required_non_negative_int(estimate.available_count, f"{field_name}.available_count")
+    _required_non_negative_int(estimate.running_count, f"{field_name}.running_count")
+    _required_non_negative_int(
+        estimate.out_of_service_count,
+        f"{field_name}.out_of_service_count",
+    )
+    _required_non_negative_int(estimate.unknown_count, f"{field_name}.unknown_count")
     _optional_non_negative_int(estimate.estimated_wait_minutes, f"{field_name}.estimated_wait_minutes")
 
 
