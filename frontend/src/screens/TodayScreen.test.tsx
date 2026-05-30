@@ -80,6 +80,30 @@ describe("TodayScreen", () => {
     expect(screen.queryByText("白 T 恤")).not.toBeInTheDocument();
   });
 
+  it("does not show static demo clothes while a configured live summary is loading", () => {
+    render(
+      <TodayScreen
+        backendStatus="loading"
+        mobileSummary={null}
+        userProfile={{
+          displayName: "测试用户",
+          dormName: "紫荆1号楼",
+          dormFloor: "6",
+          latestPickupTime: "22:30",
+          allowDryer: true,
+          budgetYuan: 20,
+          maxWaitMinutes: 30,
+        }}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByText("正在读取衣柜和机器状态").length).toBeGreaterThan(0);
+    expect(screen.queryByText("4 个洗护批次")).not.toBeInTheDocument();
+    expect(screen.queryByText("白 T、运动 T 恤")).not.toBeInTheDocument();
+    expect(screen.queryByText("羊毛开衫")).not.toBeInTheDocument();
+  });
+
   it("shows dirty basket progress for connected selected clothes", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-29T19:00:00.000+08:00"));

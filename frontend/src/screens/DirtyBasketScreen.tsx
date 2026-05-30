@@ -37,6 +37,7 @@ export function DirtyBasketScreen({
     wardrobeItems.length > 0 && wardrobeItems.every((item) => selectedIds.has(item.item_id));
   const canSelectAll = Boolean(onSelectAll && wardrobeItems.length > 0 && !allWardrobeItemsSelected);
   const canClearBasket = Boolean(onClearBasket && dirtyBasket.item_count > 0);
+  const hasSelectedLaundryItems = selectedIds.size > 0;
 
   return (
     <Page compact>
@@ -124,9 +125,18 @@ export function DirtyBasketScreen({
       </Section>
 
       <Section title="下一步">
-        <button className="primary-button" type="button" onClick={() => onNavigate("planDetail")}>
-          查看本次方案
-          <ArrowRight size={18} />
+        <button
+          className="primary-button"
+          type="button"
+          disabled={!hasSelectedLaundryItems}
+          onClick={() => {
+            if (hasSelectedLaundryItems) {
+              onNavigate("planDetail");
+            }
+          }}
+        >
+          {hasSelectedLaundryItems ? "查看本次方案" : "先选择衣物"}
+          {hasSelectedLaundryItems ? <ArrowRight size={18} /> : null}
         </button>
       </Section>
     </Page>

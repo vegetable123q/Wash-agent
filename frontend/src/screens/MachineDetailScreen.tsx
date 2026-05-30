@@ -1,17 +1,35 @@
 import { AlertTriangle, WashingMachine } from "lucide-react";
 import { machineProgramOptions, type MachineProgramOption } from "../api/machinePricing";
-import type { BackendMachine } from "../api/mobileSummary";
+import type { BackendMachine, MobileSummary } from "../api/mobileSummary";
+import type { LaundryBucket } from "../api/types";
 import { Card, Chip, Page, PrimaryPanel, Section, TopBar } from "../components/AppChrome";
-import { type MachineView } from "../data/washMateContent";
+import { type MachineView, type Tone } from "../data/washMateContent";
 
 interface MachineDetailScreenProps {
   onBack: () => void;
   backendMachine?: BackendMachine | null;
   staticMachine?: MachineView | null;
   pricingRules?: Record<string, unknown> | null;
+  mobileSummary?: MobileSummary | null;
 }
 
-export function MachineDetailScreen({ onBack, backendMachine, staticMachine, pricingRules }: MachineDetailScreenProps) {
+interface MachineFitRow {
+  title: string;
+  description: string;
+  icon: string;
+  iconTone: "purple" | "blue" | "amber";
+  chip: string;
+  chipTone: Tone;
+  actionLabel?: string;
+}
+
+interface MachineExclusionRow {
+  title: string;
+  description: string;
+  method: string;
+}
+
+export function MachineDetailScreen({ onBack, backendMachine, staticMachine, pricingRules, mobileSummary }: MachineDetailScreenProps) {
   if (!backendMachine && !staticMachine) {
     return (
       <Page compact>
@@ -28,6 +46,10 @@ export function MachineDetailScreen({ onBack, backendMachine, staticMachine, pri
   const modes = machine.modeOptions.length
     ? machine.modeOptions.map((mode) => mode.label).join(" / ")
     : machine.modes.length ? machine.modes.map(modeLabel).join(" / ") : "暂无可用模式";
+  const nameMap = new Map(mobileSummary?.wardrobe.items.map((item) => [item.item_id, item.name]) ?? []);
+  const fitRows = machineFitRows(machine, mobileSummary, nameMap);
+  const exclusionRows = machineExclusionRows(mobileSummary, nameMap);
+  const actionLabel = fitRows.find((row) => row.actionLabel)?.actionLabel ?? (mobileSummary ? "本机未分配到本次方案" : "等待本次方案");
 
   return (
     <Page compact>
@@ -73,36 +95,16 @@ export function MachineDetailScreen({ onBack, backendMachine, staticMachine, pri
       <Section title="适合本次">
         <Card>
           <div className="list-stack">
-            {machine.backendType === "dryer" ? (
-              <>
-                <div className="dense-row">
-                  <span className="text-icon text-icon-purple">烘</span>
-                  <div>
-                    <h3>低温烘干</h3>
-                    <p>适合烘干不可晾晒或急需使用的衣物。</p>
-                  </div>
-                  <Chip tone="teal">推荐</Chip>
+            {fitRows.map((row) => (
+              <div className="dense-row" key={row.title}>
+                <span className={`text-icon text-icon-${row.iconTone}`}>{row.icon}</span>
+                <div>
+                  <h3>{row.title}</h3>
+                  <p>{row.description}</p>
                 </div>
-              </>
-            ) : (
-              <>
-                <div className="dense-row">
-                  <span className="text-icon text-icon-purple">深</span>
-                  <div>
-                    <h3>深色衣物桶</h3>
-                    <p>深色或掉色风险衣物集中处理，防串色。</p>
-                  </div>
-                  <Chip tone="teal">推荐</Chip>
-                </div>
-                <div className="dense-row">
-                  <span className="text-icon text-icon-blue">浅</span>
-                  <div>
-                    <h3>浅色快速洗</h3>
-                    <p>白色和浅色衣物可快速清洗。</p>
-                  </div>
-                </div>
-              </>
-            )}
+                <Chip tone={row.chipTone}>{row.chip}</Chip>
+              </div>
+            ))}
           </div>
         </Card>
       </Section>
@@ -123,26 +125,165 @@ export function MachineDetailScreen({ onBack, backendMachine, staticMachine, pri
         </div>
       </Section>
 
-      <Section title="不建议放入">
-        <Card accent="orange" className="warning-surface">
-          <div className="row-between">
-            <div>
-              <h3>羊毛、真丝、正装</h3>
-              <p>共享机洗摩擦强，材质风险高，应走手洗或干洗。</p>
-            </div>
-            <Chip tone="red">
-              <AlertTriangle size={14} />
-              排除
-            </Chip>
+      {exclusionRows.length > 0 ? (
+        <Section title="不建议放入">
+          <div className="list-stack">
+            {exclusionRows.map((row) => (
+              <Card key={row.title} accent="orange" className="warning-surface">
+                <div className="row-between">
+                  <div>
+                    <h3>{row.title}</h3>
+                    <p>{row.description}</p>
+                  </div>
+                  <Chip tone="red">
+                    <AlertTriangle size={14} />
+                    {row.method}
+                  </Chip>
+                </div>
+              </Card>
+            ))}
           </div>
-        </Card>
-      </Section>
+        </Section>
+      ) : null}
 
       <button className="primary-button" type="button" disabled title="机器会根据本次方案自动匹配">
-        用于深色衣物桶
+        {actionLabel}
       </button>
     </Page>
   );
+}
+
+function machineFitRows(
+  machine: ReturnType<typeof detailFromBackend> | ReturnType<typeof detailFromStatic>,
+  mobileSummary: MobileSummary | null | undefined,
+  nameMap: Map<string, string>,
+): MachineFitRow[] {
+  if (!mobileSummary) {
+    return [{
+      title: "等待本次方案",
+      description: "先在脏衣篮选择本次要洗的衣物，系统会自动匹配合适机器。",
+      icon: machine.backendType === "dryer" ? "烘" : "待",
+      iconTone: "blue",
+      chip: "待生成",
+      chipTone: "orange",
+    }];
+  }
+
+  if (machine.backendType === "dryer") {
+    const assignedDryingSteps = mobileSummary.drying_plan?.steps.filter((step) => step.dryer_machine_id === machine.backendId) ?? [];
+    if (!assignedDryingSteps.length) {
+      return [noAssignmentRow("烘")];
+    }
+    return assignedDryingSteps.map((step) => {
+      const title = `${bucketDisplayName(step.bucket_id)} 烘干`;
+      return {
+        title,
+        description: itemNames(step.item_ids, nameMap),
+        icon: "烘",
+        iconTone: "amber",
+        chip: dryLabel(step.dry_method),
+        chipTone: "teal",
+        actionLabel: `用于${title}`,
+      };
+    });
+  }
+
+  const assignedBuckets = mobileSummary.plan.buckets.filter((bucket) => bucket.machine_id === machine.backendId);
+  if (!assignedBuckets.length) {
+    return [noAssignmentRow(machine.backendType === "shoe_washer" ? "鞋" : "待")];
+  }
+  return assignedBuckets.map((bucket) => {
+    const title = bucketDisplayName(bucket.bucket_id);
+    return {
+      title,
+      description: itemNames(bucket.item_ids, nameMap),
+      icon: title.slice(0, 1) || "洗",
+      iconTone: baseBucketId(bucket.bucket_id) === "dark-standard" ? "purple" : "blue",
+      chip: bucket.program ? programLabel(bucket.program) : machine.typeLabel,
+      chipTone: "teal",
+      actionLabel: `用于${title}`,
+    };
+  });
+}
+
+function noAssignmentRow(icon: string): MachineFitRow {
+  return {
+    title: "未分配到本次方案",
+    description: "当前方案已经匹配其他机器；可返回洗衣房查看本次推荐设备。",
+    icon,
+    iconTone: "blue",
+    chip: "未分配",
+    chipTone: "orange",
+  };
+}
+
+function machineExclusionRows(
+  mobileSummary: MobileSummary | null | undefined,
+  nameMap: Map<string, string>,
+): MachineExclusionRow[] {
+  if (!mobileSummary) {
+    return [];
+  }
+  return mobileSummary.plan.buckets
+    .filter((bucket) => bucket.wash_method !== "machine_wash")
+    .map((bucket) => ({
+      title: `${itemNames(bucket.item_ids, nameMap)}不进共享机`,
+      description: exclusionReason(bucket),
+      method: methodLabel(bucket.wash_method),
+    }));
+}
+
+function itemNames(itemIds: string[], nameMap: Map<string, string>): string {
+  return itemIds.map((id) => nameMap.get(id) ?? "本批衣物").join("、") || "未列出衣物";
+}
+
+function baseBucketId(bucketId: string): string {
+  return bucketId.replace(/-\d+$/, "");
+}
+
+function bucketDisplayName(bucketId: string) {
+  const base = baseBucketId(bucketId);
+  if (base === "light-standard") return "浅色标准洗";
+  if (base === "light-quick") return "浅色快洗";
+  if (base === "dark-standard") return "深色标准洗";
+  if (base === "mixed-standard") return "混色标准洗";
+  if (base === "large-bedding") return "床品单独洗";
+  if (base === "hand-wash") return "手洗衣物";
+  if (base === "dry-clean") return "干洗衣物";
+  return "本批衣物";
+}
+
+function methodLabel(method: string) {
+  if (method === "hand_wash") return "手洗";
+  if (method === "dry_clean") return "干洗";
+  if (method === "do_not_wash") return "不水洗";
+  if (method === "machine_wash") return "机洗";
+  return "待确认";
+}
+
+function dryLabel(method: string) {
+  if (method === "low_heat_dryer") return "低温烘干";
+  if (method === "normal_dryer") return "普通烘干";
+  if (method === "air_dry") return "自然晾干";
+  if (method === "do_not_dry") return "不烘干";
+  return "烘干待确认";
+}
+
+function programLabel(program: string) {
+  if (program === "quick") return "快速洗";
+  if (program === "standard") return "标准洗";
+  if (program === "large") return "大件洗";
+  return "合适程序";
+}
+
+function exclusionReason(bucket: LaundryBucket) {
+  if (bucket.warnings.length) {
+    return bucket.warnings[0];
+  }
+  if (bucket.wash_method === "hand_wash") return "材质或洗标提示更适合手洗。";
+  if (bucket.wash_method === "dry_clean") return "该批次需要专业干洗。";
+  if (bucket.wash_method === "do_not_wash") return "洗护标签提示不可水洗。";
+  return "本批衣物不适合共享机洗。";
 }
 
 function detailFromBackend(machine: BackendMachine, pricingRules?: Record<string, unknown> | null) {

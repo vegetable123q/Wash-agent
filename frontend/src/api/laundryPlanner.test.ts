@@ -376,7 +376,68 @@ describe("planLaundry", () => {
       machine_id: "sixth-floor",
       machine_floor: 6,
     });
-    expect(plan.global_warnings.join("\n")).toContain("推荐使用 sixth-floor");
+    expect(plan.global_warnings.join("\n")).toContain("推荐使用南区21号楼六层的 sixth-floor 号洗衣机，程序标准洗。");
+  });
+
+  it("uses the physical washer number from location when it is present", () => {
+    const washer: MachineInfo = {
+      machine_id: "85702265",
+      location: "紫荆16号楼 清华大学紫荆16号楼6层6号",
+      machine_floor: 6,
+      machine_type: "standard_washer",
+      status: "available",
+      remaining_minutes: null,
+      price_yuan: null,
+      modes: ["standard"],
+    };
+    const contextWithPhysicalNumber: CampusContext = {
+      all_machines: [washer],
+      available_machines: [washer],
+      queue_estimates: [],
+      weather: {},
+      drying_context: {},
+      pricing_rules: {
+        wash_programs: {
+          standard: { price_yuan: 3.5, duration_minutes: 40 },
+        },
+        dryer_programs: {
+          low: { price_yuan: 2, duration_minutes: 50 },
+        },
+      },
+    };
+    const item: WardrobeItemForPlan = {
+      profile: {
+        item_id: "shirt",
+        name: "白色短袖",
+        user_note: "",
+        material_ratios: { cotton: 1 },
+        colors: ["white"],
+        care_warnings: [],
+        care_recommendations: [],
+        care_forbidden: [],
+        care_symbols: {},
+        risks: {},
+        recommended_wash: "machine_wash",
+      },
+      wear_count_since_wash: 1,
+      preferred_method: "machine_wash",
+      user_notes: [],
+    };
+
+    const plan = planLaundry([item], {
+      selected_item_ids: ["shirt"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+      preferred_machine_floor: null,
+    }, contextWithPhysicalNumber);
+
+    const warningText = plan.global_warnings.join("\n");
+    expect(warningText).toContain("推荐使用清华大学紫荆16号楼6层6号洗衣机，程序标准洗。");
+    expect(warningText).not.toContain("85702265 号洗衣机");
   });
 });
 

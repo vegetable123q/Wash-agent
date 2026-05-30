@@ -139,7 +139,7 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
         description: exclusionReason(b),
         method: methodLabel(b.wash_method),
       }));
-    return items.length > 0 ? items : defaultExclusionItems();
+    return items;
   }, [nameMap, planBuckets, hasBuckets, hasSummary]);
 
   // LLM-enhanced summary

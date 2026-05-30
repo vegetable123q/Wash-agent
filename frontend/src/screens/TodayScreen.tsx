@@ -39,6 +39,10 @@ export function TodayScreen({
     userProfile?.maxWaitMinutes != null ||
     (userProfile?.latestPickupTime && userProfile.latestPickupTime !== "22:30"),
   );
+  const useStaticDemo = !connected && backendStatus === "offline" && !hasPersonalContext;
+  const pendingSummaryText = backendStatus === "loading"
+    ? "正在读取衣柜和机器状态"
+    : "实时数据暂不可用，请稍后刷新";
   const dormLabel = dormWithFloor(userProfile);
   const subtitle = userProfile?.dormName
     ? `${dormLabel} · 最晚 ${userProfile.latestPickupTime} 取衣`
@@ -82,7 +86,15 @@ export function TodayScreen({
         risk: mobileSummary.plan.buckets.length > 0 ? "已按风险自动分桶" : "暂无方案",
         note: mobileSummary.plan.summary,
       }
-    : planSummaryFallback;
+    : useStaticDemo
+      ? planSummaryFallback
+      : {
+          buckets: backendStatus === "loading" ? "加载中" : "待确认",
+          cost: "费用待确认",
+          duration: "时长待确认",
+          risk: pendingSummaryText,
+          note: pendingSummaryText,
+        };
 
   const hasExecutablePlan = connected && mobileSummary.plan.buckets.length > 0;
 
@@ -123,7 +135,16 @@ export function TodayScreen({
 
   // Dynamic clothing items from plan when connected
   const todayItems = useMemo(() => {
-    if (!connected) return todaySummary.items;
+    if (!connected) {
+      if (useStaticDemo) return todaySummary.items;
+      return [{
+        id: "pending-selection",
+        label: backendStatus === "loading" ? "正在加载衣柜" : "衣柜状态待确认",
+        description: pendingSummaryText,
+        tone: "blue" as const,
+        badge: { label: backendStatus === "loading" ? "加载中" : "待确认", tone: "orange" as const },
+      }];
+    }
     const nameMap = new Map(mobileSummary.wardrobe.items.map((i) => [i.item_id, i.name]));
     if (!mobileSummary.plan.buckets.length) {
       const selectedIds = mobileSummary.selected_laundry_item_ids ?? [];
@@ -159,11 +180,20 @@ export function TodayScreen({
         },
       };
     });
-  }, [connected, mobileSummary]);
+  }, [backendStatus, connected, mobileSummary, pendingSummaryText, useStaticDemo]);
 
   // Dynamic bucket preview from plan when connected
   const todayBuckets = useMemo(() => {
-    if (!connected) return bucketPlans;
+    if (!connected) {
+      if (useStaticDemo) return bucketPlans;
+      return [{
+        id: "pending-bucket",
+        title: backendStatus === "loading" ? "正在加载" : "暂无分桶",
+        machine: "待生成",
+        detail: pendingSummaryText,
+        accent: "blue" as const,
+      }];
+    }
     if (!mobileSummary?.plan.buckets.length) {
       return [{
         id: "empty-bucket",
@@ -190,11 +220,17 @@ export function TodayScreen({
         accent: unavailableWasherReason ? ("orange" as const) : b.wash_method === "hand_wash" || b.wash_method === "dry_clean" || b.wash_method === "do_not_wash" ? ("orange" as const) : baseBucketId(b.bucket_id) === "dark-standard" ? ("purple" as const) : ("blue" as const),
       };
     });
-  }, [connected, mobileSummary]);
+  }, [backendStatus, connected, mobileSummary, pendingSummaryText, useStaticDemo]);
 
   // Dynamic stats from campus context when connected
   const todayStats = useMemo(() => {
-    if (!connected || !mobileSummary) return todaySummary.stats;
+    if (!connected || !mobileSummary) {
+      if (useStaticDemo) return todaySummary.stats;
+      return [
+        { value: backendStatus === "loading" ? "读取中" : "待确认", label: pendingSummaryText },
+        { value: "待确认", label: "等待机器状态" },
+      ];
+    }
     const available = mobileSummary.campus_context.available_machines.length;
     const waits = mobileSummary.campus_context.queue_estimates
       .filter((q) => q.estimated_wait_minutes != null && q.estimated_wait_minutes > 0)
@@ -204,7 +240,12 @@ export function TodayScreen({
       { value: `${available} 台`, label: available > 0 ? "空闲可用，可先开洗" : "当前无空闲机器" },
       { value: minWait != null ? `${minWait} 分` : "0 分", label: minWait != null && minWait > 0 ? "最短等待后可用" : "无需等待" },
     ];
-  }, [connected, mobileSummary]);
+  }, [backendStatus, connected, mobileSummary, pendingSummaryText, useStaticDemo]);
+  const planSummaryChip = connected || useStaticDemo ? "已整理" : backendStatus === "loading" ? "加载中" : "待确认";
+  const bucketSummaryChip = connected
+    ? hasUnavailableWasherBucket(mobileSummary?.plan.buckets) ? "缺洗衣机" : "可执行"
+    : useStaticDemo ? "可执行" : "待生成";
+  const canOpenPlan = connected || useStaticDemo;
   const refreshAction = onRefresh ? (
     <button
       className="icon-button refresh-button"
@@ -285,7 +326,7 @@ export function TodayScreen({
         ))}
       </div>
 
-      <Section title="本次方案概览" action={<Chip tone="purple">已整理</Chip>}>
+      <Section title="本次方案概览" action={<Chip tone={connected || useStaticDemo ? "purple" : "orange"}>{planSummaryChip}</Chip>}>
         <Card accent="purple" className="plan-summary-card">
           <div className="plan-signal-grid">
             <div>
@@ -363,7 +404,7 @@ export function TodayScreen({
         </Card>
       </Section>
 
-      <Section title="分桶摘要" action={<Chip tone={hasUnavailableWasherBucket(mobileSummary?.plan.buckets) ? "orange" : "purple"}>{hasUnavailableWasherBucket(mobileSummary?.plan.buckets) ? "缺洗衣机" : "可执行"}</Chip>}>
+      <Section title="分桶摘要" action={<Chip tone={bucketSummaryChip === "可执行" ? "purple" : "orange"}>{bucketSummaryChip}</Chip>}>
         <div className="bucket-preview">
           {todayBuckets.map((bucket) => (
             <div key={bucket.id} className={`bucket-chip bucket-${bucket.accent}`}>
@@ -375,10 +416,10 @@ export function TodayScreen({
       </Section>
 
       <Section title="下一步">
-        <button className="primary-button" type="button" onClick={() => onNavigate("planDetail")}>
+        <button className="primary-button" type="button" disabled={!canOpenPlan} onClick={() => canOpenPlan && onNavigate("planDetail")}>
           <Sparkles size={18} />
-          查看本次方案
-          <ArrowRight size={18} />
+          {canOpenPlan ? "查看本次方案" : "等待方案生成"}
+          {canOpenPlan ? <ArrowRight size={18} /> : null}
         </button>
       </Section>
     </Page>
