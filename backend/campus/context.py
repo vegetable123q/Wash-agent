@@ -69,10 +69,12 @@ def build_campus_context(
     ).strip()
 
     weather = _optional_object(inputs, "weather")
-    drying_context = {
-        **_rules_drying_context(rules_path),
-        **_optional_object(inputs, "drying_context"),
-    }
+    drying_context = _normalize_drying_context(
+        {
+            **_rules_drying_context(rules_path),
+            **_optional_object(inputs, "drying_context"),
+        }
+    )
     tower_keys = _optional_string_map(inputs, "tower_keys")
     if tower_keys:
         all_machines = []
@@ -117,6 +119,13 @@ def _optional_object(inputs: dict[str, object], key: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError(f"{key} must be an object")
     return dict(value)
+
+
+def _normalize_drying_context(value: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(value)
+    if "has_balcony" in normalized:
+        normalized["balcony_available"] = normalized["has_balcony"]
+    return normalized
 
 
 def _optional_string_map(inputs: dict[str, object], key: str) -> dict[str, str]:

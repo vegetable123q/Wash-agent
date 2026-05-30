@@ -180,7 +180,28 @@ class CampusContextTests(unittest.TestCase):
         self.assertEqual(len(context.all_machines), 2)
         self.assertEqual(context.available_machines, [context.all_machines[0]])
         self.assertEqual(context.weather, {"condition": "rainy", "humidity": 88})
-        self.assertEqual(context.drying_context, {"has_balcony": False})
+        self.assertEqual(
+            context.drying_context,
+            {"has_balcony": False, "balcony_available": False},
+        )
+
+    def test_build_campus_context_normalizes_has_balcony_alias(self) -> None:
+        client = FakeMachineClient([])
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            context = build_campus_context(
+                client,
+                {
+                    "tower_key": "ncrkiz1",
+                    "tower_provider": "cleverschool",
+                    "drying_context": {"has_balcony": False},
+                },
+                machine_rules_path=_write_rules(tmp_dir),
+            )
+
+        self.assertEqual(
+            context.drying_context,
+            {"has_balcony": False, "balcony_available": False},
+        )
 
     def test_build_campus_context_from_user_input_merges_sources_for_same_building(
         self,
@@ -295,7 +316,7 @@ class CampusContextTests(unittest.TestCase):
         )
         self.assertEqual(
             context.drying_context,
-            {"has_balcony": False, "indoor_rack": True},
+            {"has_balcony": False, "indoor_rack": True, "balcony_available": False},
         )
         self.assertEqual(context.pricing_rules["currency"], "CNY")
 
@@ -334,7 +355,7 @@ class CampusContextTests(unittest.TestCase):
         self.assertEqual(context.weather, {"condition": "cloudy", "humidity": 72})
         self.assertEqual(
             context.drying_context,
-            {"has_balcony": True, "indoor_rack": True},
+            {"has_balcony": True, "indoor_rack": True, "balcony_available": True},
         )
         self.assertEqual(context.pricing_rules["currency"], "CNY")
         self.assertIn("washer_types", context.pricing_rules)
