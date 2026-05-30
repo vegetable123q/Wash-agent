@@ -78,10 +78,10 @@ describe("TodayScreen", () => {
     expect(screen.queryByText("mixed-standard")).not.toBeInTheDocument();
   });
 
-  it("hides non-finite live dashboard numbers", () => {
+  it("hides invalid live dashboard numbers", () => {
     const mobileSummary = mobileSummaryWithPlanNote("浅色衣物标准洗。", "light-standard");
     mobileSummary.plan.estimated_cost_yuan = Number.NaN;
-    mobileSummary.plan.estimated_duration_minutes = Number.POSITIVE_INFINITY;
+    mobileSummary.plan.estimated_duration_minutes = 1.5;
     mobileSummary.campus_context.all_machines = [
       {
         machine_id: "washer-1",
@@ -130,6 +130,7 @@ describe("TodayScreen", () => {
     );
 
     expect(container.textContent).not.toMatch(/NaN|Infinity/);
+    expect(container.textContent).not.toContain("1.5");
     expect(screen.getAllByText(/待确认/).length).toBeGreaterThan(0);
   });
 

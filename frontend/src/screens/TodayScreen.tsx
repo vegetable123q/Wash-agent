@@ -72,7 +72,7 @@ export function TodayScreen({
             ? "费用待确认"
             : `预计 ¥${mobileSummary.plan.estimated_cost_yuan}`,
         duration:
-          !isPositiveFiniteNumber(mobileSummary.plan.estimated_duration_minutes)
+          !isPositiveFiniteInteger(mobileSummary.plan.estimated_duration_minutes)
             ? "时长待确认"
             : `机器占用约 ${mobileSummary.plan.estimated_duration_minutes} 分钟`,
         risk: mobileSummary.plan.buckets.length > 0 ? "已按风险自动分桶" : "暂无方案",
@@ -86,7 +86,9 @@ export function TodayScreen({
   const recommendedTime = useMemo(
     () => hasExecutablePlan
       ? computeRecommendedStartTime(
-          mobileSummary.plan.estimated_duration_minutes ?? null,
+          isPositiveFiniteInteger(mobileSummary.plan.estimated_duration_minutes)
+            ? mobileSummary.plan.estimated_duration_minutes
+            : null,
           userProfile?.latestPickupTime ?? null,
         )
       : "暂无",
@@ -98,7 +100,7 @@ export function TodayScreen({
   const recommendedLabel = useMemo(() => {
     if (!mobileSummary?.plan.buckets.length) return "暂无待洗衣物";
     const duration = mobileSummary.plan.estimated_duration_minutes;
-    if (isPositiveFiniteNumber(duration)) return `全部洗完约 ${duration} 分钟`;
+    if (isPositiveFiniteInteger(duration)) return `全部洗完约 ${duration} 分钟`;
     return "全部洗完并低温烘干";
   }, [mobileSummary?.plan.buckets.length, mobileSummary?.plan.estimated_duration_minutes]);
 
@@ -427,6 +429,10 @@ function isFiniteNonNegativeNumber(value: unknown): value is number {
 
 function isPositiveFiniteNumber(value: unknown): value is number {
   return isFiniteNumber(value) && value > 0;
+}
+
+function isPositiveFiniteInteger(value: unknown): value is number {
+  return isPositiveFiniteNumber(value) && Number.isInteger(value);
 }
 
 function washMethodDesc(washMethod: string, dryMethod: string): string {
