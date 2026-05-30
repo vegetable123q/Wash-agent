@@ -270,6 +270,20 @@ def _normalize_ratio(value: Any) -> float | None:
     return min(ratio, 1.0)
 
 
+def _normalize_material_ratios(value: Any) -> dict[str, float]:
+    ratios: dict[str, float] = {}
+    for key, raw_ratio in _object_dict(value).items():
+        if not isinstance(key, str):
+            continue
+        material = key.strip().lower()
+        if not material:
+            continue
+        ratio = _normalize_ratio(raw_ratio)
+        if ratio is not None:
+            ratios[material] = ratio
+    return ratios
+
+
 def _normalize_confidence(value: Any) -> float:
     if isinstance(value, bool):
         return 0.0
@@ -574,17 +588,12 @@ def _apply_manual_fields(
         applied = True
 
     material_ratios = manual_fields.get("material_ratios")
-    if isinstance(material_ratios, dict):
-        normalized = {
-            str(key).lower(): ratio
-            for key, value in material_ratios.items()
-            if (ratio := _normalize_ratio(value)) is not None
-        }
-        if normalized:
-            profile.material_ratios = normalized
-            profile.material_evidence_level = "visible"
-            profile.field_sources["material_ratios"] = "manual_fields"
-            applied = True
+    normalized = _normalize_material_ratios(material_ratios)
+    if normalized:
+        profile.material_ratios = normalized
+        profile.material_evidence_level = "visible"
+        profile.field_sources["material_ratios"] = "manual_fields"
+        applied = True
 
     colors = manual_fields.get("colors")
     if isinstance(colors, list):
@@ -677,11 +686,7 @@ def _profile_from_llm(raw: ClothingInput, payload: dict[str, Any]) -> ClothingPr
 
     source_text = raw.extra.get("normalized_source_text") or raw.name
 
-    material_ratios = {
-        str(key).lower(): ratio
-        for key, value in _object_dict(payload.get("material_ratios")).items()
-        if (ratio := _normalize_ratio(value)) is not None
-    }
+    material_ratios = _normalize_material_ratios(payload.get("material_ratios"))
     risks = _unknown_risks()
     risks.update({
         str(key): _risk_level(value)

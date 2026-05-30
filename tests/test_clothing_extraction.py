@@ -903,6 +903,40 @@ class ClothingExtractionTests(unittest.TestCase):
         self.assertEqual(profile.material_ratios, {})
         self.assertIn("material_ratios", profile.missing_fields)
 
+    def test_llm_material_ratios_trim_and_ignore_invalid_keys(self) -> None:
+        response = {
+            "name": "test shirt",
+            "material_ratios": {" Cotton ": 0.8, "": 0.2},
+            "colors": ["black"],
+            "care_forbidden": [],
+            "risks": {},
+            "confidence": 0.7,
+        }
+
+        profile = extract_clothing_info(
+            ClothingInput(name="test shirt"),
+            llm_client=FakeLLMClient(json.dumps(response, ensure_ascii=False)),
+        )
+
+        self.assertEqual(profile.material_ratios, {"cotton": 0.8})
+
+    def test_manual_material_ratios_trim_and_ignore_invalid_keys(self) -> None:
+        profile = extract_clothing_info(
+            ClothingInput(
+                name="sweater",
+                extra={
+                    "manual_fields": {
+                        "material_ratios": {True: 50, " Wool ": 70, "": 30},
+                        "colors": ["navy"],
+                        "care_forbidden": ["hand wash only"],
+                    }
+                },
+            ),
+            llm_client=BrokenLLMClient(),
+        )
+
+        self.assertEqual(profile.material_ratios, {"wool": 0.7})
+
     def test_llm_confidence_ignores_boolean_and_nonfinite_values(self) -> None:
         for invalid_confidence in (True, float("nan"), float("inf")):
             with self.subTest(invalid_confidence=invalid_confidence):

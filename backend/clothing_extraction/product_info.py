@@ -38,6 +38,14 @@ def _string_list(value: Any) -> list[str]:
     return items
 
 
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    return value
+
+
 def _format_source(label: str, value: Any) -> str:
     if not isinstance(value, str):
         return ""
@@ -111,7 +119,7 @@ def enrich_product_info(raw: ClothingInput) -> ClothingInput:
     if manual_fields:
         source_parts.append(
             "用户手填字段: "
-            + json.dumps(manual_fields, ensure_ascii=False, sort_keys=True)
+            + json.dumps(_json_safe(manual_fields), ensure_ascii=False, sort_keys=True)
         )
 
     source_notes = _string_list(raw.extra.get("source_notes", []))
