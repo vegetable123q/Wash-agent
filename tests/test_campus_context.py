@@ -491,6 +491,14 @@ class CampusContextTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "tower_key"):
             build_campus_context(client, {})
 
+    def test_build_campus_context_rejects_non_object_user_inputs(self) -> None:
+        client = FakeMachineClient([])
+
+        for user_inputs in ("", [], [("tower_key", "nq21")]):
+            with self.subTest(user_inputs=user_inputs):
+                with self.assertRaisesRegex(ValueError, "user_inputs must be an object"):
+                    build_campus_context(client, user_inputs)  # type: ignore[arg-type]
+
     def test_build_campus_context_rejects_non_string_tower_keys(self) -> None:
         client = FakeMachineClient([])
         invalid_maps: list[dict[object, object]] = [

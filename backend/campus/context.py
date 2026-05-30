@@ -56,7 +56,7 @@ def build_campus_context(
     machine_rules_path: Path | str = "config/machine_rules.json",
 ) -> CampusContext:
     """Combine machine, weather, balcony, humidity, and pricing context."""
-    inputs = user_inputs or {}
+    inputs = {} if user_inputs is None else user_inputs
     if not isinstance(inputs, dict):
         raise ValueError("user_inputs must be an object")
     rules_path = _resolve_machine_rules_path(inputs, machine_rules_path, machine_client)
