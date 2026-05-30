@@ -53,7 +53,7 @@ function normalizeProfile(value: unknown): UserProfile {
     latestPickupTime: normalizePickupTime(profile.latestPickupTime),
     allowDryer: booleanValue(profile.allowDryer),
     budgetYuan: nonNegativeNumberOrNull(profile.budgetYuan),
-    maxWaitMinutes: nonNegativeNumberOrNull(profile.maxWaitMinutes),
+    maxWaitMinutes: nonNegativeIntegerOrNull(profile.maxWaitMinutes),
   };
 }
 
@@ -85,6 +85,11 @@ function pickupTimeParts(value: string): { hour: number; minute: number } | null
 function nonNegativeNumberOrNull(value: unknown): number | null {
   const numberValue = typeof value === "string" && value.trim() ? Number(value) : value;
   return typeof numberValue === "number" && Number.isFinite(numberValue) && numberValue >= 0 ? numberValue : null;
+}
+
+function nonNegativeIntegerOrNull(value: unknown): number | null {
+  const numberValue = nonNegativeNumberOrNull(value);
+  return numberValue != null && Number.isInteger(numberValue) ? numberValue : null;
 }
 
 function booleanValue(value: unknown): boolean {

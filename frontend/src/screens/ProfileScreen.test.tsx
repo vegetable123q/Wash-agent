@@ -58,6 +58,33 @@ describe("ProfileScreen", () => {
     );
   });
 
+  it("keeps decimal budgets but rejects fractional maximum wait preferences", () => {
+    const onSave = vi.fn();
+    const { container } = render(
+      <ProfileScreen
+        profile={baseProfile()}
+        modelHubConfig={emptyModelHubConfig}
+        backendStatus="connected"
+        towerOptions={[]}
+        onSave={onSave}
+        onSaveModelHubConfig={vi.fn((config) => config)}
+        onClearModelHubConfig={vi.fn()}
+      />,
+    );
+
+    const numberInputs = numberPreferenceInputs(container);
+    fireEvent.change(numberInputs[0], { target: { value: "12.5" } });
+    fireEvent.change(numberInputs[1], { target: { value: "8.5" } });
+    fireEvent.submit(profileSubmitButton(container).closest("form")!);
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        budgetYuan: 12.5,
+        maxWaitMinutes: null,
+      }),
+    );
+  });
+
   it("saves zero budget and maximum wait preferences", () => {
     const onSave = vi.fn();
     const { container } = render(

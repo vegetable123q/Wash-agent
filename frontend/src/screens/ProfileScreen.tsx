@@ -49,7 +49,9 @@ export function ProfileScreen({
   };
 
   const updateNumberDraft = (field: "budgetYuan" | "maxWaitMinutes", value: string) => {
-    updateDraft({ [field]: nonNegativeNumberOrNull(value) });
+    updateDraft({
+      [field]: field === "maxWaitMinutes" ? nonNegativeIntegerOrNull(value) : nonNegativeNumberOrNull(value),
+    });
   };
 
   const handleSubmit = (event: FormEvent) => {
@@ -291,4 +293,9 @@ function nonNegativeNumberOrNull(value: string): number | null {
   }
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function nonNegativeIntegerOrNull(value: string): number | null {
+  const parsed = nonNegativeNumberOrNull(value);
+  return parsed != null && Number.isInteger(parsed) ? parsed : null;
 }

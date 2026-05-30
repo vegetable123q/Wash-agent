@@ -78,6 +78,21 @@ describe("userProfile", () => {
     });
   });
 
+  it("keeps decimal budgets but normalizes fractional maximum wait preferences to null", () => {
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        budgetYuan: "12.5",
+        maxWaitMinutes: "8.5",
+      }),
+    );
+
+    expect(loadUserProfile()).toMatchObject({
+      budgetYuan: 12.5,
+      maxWaitMinutes: null,
+    });
+  });
+
   it("normalizes string false dryer preference to false", () => {
     localStorage.setItem(
       storageKey,
