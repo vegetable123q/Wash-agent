@@ -73,8 +73,8 @@ export async function generatePlanSummary(
         dry: b.dry_method,
         warnings: b.warnings,
       })),
-      cost: plan.estimated_cost_yuan,
-      duration: plan.estimated_duration_minutes,
+      cost: validPlanCost(plan.estimated_cost_yuan),
+      duration: validPlanDuration(plan.estimated_duration_minutes),
       summary: plan.summary,
     };
     const prompt = `以下是校园洗衣方案的结构化数据：\n${JSON.stringify(planData, null, 2)}\n\n请用2-3句简洁中文总结这个方案的关键信息（分桶策略、费用、注意事项），不要用列表或JSON。`;
@@ -159,6 +159,7 @@ export async function generateTodayAdvice(
     return { text: fallbackTodayAdvice(plan, weather, frequencyAdvice), source: "fallback" };
   }
   try {
+    plan = sanitizePlanEstimates(plan);
     const weatherText =
       weather?.status === "live" && weather.current
         ? `温度 ${weather.current.temperature_2m}°C，湿度 ${weather.current.relative_humidity_2m}%，降水 ${weather.current.precipitation}mm`
@@ -255,4 +256,20 @@ function isFiniteNonNegativeNumber(value: unknown): value is number {
 
 function isValidDuration(value: number | null): value is number {
   return typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value > 0;
+}
+
+function validPlanCost(value: number | null): number | null {
+  return isFiniteNonNegativeNumber(value) ? value : null;
+}
+
+function validPlanDuration(value: number | null): number | null {
+  return isValidDuration(value) ? value : null;
+}
+
+function sanitizePlanEstimates(plan: LaundryPlan): LaundryPlan {
+  return {
+    ...plan,
+    estimated_cost_yuan: validPlanCost(plan.estimated_cost_yuan),
+    estimated_duration_minutes: validPlanDuration(plan.estimated_duration_minutes),
+  };
 }

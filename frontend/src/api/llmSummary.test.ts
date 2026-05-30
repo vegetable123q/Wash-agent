@@ -3,9 +3,24 @@ import { bucketLabel, computeRecommendedStartTime, generatePlanSummary, generate
 import { emptyModelHubConfig } from "./modelHubConfig";
 import type { LaundryPlan } from "./types";
 
+const configuredModelHub = {
+  ...emptyModelHubConfig,
+  apikey: "test-modelhub-key",
+};
+
+function modelHubTextResponse(text: string) {
+  return {
+    ok: true,
+    json: async () => ({
+      candidates: [{ content: { parts: [{ text }] } }],
+    }),
+  };
+}
+
 describe("computeRecommendedStartTime", () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it("uses a valid pickup time to recommend the latest safe start", () => {
@@ -94,5 +109,42 @@ describe("computeRecommendedStartTime", () => {
 
     expect(result.source).toBe("fallback");
     expect(result.text).not.toContain("NaN");
+  });
+
+  it("sanitizes invalid plan estimates before sending ModelHub prompts", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(modelHubTextResponse("summary"));
+    vi.stubGlobal("fetch", fetchMock);
+    const plan = {
+      buckets: [
+        {
+          bucket_id: "light-standard",
+          item_ids: ["tee-1"],
+          wash_method: "machine_wash",
+          machine_type: "standard_washer",
+          program: "standard",
+          detergent_ml: 24,
+          use_laundry_bag: false,
+          dry_method: "air_dry",
+          warnings: [],
+        },
+      ],
+      estimated_cost_yuan: -1,
+      estimated_duration_minutes: 1.5,
+      summary: "light standard wash",
+      global_warnings: [],
+    } satisfies LaundryPlan;
+
+    await generatePlanSummary(plan, configuredModelHub);
+
+    const summaryBody = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    const summaryPrompt = String(summaryBody.contents[0].parts[0].text);
+    expect(summaryPrompt).not.toContain("\"cost\": -1");
+    expect(summaryPrompt).not.toContain("1.5");
+
+    await generateTodayAdvice({ ...plan, estimated_cost_yuan: Number.NaN }, undefined, undefined, configuredModelHub);
+
+    const adviceBody = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    const advicePrompt = String(adviceBody.contents[0].parts[0].text);
+    expect(advicePrompt).not.toContain("NaN");
   });
 });
