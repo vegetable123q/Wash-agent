@@ -448,6 +448,8 @@ def _optional_int(value: object, field_name: str) -> int | None:
         return None
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValueError(f"machine {field_name} must be an integer")
+    if value < 0:
+        raise ValueError(f"machine {field_name} must be non-negative")
     return value
 
 
