@@ -9,6 +9,7 @@ from backend.shared.models import (
     ClothingProfile,
     DryMethod,
     LaundryBucket,
+    LaundryChargeLine,
     LaundryPlan,
     MachineInfo,
     MachineQueueEstimate,
@@ -58,6 +59,19 @@ def _validate_plan(value: object) -> None:
         _validate_bucket(bucket, f"plan.buckets[{index}]")
     _required_non_negative_number(value.estimated_cost_yuan, "plan.estimated_cost_yuan")
     _required_non_negative_int(value.estimated_duration_minutes, "plan.estimated_duration_minutes")
+    _validate_cost_breakdown(value.cost_breakdown)
+
+
+def _validate_cost_breakdown(value: object) -> None:
+    if not isinstance(value, list):
+        raise ValueError("plan.cost_breakdown must be a list")
+    for index, line in enumerate(value):
+        if not isinstance(line, LaundryChargeLine):
+            raise ValueError(f"plan.cost_breakdown[{index}] must be a LaundryChargeLine")
+        field_name = f"plan.cost_breakdown[{index}]"
+        _non_empty_string(line.label, f"{field_name}.label")
+        _required_non_negative_number(line.amount_yuan, f"{field_name}.amount_yuan")
+        _required_non_negative_int(line.duration_minutes, f"{field_name}.duration_minutes")
 
 
 def _validate_bucket(bucket: LaundryBucket, field_name: str) -> None:
