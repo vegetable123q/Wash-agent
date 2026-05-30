@@ -94,7 +94,7 @@ describe("machinePricing", () => {
     expect(priceText).not.toContain("-1");
   });
 
-  it("ignores configured programs with nonpositive durations", () => {
+  it("ignores configured programs with invalid durations", () => {
     const machine: BackendMachine = {
       machine_id: "washer-1",
       location: "1F",
@@ -107,13 +107,13 @@ describe("machinePricing", () => {
 
     const options = machineProgramOptions(machine, {
       wash_programs: {
-        quick: { price_yuan: 3, duration_minutes: -5 },
+        quick: { price_yuan: 3, duration_minutes: 1.5 },
         standard: { price_yuan: 3.5, duration_minutes: 40 },
       },
       dryer_programs: {},
     });
 
     expect(options.map((option) => option.id)).toEqual(["standard"]);
-    expect(JSON.stringify(options)).not.toContain("-5");
+    expect(JSON.stringify(options)).not.toContain("1.5");
   });
 });

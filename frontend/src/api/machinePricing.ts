@@ -114,6 +114,7 @@ function isProgramPricing(value: unknown): value is ProgramPricingLike {
     && value.price_yuan >= 0
     && typeof value.duration_minutes === "number"
     && Number.isFinite(value.duration_minutes)
+    && Number.isInteger(value.duration_minutes)
     && value.duration_minutes > 0
   );
 }
