@@ -96,7 +96,12 @@ class WardrobeStore:
         if not self.path.exists():
             raise FileNotFoundError(f"wardrobe data file not found: {self.path}")
         with self.path.open("r", encoding="utf-8") as file:
-            payload = json.load(file)
+            try:
+                payload = json.load(file)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    f"Invalid JSON in wardrobe data file {self.path}: {exc}"
+                ) from exc
         if not isinstance(payload, dict) or "items" not in payload:
             raise ValueError("wardrobe data must be an object with an 'items' list")
         items = payload["items"]

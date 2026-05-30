@@ -412,6 +412,12 @@ class CModuleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "missing required fields"):
             self.store.list_items()
 
+    def test_store_wraps_invalid_json_errors(self) -> None:
+        self.path.write_text("{bad json", encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "Invalid JSON in wardrobe data file"):
+            self.store.list_items()
+
     def test_store_rejects_invalid_item_shape(self) -> None:
         invalid_items: list[object] = [True, 123, "item"]
         for item in invalid_items:
