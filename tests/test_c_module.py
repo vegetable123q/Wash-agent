@@ -118,6 +118,16 @@ class CModuleTests(unittest.TestCase):
                     else:
                         self.store.delete_item("missing-item")
 
+    def test_store_rejects_duplicate_profile_item_ids(self) -> None:
+        payload = json.loads(self.path.read_text(encoding="utf-8"))
+        payload["items"][1]["profile"]["item_id"] = payload["items"][0]["profile"][
+            "item_id"
+        ]
+        self.path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "duplicate.*item_id"):
+            self.store.list_items()
+
     def test_upsert_rejects_invalid_item_input(self) -> None:
         invalid_items: list[object] = [
             object(),

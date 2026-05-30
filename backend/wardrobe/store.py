@@ -102,9 +102,14 @@ class WardrobeStore:
         items = payload["items"]
         if not isinstance(items, list):
             raise ValueError("wardrobe data field 'items' must be a list")
+        seen_item_ids: set[str] = set()
         for index, item in enumerate(items):
             if not isinstance(item, dict):
                 raise ValueError(f"items[{index}] must be an object")
+            item_id = _stored_item_id(item, index)
+            if item_id in seen_item_ids:
+                raise ValueError(f"duplicate wardrobe item_id: {item_id}")
+            seen_item_ids.add(item_id)
         return items
 
     def _write_items(self, items: list[dict[str, Any]]) -> None:
