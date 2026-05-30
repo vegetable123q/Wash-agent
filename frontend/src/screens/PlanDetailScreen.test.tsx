@@ -205,6 +205,65 @@ describe("PlanDetailScreen", () => {
     expect(container.textContent).not.toContain("standard_washer");
     expect(screen.getAllByText(/推荐使用/)).toHaveLength(1);
   });
+  it("does not show the unselected empty state when selected clothes failed to produce buckets", () => {
+    const mobileSummary = {
+      source: "backend",
+      selected_laundry_item_ids: ["tee-1"],
+      dirty_basket: {
+        item_count: 1,
+        load_percent: 30,
+        oldest_days: 1,
+        urgent_count: 0,
+        status_label: "ready",
+        recommendation: "wash soon",
+        next_action: "view plan",
+        items: [],
+      },
+      wardrobe: {
+        items: [
+          {
+            item_id: "tee-1",
+            name: "Test tee",
+            user_note: "",
+            user_notes: [],
+            wear_count_since_wash: 1,
+            wash_count: 0,
+            material_ratios: { cotton: 1 },
+            colors: ["white"],
+            risks: {},
+          },
+        ],
+      },
+      campus_context: {
+        all_machines: [],
+        available_machines: [],
+        queue_estimates: [],
+        weather: {},
+        drying_context: {},
+        pricing_rules: {},
+      },
+      plan: {
+        buckets: [],
+        estimated_cost_yuan: null,
+        estimated_duration_minutes: null,
+        summary: "已选择衣物，但暂时未生成可执行方案。",
+        global_warnings: ["未能匹配到可用机器，请检查机器状态或手动选择。"],
+      },
+      report: {
+        title: "report",
+        sections: {},
+        savings_notes: [],
+        risk_notes: [],
+      },
+    } as MobileSummary;
+
+    render(<PlanDetailScreen onBack={vi.fn()} mobileSummary={mobileSummary} />);
+
+    expect(screen.getAllByText("方案暂未生成").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("已选择衣物，但暂时未生成可执行方案。").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("未能匹配到可用机器，请检查机器状态或手动选择。").length).toBeGreaterThan(0);
+    expect(screen.queryByText("未选择衣物")).not.toBeInTheDocument();
+  });
 });
 
 const configuredModelHub = {

@@ -424,8 +424,12 @@ function findAvailableMachine(
   program: string,
 ): MachineInfo | null {
   return available.find(
-    (m) => m.machine_type === machineType && m.status === "available" && m.modes.includes(program),
+    (m) => m.machine_type === machineType && m.status === "available" && supportsProgram(m, program),
   ) ?? null;
+}
+
+function supportsProgram(machine: MachineInfo, program: string): boolean {
+  return machine.modes.length === 0 || machine.modes.includes(program);
 }
 
 function machineRecommendationWarning(machine: MachineInfo, program: string): string {

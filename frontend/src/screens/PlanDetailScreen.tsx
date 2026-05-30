@@ -29,6 +29,11 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
   const planBuckets = mobileSummary?.plan.buckets ?? [];
   const hasSummary = Boolean(mobileSummary);
   const hasBuckets = planBuckets.length > 0;
+  const hasSelectedItems = (mobileSummary?.selected_laundry_item_ids.length ?? 0) > 0;
+  const hasSelectedEmptyPlan = hasSummary && hasSelectedItems && !hasBuckets;
+  const emptyPlanTags = (mobileSummary?.plan.global_warnings ?? [])
+    .map(userFacingWarning)
+    .map((warning) => ({ label: warning, tone: "orange" as const }));
   const nameMap = useMemo(() => {
     const map = new Map<string, string>();
     if (mobileSummary?.wardrobe.items) {
@@ -50,14 +55,23 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
         accent: bucket.wash_method === "hand_wash" || bucket.wash_method === "dry_clean" || bucket.wash_method === "do_not_wash" ? ("orange" as const) : ("purple" as const),
       }))
     : hasSummary
-      ? [{
+      ? hasSelectedItems
+        ? [{
+            id: "empty-plan",
+            title: "方案暂未生成",
+            machine: "待确认",
+            detail: mobileSummary?.plan.summary || "已选择衣物，但暂时未生成可执行方案。",
+            tags: emptyPlanTags.length ? emptyPlanTags : [{ label: "等待机器状态刷新", tone: "orange" as const }],
+            accent: "purple" as const,
+          }]
+        : [{
           id: "empty-plan",
           title: "暂无本次分桶",
           machine: "待选择",
           detail: "请先在衣柜勾选这批要清洗的衣物。",
           tags: [{ label: "未选择衣物", tone: "orange" as const }],
           accent: "purple" as const,
-        }]
+          }]
       : bucketPlans;
   const globalWarningRows = useMemo(() => {
     const bucketWarnings = new Set(planBuckets.flatMap((bucket) => bucket.warnings));
@@ -69,6 +83,9 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
 
   const preparationSteps: PreparationStep[] = useMemo(() => {
     if (!hasSummary) return defaultPreparationSteps();
+    if (!hasBuckets && hasSelectedItems) {
+      return [{ icon: "blue", title: "查看机器状态", description: "已选择衣物，但暂时没有生成可执行分桶；请查看上方提醒或刷新机器状态。" }];
+    }
     if (!hasBuckets) {
       return [{ icon: "blue", title: "先选择衣物", description: "回到衣柜勾选本次要清洗的衣物后，再查看分桶、费用和时长。" }];
     }
@@ -110,7 +127,7 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
     }
 
     return steps.length > 0 ? steps : defaultPreparationSteps();
-  }, [planBuckets, hasBuckets, hasSummary]);
+  }, [planBuckets, hasBuckets, hasSummary, hasSelectedItems]);
 
   const exclusionItems: ExclusionItem[] = useMemo(() => {
     if (!hasSummary) return defaultExclusionItems();
@@ -143,10 +160,10 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig }: Plan
 
       <Card accent="purple" className="summary-card">
         <div>
-          <h2>{hasBuckets ? `${planBuckets.length} 个洗护批次` : hasSummary ? "暂无本次方案" : "3 桶分开洗"}</h2>
+          <h2>{hasBuckets ? `${planBuckets.length} 个洗护批次` : hasSelectedEmptyPlan ? "方案暂未生成" : hasSummary ? "暂无本次方案" : "3 桶分开洗"}</h2>
           <p>{llmSummary ?? mobileSummary?.plan.summary ?? "床品单独占用标准筒，不和普通衣物混洗。"}</p>
         </div>
-        <Chip tone={hasBuckets ? "teal" : "orange"}>{hasBuckets ? "已生成" : hasSummary ? "待选择" : "可执行"}</Chip>
+        <Chip tone={hasBuckets ? "teal" : "orange"}>{hasBuckets ? "已生成" : hasSelectedEmptyPlan ? "待确认" : hasSummary ? "待选择" : "可执行"}</Chip>
       </Card>
 
       {globalWarningRows.length > 0 ? (
