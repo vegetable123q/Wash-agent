@@ -814,6 +814,76 @@ class EModuleTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, field_name):
                     generate_report(plan, items, _campus_context())
 
+    def test_report_requires_valid_cost_line_metadata(self) -> None:
+        items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
+        bucket = LaundryBucket(
+            bucket_id="light-standard",
+            item_ids=["white-tee"],
+            wash_method=WashMethod.MACHINE_WASH,
+        )
+
+        def invalid_plan(line: LaundryChargeLine) -> LaundryPlan:
+            return LaundryPlan(
+                buckets=[bucket],
+                estimated_cost_yuan=0,
+                estimated_duration_minutes=0,
+                cost_breakdown=[line],
+            )
+
+        invalid_plans = [
+            (
+                "bucket_id",
+                invalid_plan(
+                    LaundryChargeLine(bucket_id=True, label="wash", amount_yuan=1, duration_minutes=30)  # type: ignore[arg-type]
+                ),
+            ),
+            (
+                "bucket_id",
+                invalid_plan(LaundryChargeLine(bucket_id="", label="wash", amount_yuan=1, duration_minutes=30)),
+            ),
+            (
+                "machine_id",
+                invalid_plan(
+                    LaundryChargeLine(
+                        bucket_id="light-standard",
+                        label="wash",
+                        amount_yuan=1,
+                        duration_minutes=30,
+                        machine_id=True,  # type: ignore[arg-type]
+                    )
+                ),
+            ),
+            (
+                "machine_type",
+                invalid_plan(
+                    LaundryChargeLine(
+                        bucket_id="light-standard",
+                        label="wash",
+                        amount_yuan=1,
+                        duration_minutes=30,
+                        machine_type="standard_washer",  # type: ignore[arg-type]
+                    )
+                ),
+            ),
+            (
+                "program",
+                invalid_plan(
+                    LaundryChargeLine(
+                        bucket_id="light-standard",
+                        label="wash",
+                        amount_yuan=1,
+                        duration_minutes=30,
+                        program=True,  # type: ignore[arg-type]
+                    )
+                ),
+            ),
+        ]
+
+        for field_name, plan in invalid_plans:
+            with self.subTest(field_name=field_name, plan=plan):
+                with self.assertRaisesRegex(ValueError, field_name):
+                    generate_report(plan, items, _campus_context())
+
     def test_report_requires_valid_bucket_item_ids(self) -> None:
         items = [_item("white-tee", "white tee", colors=["white"], materials={"cotton": 1.0})]
         invalid_plans = [

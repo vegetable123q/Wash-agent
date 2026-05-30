@@ -69,9 +69,13 @@ def _validate_cost_breakdown(value: object) -> None:
         if not isinstance(line, LaundryChargeLine):
             raise ValueError(f"plan.cost_breakdown[{index}] must be a LaundryChargeLine")
         field_name = f"plan.cost_breakdown[{index}]"
+        _non_empty_string(line.bucket_id, f"{field_name}.bucket_id")
         _non_empty_string(line.label, f"{field_name}.label")
         _required_non_negative_number(line.amount_yuan, f"{field_name}.amount_yuan")
         _required_non_negative_int(line.duration_minutes, f"{field_name}.duration_minutes")
+        _string(line.machine_id, f"{field_name}.machine_id")
+        _enum_field(line.machine_type, MachineType, f"{field_name}.machine_type")
+        _string(line.program, f"{field_name}.program")
 
 
 def _validate_bucket(bucket: LaundryBucket, field_name: str) -> None:
