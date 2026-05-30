@@ -145,6 +145,25 @@ describe("generateReport", () => {
 
     expect(() => generateReport(plan, minimalItems(), minimalCampusContext())).toThrow(/detergent_ml/);
   });
+
+  it("hides invalid campus queue waits before rendering", () => {
+    const campusContext = minimalCampusContext();
+    campusContext.queue_estimates = [
+      {
+        machine_type: "standard_washer",
+        total_count: 1,
+        available_count: 0,
+        running_count: 1,
+        out_of_service_count: 0,
+        unknown_count: 0,
+        estimated_wait_minutes: 1.5,
+      },
+    ];
+
+    const report = generateReport(minimalPlan(), minimalItems(), campusContext);
+
+    expect(JSON.stringify(report)).not.toContain("1.5");
+  });
 });
 
 function minimalPlan(): LaundryPlan {

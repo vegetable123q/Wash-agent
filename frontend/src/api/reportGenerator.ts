@@ -169,10 +169,14 @@ function queueSummary(estimates: MachineQueueEstimate[]): string {
   if (!estimates.length) return "";
   return estimates
     .map((e) => {
-      const wait = e.estimated_wait_minutes == null ? "未知" : `${e.estimated_wait_minutes} 分钟`;
+      const wait = queueWaitText(e.estimated_wait_minutes);
       return `${machineTypeText(e.machine_type)} 可用 ${e.available_count}/${e.total_count}，预计等待 ${wait}`;
     })
     .join("；");
+}
+
+function queueWaitText(minutes: number | null): string {
+  return typeof minutes === "number" && Number.isInteger(minutes) && minutes >= 0 ? `${minutes} 分钟` : "未知";
 }
 
 function dryingContextSummary(dc: Record<string, unknown>): string {
