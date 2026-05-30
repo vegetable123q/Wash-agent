@@ -214,6 +214,7 @@ export function bucketLabel(bucketId: string): string {
     "large-bedding": "大件",
     "dark-standard": "深色标准",
     "light-standard": "浅色标准",
+    "mixed-standard": "混色标准",
   };
   return labels[normalizedBucketId] ?? bucketId;
 }

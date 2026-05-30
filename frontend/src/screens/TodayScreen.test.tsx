@@ -65,6 +65,19 @@ describe("TodayScreen", () => {
     expect(screen.queryByText(/大件机/)).not.toBeInTheDocument();
   });
 
+  it("shows mixed standard bucket labels instead of internal ids", () => {
+    render(
+      <TodayScreen
+        backendStatus="connected"
+        mobileSummary={mobileSummaryWithPlanNote("mixed plan", "mixed-standard")}
+        onNavigate={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("混色标准洗")).toBeInTheDocument();
+    expect(screen.queryByText("mixed-standard")).not.toBeInTheDocument();
+  });
+
   it("hides non-finite live dashboard numbers", () => {
     const mobileSummary = mobileSummaryWithPlanNote("浅色衣物标准洗。", "light-standard");
     mobileSummary.plan.estimated_cost_yuan = Number.NaN;

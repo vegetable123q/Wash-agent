@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { computeRecommendedStartTime } from "./llmSummary";
+import { bucketLabel, computeRecommendedStartTime } from "./llmSummary";
 
 describe("computeRecommendedStartTime", () => {
   afterEach(() => {
@@ -32,5 +32,10 @@ describe("computeRecommendedStartTime", () => {
     vi.setSystemTime(new Date("2026-05-29T19:00:00.000+08:00"));
 
     expect(computeRecommendedStartTime(-30, "22:30")).toBe("21:15");
+  });
+
+  it("labels mixed standard buckets without leaking internal ids", () => {
+    expect(bucketLabel("mixed-standard")).toBe("混色标准");
+    expect(bucketLabel("mixed-standard-2")).toBe("混色标准");
   });
 });

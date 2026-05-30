@@ -137,6 +137,7 @@ function bucketReason(bucket: LaundryBucket): string {
     "large-bedding": "床品体积大，单独占用洗衣机减少过载和返洗",
     "dark-standard": "深色或高掉色风险衣物单独处理，避免串色",
     "light-standard": "浅色普通机洗衣物集中标准洗",
+    "mixed-standard": "用户允许混色，低掉色风险普通衣物合并标准洗",
   };
   return reasons[bucketId] ?? "本批衣物需要单独处理";
 }
@@ -188,6 +189,7 @@ function bucketTitle(bucket: LaundryBucket): string {
     "large-bedding": "床品单独洗",
     "dark-standard": "深色标准洗",
     "light-standard": "浅色标准洗",
+    "mixed-standard": "混色标准洗",
   };
   return labels[bucketId] ?? "本批衣物";
 }

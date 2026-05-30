@@ -444,6 +444,7 @@ function bucketLabelFromId(bucketId: string): string {
     "large-bedding": "大件洗",
     "dark-standard": "深色标准洗",
     "light-standard": "浅色快洗",
+    "mixed-standard": "混色标准洗",
   };
   return labels[normalizedBucketId] ?? bucketId;
 }
