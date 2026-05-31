@@ -124,6 +124,9 @@ export interface WardrobeItemForPlan {
   wear_count_since_wash: number;
   preferred_method: WashMethod;
   user_notes: string[];
+  last_washed_at?: string;
+  first_worn_after_wash_at?: string;
+  last_worn_at?: string;
 }
 
 /** User constraints for the current laundry session. */
@@ -212,6 +215,7 @@ export interface CompletedLaundryItemSnapshot {
   item_id: string;
   wear_count_since_wash: number;
   wash_count: number;
+  last_washed_at?: string;
 }
 
 /** One locally recorded completed laundry session. */
@@ -311,6 +315,9 @@ export interface WardrobeSummaryItem {
   user_notes?: string[];
   wear_count_since_wash: number;
   wash_count: number;
+  last_washed_at?: string;
+  first_worn_after_wash_at?: string;
+  last_worn_at?: string;
   material_ratios: Record<string, number>;
   colors: string[];
   risks: Record<string, string>;

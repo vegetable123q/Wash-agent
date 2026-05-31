@@ -305,6 +305,7 @@ function buildDemoOutfitLogs(): OutfitLog[] {
     top_ids: string[];
     bottom_ids: string[];
     outer_ids: string[];
+    accessory_ids?: string[];
     temperature: number;
     weather_code: number;
     precipitation: number;
@@ -314,6 +315,7 @@ function buildDemoOutfitLogs(): OutfitLog[] {
       top_ids: ["demo-blue-shirt"],
       bottom_ids: ["demo-khaki-pants"],
       outer_ids: [],
+      accessory_ids: ["demo-underwear-set"],
       temperature: 26,
       weather_code: 1,
       precipitation: 0,
@@ -323,6 +325,7 @@ function buildDemoOutfitLogs(): OutfitLog[] {
       top_ids: ["demo-black-tee"],
       bottom_ids: ["demo-black-jeans"],
       outer_ids: ["demo-denim-jacket"],
+      accessory_ids: ["demo-underwear-set"],
       temperature: 23,
       weather_code: 3,
       precipitation: 0,
@@ -332,6 +335,7 @@ function buildDemoOutfitLogs(): OutfitLog[] {
       top_ids: ["demo-sport-tee"],
       bottom_ids: ["demo-black-jeans"],
       outer_ids: [],
+      accessory_ids: ["demo-underwear-set", "demo-sport-socks"],
       temperature: 28,
       weather_code: 0,
       precipitation: 0,
@@ -341,6 +345,7 @@ function buildDemoOutfitLogs(): OutfitLog[] {
       top_ids: ["demo-white-tee"],
       bottom_ids: ["demo-khaki-pants"],
       outer_ids: ["demo-wool-cardigan"],
+      accessory_ids: ["demo-underwear-set"],
       temperature: 20,
       weather_code: 51,
       precipitation: 0.3,
@@ -350,6 +355,7 @@ function buildDemoOutfitLogs(): OutfitLog[] {
       top_ids: ["demo-gray-hoodie"],
       bottom_ids: ["demo-black-jeans"],
       outer_ids: [],
+      accessory_ids: ["demo-underwear-set"],
       temperature: 22,
       weather_code: 2,
       precipitation: 0,
@@ -359,6 +365,7 @@ function buildDemoOutfitLogs(): OutfitLog[] {
       top_ids: ["demo-black-tee"],
       bottom_ids: ["demo-khaki-pants"],
       outer_ids: ["demo-denim-jacket"],
+      accessory_ids: ["demo-underwear-set"],
       temperature: 21,
       weather_code: 3,
       precipitation: 0,
@@ -368,6 +375,7 @@ function buildDemoOutfitLogs(): OutfitLog[] {
       top_ids: ["demo-sport-tee"],
       bottom_ids: ["demo-black-jeans"],
       outer_ids: [],
+      accessory_ids: ["demo-underwear-set", "demo-sport-socks"],
       temperature: 27,
       weather_code: 0,
       precipitation: 0,
@@ -381,7 +389,7 @@ function buildDemoOutfitLogs(): OutfitLog[] {
       top_ids: outfit.top_ids,
       bottom_ids: outfit.bottom_ids,
       outer_ids: outfit.outer_ids,
-      accessory_ids: [],
+      accessory_ids: outfit.accessory_ids ?? [],
       weather_snapshot: {
         temperature_2m: outfit.temperature,
         weather_code: outfit.weather_code,

@@ -15,6 +15,7 @@ import { estimatedWasherLoadCount, loadPercentForItems } from "./laundryLoad";
 import { planLaundry, recommendDrying } from "./laundryPlanner";
 import { machineDisplayLabel } from "./machineDisplay";
 import { deleteWardrobePhotoFile, loadWardrobePhotoDataUrl, saveWardrobePhotoDataUrl } from "./photoFileStorage";
+import { loadOutfitLogs } from "./outfitLogStore";
 import { DRYING_CONTEXT, PRICING_RULES } from "./pricingRules";
 import { generateReport } from "./reportGenerator";
 import type {
@@ -35,6 +36,7 @@ import type {
   MachineInfo,
   MachineQueueEstimate,
   MobileSummary,
+  OutfitLog,
   WardrobeInput,
   WardrobeCategory,
   WardrobeSummaryItem,
@@ -276,7 +278,7 @@ export async function completeLaundryPlan(
   if (completedSet.size > 0) {
     const nextItems = items.map((item) =>
       completedSet.has(item.item_id)
-        ? { ...item, wear_count_since_wash: 0, wash_count: item.wash_count + 1 }
+        ? { ...item, wear_count_since_wash: 0, wash_count: item.wash_count + 1, last_washed_at: record?.completed_at ?? new Date().toISOString() }
         : item,
     );
     writeLocalWardrobeItems(nextItems);
@@ -301,9 +303,13 @@ export async function undoCompletedLaundry(
   const snapshotById = new Map(record.before_items.map((item) => [item.item_id, item]));
   const nextItems = readLocalWardrobeItems().map((item) => {
     const snapshot = snapshotById.get(item.item_id);
-    return snapshot
-      ? { ...item, wear_count_since_wash: snapshot.wear_count_since_wash, wash_count: snapshot.wash_count }
-      : item;
+    if (!snapshot) return item;
+    const restored = { ...item, wear_count_since_wash: snapshot.wear_count_since_wash, wash_count: snapshot.wash_count };
+    if (snapshot.last_washed_at) {
+      return { ...restored, last_washed_at: snapshot.last_washed_at };
+    }
+    const { last_washed_at: _lastWashedAt, ...withoutLastWashedAt } = restored;
+    return withoutLastWashedAt;
   });
   writeLocalWardrobeItems(nextItems);
   writeCompletedLaundryRecords(records.filter((item) => item.record_id !== normalizedRecordId));
@@ -336,6 +342,7 @@ function buildCompletedLaundryRecord(
       item_id: item.item_id,
       wear_count_since_wash: item.wear_count_since_wash,
       wash_count: item.wash_count,
+      ...(item.last_washed_at ? { last_washed_at: item.last_washed_at } : {}),
     })),
   };
 }
@@ -440,6 +447,7 @@ function completedSnapshotFromStorage(value: unknown): CompletedLaundryRecord["b
     item_id: itemId,
     wear_count_since_wash: nonNegativeInteger(raw.wear_count_since_wash),
     wash_count: nonNegativeInteger(raw.wash_count),
+    ...(validIsoDate(raw.last_washed_at) ? { last_washed_at: String(raw.last_washed_at) } : {}),
   };
 }
 
@@ -552,7 +560,8 @@ function buildLaundryArtifacts(
   campusContext: CampusContext,
   profile?: LaundryPreferenceProfile,
 ): { frequencyAdvice: FrequencyAdvice[]; plan: LaundryPlan; dryingPlan?: DryingPlan; report: WashReport } {
-  const planItems = storedItems.map(storedToPlanItem);
+  const usageAwareItems = enrichWardrobeUsageDates(storedItems, readCompletedLaundryRecords(), loadOutfitLogs());
+  const planItems = usageAwareItems.map(storedToPlanItem);
   const constraints: LaundryConstraints = {
     selected_item_ids: selectedLaundryItemIds,
     urgent_item_ids: [],
@@ -623,6 +632,80 @@ function buildLaundryArtifacts(
       },
     };
   }
+}
+
+function enrichWardrobeUsageDates(
+  storedItems: WardrobeSummaryItem[],
+  completedRecords: CompletedLaundryRecord[],
+  outfitLogs: OutfitLog[],
+): WardrobeSummaryItem[] {
+  const lastWashedByItem = latestCompletedAtByItem(completedRecords, storedItems);
+  const wornDatesByItem = wornDatesByItemId(outfitLogs);
+
+  return storedItems.map((item) => {
+    const lastWashedAt = lastWashedByItem.get(item.item_id);
+    const lastWashedTime = lastWashedAt ? Date.parse(lastWashedAt) : null;
+    const wornDates = (wornDatesByItem.get(item.item_id) ?? [])
+      .filter((date) => {
+        const wornTime = Date.parse(date);
+        return Number.isFinite(wornTime) && (lastWashedTime == null || wornTime >= lastWashedTime);
+      })
+      .sort();
+    const firstWornAfterWashAt = wornDates[0];
+    const lastWornAt = wornDates[wornDates.length - 1];
+
+    return {
+      ...item,
+      ...(lastWashedAt ? { last_washed_at: lastWashedAt } : {}),
+      ...(firstWornAfterWashAt ? { first_worn_after_wash_at: firstWornAfterWashAt } : {}),
+      ...(lastWornAt ? { last_worn_at: lastWornAt } : {}),
+    };
+  });
+}
+
+function latestCompletedAtByItem(
+  completedRecords: CompletedLaundryRecord[],
+  storedItems: WardrobeSummaryItem[],
+): Map<string, string> {
+  const result = new Map<string, string>();
+  for (const item of storedItems) {
+    if (validIsoDate(item.last_washed_at)) {
+      result.set(item.item_id, String(item.last_washed_at));
+    }
+  }
+  for (const record of completedRecords) {
+    if (!validIsoDate(record.completed_at)) continue;
+    for (const itemId of record.completed_item_ids) {
+      const current = result.get(itemId);
+      if (!current || Date.parse(record.completed_at) > Date.parse(current)) {
+        result.set(itemId, record.completed_at);
+      }
+    }
+  }
+  return result;
+}
+
+function wornDatesByItemId(outfitLogs: OutfitLog[]): Map<string, string[]> {
+  const result = new Map<string, string[]>();
+  for (const log of outfitLogs) {
+    if (!validIsoDate(log.date)) continue;
+    for (const itemId of outfitLogItemIds(log)) {
+      const dates = result.get(itemId) ?? [];
+      dates.push(log.date);
+      result.set(itemId, dates);
+    }
+  }
+  return result;
+}
+
+function outfitLogItemIds(log: OutfitLog): string[] {
+  const topIds = Array.isArray(log.top_ids) ? log.top_ids : [];
+  const bottomIds = Array.isArray(log.bottom_ids) ? log.bottom_ids : [];
+  const outerIds = Array.isArray(log.outer_ids) ? log.outer_ids : [];
+  const accessoryIds = Array.isArray(log.accessory_ids) ? log.accessory_ids : [];
+  return [...topIds, ...bottomIds, ...outerIds, ...accessoryIds]
+    .map((id) => id.trim())
+    .filter(Boolean);
 }
 
 function toMobileLaundryPlan(plan: LaundryPlan): MobileSummary["plan"] {
@@ -751,6 +834,7 @@ function normalizeStoredWardrobeItem(value: unknown): WardrobeSummaryItem {
     user_notes: stringArray(item.user_notes),
     wear_count_since_wash: nonNegativeInteger(item.wear_count_since_wash),
     wash_count: nonNegativeInteger(item.wash_count),
+    ...(validIsoDate(item.last_washed_at) ? { last_washed_at: String(item.last_washed_at) } : {}),
     material_ratios: normalizeMaterialRatioRecord(item.material_ratios),
     colors: stringArray(item.colors),
     risks: normalizeStoredRiskRecord(item.risks),
@@ -759,7 +843,12 @@ function normalizeStoredWardrobeItem(value: unknown): WardrobeSummaryItem {
 }
 
 function toStoredWardrobeItem(item: WardrobeSummaryItem): WardrobeSummaryItem {
-  const { photo_data_url: _photoDataUrl, ...storedItem } = item;
+  const {
+    photo_data_url: _photoDataUrl,
+    first_worn_after_wash_at: _firstWornAfterWashAt,
+    last_worn_at: _lastWornAt,
+    ...storedItem
+  } = item;
   return storedItem;
 }
 

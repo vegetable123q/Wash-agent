@@ -18,7 +18,23 @@ export type Tone =
   | "red"
   | "soft";
 
-export type ClothingArtKind = "tee" | "hoodie" | "jeans" | "wool" | "bedding" | "sport";
+export type ClothingArtKind =
+  | "tee"
+  | "hoodie"
+  | "jeans"
+  | "shorts"
+  | "socks"
+  | "skirt"
+  | "dress"
+  | "coat"
+  | "shoes"
+  | "bag"
+  | "hat"
+  | "scarf"
+  | "towel"
+  | "wool"
+  | "bedding"
+  | "sport";
 
 export interface ChipInfo {
   label: string;

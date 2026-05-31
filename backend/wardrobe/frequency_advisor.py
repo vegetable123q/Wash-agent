@@ -4,16 +4,18 @@ from __future__ import annotations
 
 import math
 import re
+from datetime import datetime, timezone
 
 from backend.shared.models import ClothingProfile, FrequencyAdvice, LaundryConstraints, RiskLevel, WardrobeItem
 from backend.shared.utils import dedupe
 
 
-_FREQUENCY_THRESHOLDS = {
+_WEAR_COUNT_THRESHOLDS = {
     "underwear": 1,
     "sock": 1,
     "sport": 1,
     "sports": 1,
+    "towel": 3,
     "t-shirt": 2,
     "tee": 2,
     "tshirt": 2,
@@ -24,16 +26,19 @@ _FREQUENCY_THRESHOLDS = {
     "jeans": 5,
     "denim": 5,
     "pants": 4,
+    "jacket": 8,
     "coat": 8,
-    "bedding": 1,
-    "sheet": 1,
-    "sheets": 1,
-    "duvet": 1,
+    "bedding": 2,
+    "sheet": 2,
+    "sheets": 2,
+    "duvet": 2,
     "内衣": 1,
     "贴身": 1,
     "袜": 1,
     "运动": 1,
     "速干": 1,
+    "浴巾": 3,
+    "毛巾": 3,
     "t恤": 2,
     "t 恤": 2,
     "衬衫": 2,
@@ -42,14 +47,64 @@ _FREQUENCY_THRESHOLDS = {
     "毛衣": 4,
     "牛仔": 5,
     "裤": 4,
+    "夹克": 8,
     "外套": 8,
-    "床单": 1,
-    "被套": 1,
+    "床单": 2,
+    "被套": 2,
 }
 
-_LOW_FREQUENCY_TERMS = {"jeans", "denim", "sweater", "wool", "coat", "牛仔", "羊毛", "毛衣", "外套"}
+_DAY_CYCLE_THRESHOLDS = {
+    "underwear": 1,
+    "sock": 1,
+    "sport": 1,
+    "sports": 1,
+    "towel": 3,
+    "t-shirt": 2,
+    "tee": 2,
+    "tshirt": 2,
+    "shirt": 2,
+    "hoodie": 7,
+    "sweater": 14,
+    "wool": 14,
+    "jeans": 7,
+    "denim": 7,
+    "pants": 7,
+    "jacket": 30,
+    "coat": 30,
+    "bedding": 14,
+    "sheet": 14,
+    "sheets": 14,
+    "duvet": 14,
+    "内衣": 1,
+    "贴身": 1,
+    "袜": 1,
+    "运动": 1,
+    "速干": 1,
+    "浴巾": 3,
+    "毛巾": 3,
+    "t恤": 2,
+    "t 恤": 2,
+    "衬衫": 2,
+    "卫衣": 7,
+    "羊毛": 14,
+    "毛衣": 14,
+    "牛仔": 7,
+    "裤": 7,
+    "夹克": 30,
+    "外套": 30,
+    "床单": 14,
+    "被套": 14,
+}
+
+_DAY_CYCLE_TERMS = {
+    "towel", "浴巾", "毛巾", "hoodie", "sweater", "wool", "jeans", "denim",
+    "pants", "jacket", "coat", "bedding", "sheet", "sheets", "duvet",
+    "卫衣", "羊毛", "毛衣", "牛仔", "裤", "夹克", "外套", "床单", "被套",
+}
+_LOW_FREQUENCY_TERMS = {"jeans", "denim", "sweater", "wool", "jacket", "coat", "牛仔", "羊毛", "毛衣", "夹克", "外套"}
 _SPORT_TERMS = {"sport", "sports", "运动", "速干", "sweat", "出汗"}
 _STAIN_TERMS = {"stain", "污渍", "油渍"}
+_HYGIENE_TERMS = {"underwear", "sock", "内衣", "贴身", "袜"}
 _FREQUENCY_RISK_KEYS = {"shrink", "color_bleed", "deform", "pilling", "dryer_damage"}
 _ENGLISH_TERM_RE = re.compile(r"^[a-z0-9 -]+$", re.IGNORECASE)
 
@@ -63,22 +118,50 @@ def advise_frequency(
     _validate_item(item)
     _validate_constraints(constraints)
     search_text = _search_text(item)
-    threshold = _threshold_for(search_text)
+    wear_threshold = _wear_threshold_for(search_text)
+    day_threshold = _day_threshold_for(search_text)
+    day_info = _usage_day_info(item)
+    day_due = day_info is not None and day_info[0] >= day_threshold
+    wear_due = item.wear_count_since_wash >= wear_threshold
+    sport_related = _contains_term(search_text, _SPORT_TERMS)
+    hygiene_related = constraints.hygiene_sensitive and _contains_term(search_text, _HYGIENE_TERMS)
+    immediate_use_based = sport_related or hygiene_related
+    cycle_sensitive = _contains_term(search_text, _DAY_CYCLE_TERMS) or _contains_term(search_text, _LOW_FREQUENCY_TERMS)
     urgent_item_ids = set(_normalized_item_ids(constraints.urgent_item_ids))
     reasons: list[str] = []
     score = 0.0
 
-    if item.wear_count_since_wash >= threshold:
-        score += 45
-        reasons.append(f"已穿 {item.wear_count_since_wash} 次，达到建议清洗阈值 {threshold} 次。")
+    if day_info is not None:
+        days, basis = day_info
+        if day_due:
+            score += 45
+            reasons.append(f"距离{basis}已 {days} 天，达到建议清洗周期 {day_threshold} 天。")
+        else:
+            reasons.append(f"距离{basis} {days} 天，未达到建议清洗周期 {day_threshold} 天。")
+    elif immediate_use_based and wear_due:
+        reasons.append(f"贴身、运动或出汗类衣物已使用 {item.wear_count_since_wash} 次，建议及时清洗。")
+    elif cycle_sensitive:
+        reasons.append(f"这类衣物更适合按清洗周期判断，暂无上次洗涤或穿用日期；已使用 {item.wear_count_since_wash} 次仅作参考。")
+    elif wear_due:
+        reasons.append(f"已穿 {item.wear_count_since_wash} 次，达到建议穿着上限 {wear_threshold} 次。")
     else:
-        reasons.append(f"已穿 {item.wear_count_since_wash} 次，未达到建议清洗阈值 {threshold} 次。")
+        reasons.append(f"已穿 {item.wear_count_since_wash} 次，未达到建议穿着上限 {wear_threshold} 次。")
+
+    if wear_due:
+        if immediate_use_based:
+            score += 45
+        elif day_info is not None or cycle_sensitive:
+            score += 20
+        else:
+            score += 45
+        if day_info is not None:
+            reasons.append(f"已穿 {item.wear_count_since_wash} 次，达到建议穿着上限 {wear_threshold} 次。")
 
     if item.profile.item_id in urgent_item_ids:
         score += 25
         reasons.append("该衣物被标记为本次急用，优先级提高。")
 
-    if _contains_term(search_text, _SPORT_TERMS):
+    if sport_related:
         score += 35
         reasons.append("运动后或出汗后穿着，建议及时清洗。")
 
@@ -86,7 +169,7 @@ def advise_frequency(
         score += 35
         reasons.append("用户记录有明显污渍，建议本次优先处理。")
 
-    if _contains_term(search_text, _LOW_FREQUENCY_TERMS) and item.wear_count_since_wash < threshold:
+    if _contains_term(search_text, _LOW_FREQUENCY_TERMS) and not day_due and item.wear_count_since_wash < wear_threshold:
         score -= 15
         reasons.append("牛仔、羊毛或外套类衣物可适当少洗，减少褪色、缩水和变形。")
 
@@ -95,7 +178,7 @@ def advise_frequency(
         score -= penalty
         reasons.append("历史或抽取结果提示存在缩水、掉色、变形等风险，频率建议不会强行要求机洗。")
 
-    if constraints.hygiene_sensitive and _contains_term(search_text, {"underwear", "sock", "内衣", "贴身", "袜"}):
+    if hygiene_related:
         score += 20
         reasons.append("贴身或高卫生敏感衣物，建议提高换洗频率。")
 
@@ -138,15 +221,44 @@ def recommended_item_ids(
     ]
 
 
-def _threshold_for(text: str) -> int:
+def _wear_threshold_for(text: str) -> int:
     matches = [
         threshold
-        for term, threshold in _FREQUENCY_THRESHOLDS.items()
+        for term, threshold in _WEAR_COUNT_THRESHOLDS.items()
         if _term_matches(text, term)
     ]
     if not matches:
         raise ValueError("cannot infer wash-frequency threshold from wardrobe item data")
     return min(matches)
+
+
+def _day_threshold_for(text: str) -> int:
+    matches = [
+        threshold
+        for term, threshold in _DAY_CYCLE_THRESHOLDS.items()
+        if _term_matches(text, term)
+    ]
+    return min(matches) if matches else 7
+
+
+def _usage_day_info(item: WardrobeItem) -> tuple[int, str] | None:
+    wash_times = [_parse_datetime(record.washed_at) for record in item.wash_history]
+    valid_wash_times = [time for time in wash_times if time is not None]
+    if not valid_wash_times:
+        return None
+    latest_wash = max(valid_wash_times)
+    now = datetime.now(timezone.utc)
+    return max(0, math.floor((now - latest_wash).total_seconds() / 86400)), "上次洗涤"
+
+
+def _parse_datetime(value: str) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _contains_term(text: str, terms: set[str]) -> bool:

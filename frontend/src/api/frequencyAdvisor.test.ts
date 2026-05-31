@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { adviseAllFrequencies, adviseFrequency, recommendedItemIds } from "./frequencyAdvisor";
 import type { LaundryConstraints, WardrobeItemForPlan } from "./types";
 
@@ -13,25 +13,61 @@ const constraints: LaundryConstraints = {
 };
 
 describe("frequencyAdvisor", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("uses a T-shirt threshold for English tee names", () => {
     const advice = adviseFrequency(planItem({ name: "white cotton tee", wearCount: 2 }), constraints);
 
     expect(advice.priority_score).toBeGreaterThanOrEqual(45);
-    expect(advice.reasons[0]).toContain("达到建议清洗阈值 2 次");
+    expect(advice.reasons[0]).toContain("达到建议穿着上限 2 次");
   });
 
   it("uses a bedding threshold for English sheet names", () => {
-    const advice = adviseFrequency(planItem({ name: "cotton bed sheet", wearCount: 1 }), constraints);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-31T12:00:00Z"));
+
+    const advice = adviseFrequency(
+      planItem({ name: "cotton bed sheet", wearCount: 1, firstWornAfterWashAt: "2026-05-17" }),
+      constraints,
+    );
 
     expect(advice.priority_score).toBeGreaterThanOrEqual(45);
-    expect(advice.reasons[0]).toContain("达到建议清洗阈值 1 次");
+    expect(advice.reasons[0]).toContain("达到建议清洗周期 14 天");
+  });
+
+  it("does not rush bedding just because it has been used once recently", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-31T12:00:00Z"));
+
+    const advice = adviseFrequency(
+      planItem({ name: "cotton bed sheet", wearCount: 1, firstWornAfterWashAt: "2026-05-28" }),
+      constraints,
+    );
+
+    expect(advice.priority_score).toBeLessThan(45);
+    expect(advice.reasons[0]).toContain("距离本轮首次穿用 3 天，未达到建议清洗周期 14 天");
+  });
+
+  it("prioritizes towels by day cycle even with a low wear count", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-31T12:00:00Z"));
+
+    const advice = adviseFrequency(
+      planItem({ name: "blue bath towel", wearCount: 1, firstWornAfterWashAt: "2026-05-26" }),
+      constraints,
+    );
+
+    expect(advice.priority_score).toBeGreaterThanOrEqual(45);
+    expect(advice.reasons[0]).toContain("距离本轮首次穿用已 5 天，达到建议清洗周期 3 天");
   });
 
   it("does not match short English threshold terms inside unrelated words", () => {
     const advice = adviseFrequency(planItem({ name: "steel gray jacket", wearCount: 2 }), constraints);
 
     expect(advice.priority_score).toBe(0);
-    expect(advice.reasons[0]).toContain("未达到建议清洗阈值 4 次");
+    expect(advice.reasons[0]).toContain("暂无上次洗涤或穿用日期");
   });
 
   it("does not match sport terms inside unrelated English words", () => {
@@ -81,7 +117,19 @@ describe("frequencyAdvisor", () => {
   });
 });
 
-function planItem({ itemId = "item-1", name, wearCount }: { itemId?: string; name: string; wearCount: number }): WardrobeItemForPlan {
+function planItem({
+  itemId = "item-1",
+  name,
+  wearCount,
+  lastWashedAt,
+  firstWornAfterWashAt,
+}: {
+  itemId?: string;
+  name: string;
+  wearCount: number;
+  lastWashedAt?: string;
+  firstWornAfterWashAt?: string;
+}): WardrobeItemForPlan {
   return {
     profile: {
       item_id: itemId,
@@ -99,5 +147,7 @@ function planItem({ itemId = "item-1", name, wearCount }: { itemId?: string; nam
     wear_count_since_wash: wearCount,
     preferred_method: "machine_wash",
     user_notes: [],
+    last_washed_at: lastWashedAt,
+    first_worn_after_wash_at: firstWornAfterWashAt,
   };
 }

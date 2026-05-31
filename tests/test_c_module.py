@@ -4,6 +4,7 @@ import json
 import shutil
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from backend.shared.models import ClothingProfile, LaundryConstraints, RiskLevel, WardrobeItem, WashMethod, WashRecord
@@ -185,7 +186,6 @@ class CModuleTests(unittest.TestCase):
     def test_frequency_uses_common_english_alias_thresholds(self) -> None:
         cases = [
             ("white cotton tee", 2, 45),
-            ("cotton bed sheet", 1, 45),
         ]
 
         for name, wear_count, min_score in cases:
@@ -203,6 +203,50 @@ class CModuleTests(unittest.TestCase):
                 advice = advise_frequency(item, LaundryConstraints())
 
                 self.assertGreaterEqual(advice.priority_score, min_score)
+
+    def test_frequency_uses_wash_history_days_before_bedding_wear_count(self) -> None:
+        item = WardrobeItem(
+            profile=ClothingProfile(
+                item_id="recent-bedding",
+                name="cotton bed sheet",
+                material_ratios={"cotton": 1.0},
+                colors=["white"],
+            ),
+            wear_count_since_wash=1,
+            wash_history=[
+                WashRecord(
+                    washed_at=(datetime.now(timezone.utc) - timedelta(days=3)).isoformat(),
+                    method=WashMethod.MACHINE_WASH,
+                ),
+            ],
+        )
+
+        advice = advise_frequency(item, LaundryConstraints())
+
+        self.assertLess(advice.priority_score, 45)
+        self.assertIn("未达到建议清洗周期 14 天", advice.reasons[0])
+
+    def test_frequency_prioritizes_towels_by_day_cycle(self) -> None:
+        item = WardrobeItem(
+            profile=ClothingProfile(
+                item_id="old-towel",
+                name="blue bath towel",
+                material_ratios={"cotton": 1.0},
+                colors=["blue"],
+            ),
+            wear_count_since_wash=1,
+            wash_history=[
+                WashRecord(
+                    washed_at=(datetime.now(timezone.utc) - timedelta(days=5)).isoformat(),
+                    method=WashMethod.MACHINE_WASH,
+                ),
+            ],
+        )
+
+        advice = advise_frequency(item, LaundryConstraints())
+
+        self.assertGreaterEqual(advice.priority_score, 45)
+        self.assertIn("达到建议清洗周期 3 天", advice.reasons[0])
 
     def test_frequency_requires_item_and_constraints(self) -> None:
         item = self.store.get_item("wm-white-tee-001")

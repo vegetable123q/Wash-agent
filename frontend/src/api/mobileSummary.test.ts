@@ -37,6 +37,7 @@ import { PRICING_RULES } from "./pricingRules";
 
 const wardrobeStorageKey = "washmate.localWardrobe";
 const dirtyBasketStorageKey = "washmate.selectedLaundryItemIds";
+const outfitLogsStorageKey = "washmate.outfitLogs";
 
 describe("mobileSummary wardrobe selection", () => {
   beforeEach(() => {
@@ -101,6 +102,35 @@ describe("mobileSummary wardrobe selection", () => {
     expect(summary.selected_laundry_item_ids).toEqual([]);
     expect(summary.plan.buckets).toEqual([]);
     expect(summary.plan.summary).toContain("请选择本次要清洗的衣物");
+  });
+
+  it("uses outfit log dates to avoid rushing recent cycle-based items", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-31T12:00:00Z"));
+    localStorage.setItem(
+      wardrobeStorageKey,
+      JSON.stringify([
+        wardrobeItem("bedding-1", "白色床单被套", { wear_count_since_wash: 1, wash_count: 2 }),
+      ]),
+    );
+    localStorage.setItem(
+      outfitLogsStorageKey,
+      JSON.stringify([
+        {
+          date: "2026-05-28",
+          top_ids: [],
+          bottom_ids: [],
+          outer_ids: [],
+          accessory_ids: ["bedding-1"],
+        },
+      ]),
+    );
+
+    const summary = await fetchMobileSummary();
+    const advice = summary.frequency_advice?.find((item) => item.item_id === "bedding-1");
+
+    expect(advice?.priority_score).toBeLessThan(45);
+    expect(advice?.reasons[0]).toContain("距离本轮首次穿用 3 天，未达到建议清洗周期 14 天");
   });
 
   it("persists explicit laundry selection separately from wardrobe records", async () => {
@@ -329,6 +359,8 @@ describe("mobileSummary wardrobe selection", () => {
   });
 
   it("stores a completed laundry record so reports survive dirty-basket clearing", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-31T12:00:00Z"));
     localStorage.setItem(
       wardrobeStorageKey,
       JSON.stringify([
@@ -341,6 +373,7 @@ describe("mobileSummary wardrobe selection", () => {
     const summary = await fetchMobileSummary();
 
     expect(result.record?.item_names).toEqual(["白色棉 T 恤"]);
+    expect(summary.wardrobe.items[0].last_washed_at).toBe("2026-05-31T12:00:00.000Z");
     expect(summary.selected_laundry_item_ids).toEqual([]);
     expect(summary.completed_laundry!.weekly_count).toBe(1);
     expect(summary.completed_laundry!.recent_records[0]).toMatchObject({

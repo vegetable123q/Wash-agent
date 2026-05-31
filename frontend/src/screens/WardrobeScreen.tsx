@@ -24,6 +24,7 @@ interface WardrobeCardModel {
   careChips: CareChip[];
   category: WardrobeCategory;
   photoDataUrl: string;
+  colors: string[];
 }
 
 export function WardrobeScreen({ mobileSummary, onNavigate, onViewItem, onDeleteItem, onClearWardrobe }: WardrobeScreenProps) {
@@ -41,6 +42,7 @@ export function WardrobeScreen({ mobileSummary, onNavigate, onViewItem, onDelete
     careChips: importantCareChips(splitWardrobeCareMemory(item.user_note || item.user_notes?.[0]).careTags),
     category: categoryForItem(item),
     photoDataUrl: item.photo_data_url ?? "",
+    colors: item.colors,
   }));
   const categoryGroups = groupWardrobeCards(cards);
   const itemCount = String(backendItems.length);
@@ -113,7 +115,7 @@ export function WardrobeScreen({ mobileSummary, onNavigate, onViewItem, onDelete
                         {item.photoDataUrl ? (
                           <img className="wardrobe-photo" src={item.photoDataUrl} alt={`${item.name} 照片`} />
                         ) : (
-                          <ClothingArt kind={item.art} />
+                          <ClothingArt kind={item.art} colors={item.colors} />
                         )}
                         <Chip tone={item.tag.tone}>{item.tag.label}</Chip>
                       </div>
@@ -252,6 +254,16 @@ function isWardrobeCategory(value: unknown): value is WardrobeCategory {
 }
 
 function artForName(name: string): ClothingArtKind {
+  if (/(鞋|靴|sneaker|shoe|boot)/i.test(name)) return "shoes";
+  if (/(包|背包|书包|帆布包|手提包|tote|bag)/i.test(name)) return "bag";
+  if (/(帽子|鸭舌帽|棒球帽|渔夫帽|贝雷帽|冷帽|beanie|cap|hat)/i.test(name)) return "hat";
+  if (/(袜|socks?|stocking)/i.test(name)) return "socks";
+  if (/(丝巾|围巾|领巾|scarf|shawl)/i.test(name)) return "scarf";
+  if (/(浴巾|毛巾|方巾|towel)/i.test(name)) return "towel";
+  if (/(连衣裙|长裙|dress)/i.test(name)) return "dress";
+  if (/(半身裙|短裙|裙|skirt)/i.test(name)) return "skirt";
+  if (/(外套|夹克|风衣|大衣|羽绒服|西装|coat|jacket|blazer|parka)/i.test(name)) return "coat";
+  if (/(内裤|短裤|三角裤|四角裤|boxer|brief|shorts)/i.test(name)) return "shorts";
   if (name.includes("裤")) return "jeans";
   if (name.includes("羊毛") || name.includes("开衫")) return "wool";
   if (name.includes("床") || name.includes("被")) return "bedding";

@@ -109,12 +109,16 @@ export function toWardrobeItemForPlan(
   profile: ClothingProfile,
   wearCount: number,
   userNotes: string[],
+  usageDates?: Pick<WardrobeItemForPlan, "last_washed_at" | "first_worn_after_wash_at" | "last_worn_at">,
 ): WardrobeItemForPlan {
   return {
     profile,
     wear_count_since_wash: wearCount,
     preferred_method: inferPreferredMethod(profile),
     user_notes: userNotes,
+    ...(usageDates?.last_washed_at ? { last_washed_at: usageDates.last_washed_at } : {}),
+    ...(usageDates?.first_worn_after_wash_at ? { first_worn_after_wash_at: usageDates.first_worn_after_wash_at } : {}),
+    ...(usageDates?.last_worn_at ? { last_worn_at: usageDates.last_worn_at } : {}),
   };
 }
 
@@ -126,6 +130,9 @@ export interface StoredWardrobeItem {
   user_notes?: string[];
   wear_count_since_wash: number;
   wash_count: number;
+  last_washed_at?: string;
+  first_worn_after_wash_at?: string;
+  last_worn_at?: string;
   material_ratios: Record<string, number>;
   colors: string[];
   risks: Record<string, string>;
@@ -145,7 +152,11 @@ export function storedToPlanItem(item: StoredWardrobeItem): WardrobeItemForPlan 
     risks: normalizeRisks(item.risks),
     recommended_wash: "",
   };
-  return toWardrobeItemForPlan(profile, item.wear_count_since_wash, item.user_notes ?? []);
+  return toWardrobeItemForPlan(profile, item.wear_count_since_wash, item.user_notes ?? [], {
+    last_washed_at: item.last_washed_at,
+    first_worn_after_wash_at: item.first_worn_after_wash_at,
+    last_worn_at: item.last_worn_at,
+  });
 }
 
 // ─── material parsing ───────────────────────────────────────────────────
