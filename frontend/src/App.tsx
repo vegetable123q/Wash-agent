@@ -16,9 +16,11 @@ import {
   setLaundrySelection,
   setWardrobeWearCount,
   undoCompletedLaundry,
+  updateWardrobeItem,
   type BackendMachine,
   type CompletedLaundryRecord,
   type MobileSummary,
+  type WardrobeInput,
   type WardrobeSummaryItem,
 } from "./api/mobileSummary";
 import { saveOutfitLog, getTodayLog, type OutfitLog } from "./api/outfitLogStore";
@@ -223,6 +225,11 @@ export default function App() {
     await refreshMobileSummary();
   };
 
+  const handleUpdateWardrobeItem = async (itemId: string, input: WardrobeInput) => {
+    await updateWardrobeItem(itemId, input);
+    await refreshMobileSummary();
+  };
+
   const handleAddClothingToBasket = async (itemId: string) => {
     const selected = new Set(mobileSummary?.selected_laundry_item_ids ?? []);
     selected.add(itemId);
@@ -424,6 +431,7 @@ export default function App() {
             onRecordWear={handleRecordWardrobeWear}
             onSetWearCount={handleSetWardrobeWearCount}
             onAddToBasket={handleAddClothingToBasket}
+            onUpdateItem={handleUpdateWardrobeItem}
             isInDirtyBasket={Boolean(selectedBackendItem && mobileSummary?.selected_laundry_item_ids.includes(selectedBackendItem.item_id))}
           />
         );

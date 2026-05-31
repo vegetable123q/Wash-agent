@@ -129,6 +129,48 @@ describe("App in-APK backend integration", () => {
     }
   });
 
+  it("edits a wardrobe item from the detail page", async () => {
+    localStorage.setItem(
+      "washmate.localWardrobe",
+      JSON.stringify([
+        {
+          item_id: "tee-1",
+          name: "白色棉 T 恤",
+          user_note: "常穿，容易出汗",
+          user_notes: ["常穿，容易出汗"],
+          wear_count_since_wash: 1,
+          wash_count: 0,
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          risks: {},
+          category: "上衣",
+        },
+      ]),
+    );
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({}),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /衣柜/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "查看详情" }));
+    fireEvent.click(await screen.findByRole("button", { name: "编辑衣物" }));
+    fireEvent.change(screen.getByLabelText("衣物名称"), { target: { value: "白色长袖 T 恤" } });
+    fireEvent.change(screen.getByLabelText("个人备注"), { target: { value: "领口容易变形" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
+
+    expect(await screen.findByText("白色长袖 T 恤")).toBeInTheDocument();
+    expect(screen.getByText("领口容易变形")).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem("washmate.localWardrobe") ?? "[]")[0]).toMatchObject({
+      name: "白色长袖 T 恤",
+      user_note: "领口容易变形",
+    });
+  });
+
   it("updates dirty-basket selection without refetching weather or machine data", async () => {
     localStorage.setItem(
       "washmate.localWardrobe",

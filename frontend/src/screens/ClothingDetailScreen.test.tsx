@@ -130,6 +130,41 @@ describe("ClothingDetailScreen", () => {
     expect(onSetWearCount).toHaveBeenCalledWith("tee-1", 5);
   });
 
+  it("opens an editable wardrobe form from the detail action", async () => {
+    const onUpdateItem = vi.fn();
+
+    render(
+      <ClothingDetailScreen
+        onBack={vi.fn()}
+        backendItem={wardrobeItem({
+          item_id: "tee-1",
+          name: "白色 T 恤",
+          user_note: "常穿，容易出汗",
+          category: "上衣",
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          risks: {},
+        })}
+        onUpdateItem={onUpdateItem}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "编辑衣物" }));
+    fireEvent.change(screen.getByLabelText("衣物名称"), { target: { value: "白色长袖 T 恤" } });
+    fireEvent.change(screen.getByLabelText("个人备注"), { target: { value: "领口容易变形" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
+
+    await waitFor(() =>
+      expect(onUpdateItem).toHaveBeenCalledWith("tee-1", expect.objectContaining({
+        name: "白色长袖 T 恤",
+        material: "cotton 100%",
+        colors: "white",
+        note: "领口容易变形",
+        category: "上衣",
+      })),
+    );
+  });
+
   it("disables the dirty-basket action when the item is already selected", () => {
     render(
       <ClothingDetailScreen

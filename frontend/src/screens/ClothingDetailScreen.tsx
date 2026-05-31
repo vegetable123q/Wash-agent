@@ -2,7 +2,7 @@ import { Edit3, Footprints, ShoppingBasket } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import type { ModelHubConfig } from "../api/modelHubConfig";
 import { fallbackRiskDescription, generateRiskDescription, riskKeyLabel } from "../api/llmSummary";
-import type { WardrobeSummaryItem } from "../api/mobileSummary";
+import type { WardrobeCategory, WardrobeInput, WardrobeSummaryItem } from "../api/mobileSummary";
 import { hasNonMachineWashCare, splitWardrobeCareMemory } from "../api/wardrobeCareText";
 import { Card, Chip, MetricCard, Page, Section, TopBar } from "../components/AppChrome";
 import { ClothingArt } from "../components/ClothingArt";
@@ -16,8 +16,26 @@ interface ClothingDetailScreenProps {
   onRecordWear?: (itemId: string) => void | Promise<void>;
   onSetWearCount?: (itemId: string, wearCount: number) => void | Promise<void>;
   onAddToBasket?: (itemId: string) => void | Promise<void>;
+  onUpdateItem?: (itemId: string, input: WardrobeInput) => void | Promise<void>;
   isInDirtyBasket?: boolean;
 }
+
+interface ClothingEditDraft {
+  name: string;
+  material: string;
+  colors: string;
+  category: WardrobeCategory;
+  note: string;
+}
+
+const wardrobeCategoryOptions: WardrobeCategory[] = ["上衣", "裤装", "裙装", "外套", "内衣袜子", "床品", "鞋包配饰", "其他"];
+const emptyEditDraft: ClothingEditDraft = {
+  name: "",
+  material: "",
+  colors: "",
+  category: "其他",
+  note: "",
+};
 
 export function ClothingDetailScreen({
   onBack,
@@ -27,11 +45,16 @@ export function ClothingDetailScreen({
   onRecordWear,
   onSetWearCount,
   onAddToBasket,
+  onUpdateItem,
   isInDirtyBasket = false,
 }: ClothingDetailScreenProps) {
   // LLM-enhanced risk description (backend items only)
   const [llmRiskText, setLlmRiskText] = useState<string | null>(null);
   const [wearCountDraft, setWearCountDraft] = useState(() => String(backendItem?.wear_count_since_wash ?? 0));
+  const [isEditing, setIsEditing] = useState(false);
+  const [editDraft, setEditDraft] = useState<ClothingEditDraft>(() => backendItem ? editDraftFromBackend(backendItem) : emptyEditDraft);
+  const [editStatus, setEditStatus] = useState<"idle" | "saving" | "error">("idle");
+  const [editError, setEditError] = useState("");
 
   const item = backendItem ? detailFromBackend(backendItem) : staticItem ? detailFromStatic(staticItem) : null;
   const trimmedWearCountDraft = wearCountDraft.trim();
@@ -43,6 +66,8 @@ export function ClothingDetailScreen({
       isWearCountDraftValid &&
       manualWearCount !== backendItem.wear_count_since_wash,
   );
+  const canEditItem = Boolean(backendItem && onUpdateItem);
+  const canSaveEdit = Boolean(backendItem && onUpdateItem && editDraft.name.trim() && editStatus !== "saving");
 
   useEffect(() => {
     setLlmRiskText(null);
@@ -60,12 +85,49 @@ export function ClothingDetailScreen({
     }
   }, [backendItem?.item_id, backendItem?.wear_count_since_wash]);
 
+  useEffect(() => {
+    setIsEditing(false);
+    setEditDraft(backendItem ? editDraftFromBackend(backendItem) : emptyEditDraft);
+    setEditStatus("idle");
+    setEditError("");
+  }, [backendItem?.item_id]);
+
   const handleWearCountSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!backendItem || !canSaveWearCount) {
       return;
     }
     void onSetWearCount?.(backendItem.item_id, manualWearCount);
+  };
+
+  const updateEditDraft = (patch: Partial<ClothingEditDraft>) => {
+    setEditDraft((current) => ({ ...current, ...patch }));
+    setEditStatus("idle");
+    setEditError("");
+  };
+
+  const handleEditSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!backendItem || !onUpdateItem || !canSaveEdit) {
+      return;
+    }
+    setEditStatus("saving");
+    setEditError("");
+    try {
+      await onUpdateItem(backendItem.item_id, {
+        name: editDraft.name.trim(),
+        material: editDraft.material.trim(),
+        colors: editDraft.colors.trim(),
+        note: editDraft.note.trim(),
+        image_filename: backendItem.user_notes?.[1] ?? "",
+        category: editDraft.category,
+      });
+      setIsEditing(false);
+      setEditStatus("idle");
+    } catch (error) {
+      setEditStatus("error");
+      setEditError(error instanceof Error ? error.message : "保存失败");
+    }
   };
 
   if (!item) {
@@ -88,7 +150,14 @@ export function ClothingDetailScreen({
         title="衣物详情"
         onBack={onBack}
         action={
-          <button className="icon-button" type="button" aria-label="编辑衣物" disabled title="当前详情页仅展示衣物记忆">
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="编辑衣物"
+            disabled={!canEditItem}
+            title={canEditItem ? "编辑衣物信息" : "当前衣物暂不可编辑"}
+            onClick={() => setIsEditing(true)}
+          >
             <Edit3 size={18} />
           </button>
         }
@@ -108,6 +177,69 @@ export function ClothingDetailScreen({
           </div>
         </div>
       </Card>
+
+      {isEditing && backendItem ? (
+        <Section title="编辑衣物">
+          <Card>
+            <form className="form-stack" onSubmit={handleEditSubmit}>
+              <label>
+                <span>衣物名称</span>
+                <input
+                  className="input-like"
+                  value={editDraft.name}
+                  onChange={(event) => updateEditDraft({ name: event.target.value })}
+                />
+              </label>
+              <label>
+                <span>主要材质</span>
+                <input
+                  className="input-like"
+                  value={editDraft.material}
+                  onChange={(event) => updateEditDraft({ material: event.target.value })}
+                />
+              </label>
+              <label>
+                <span>颜色</span>
+                <input
+                  className="input-like"
+                  value={editDraft.colors}
+                  onChange={(event) => updateEditDraft({ colors: event.target.value })}
+                />
+              </label>
+              <label>
+                <span>分类</span>
+                <select
+                  className="input-like"
+                  aria-label="分类"
+                  value={editDraft.category}
+                  onChange={(event) => updateEditDraft({ category: event.target.value as WardrobeCategory })}
+                >
+                  {wardrobeCategoryOptions.map((category) => (
+                    <option key={category} value={category}>{category}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>个人备注</span>
+                <textarea
+                  className="input-like textarea-like"
+                  value={editDraft.note}
+                  onChange={(event) => updateEditDraft({ note: event.target.value })}
+                />
+              </label>
+              {editStatus === "error" ? <p className="form-status form-status-error">{editError}</p> : null}
+              <div className="button-row">
+                <button className="secondary-button" type="button" onClick={() => setIsEditing(false)}>
+                  取消
+                </button>
+                <button className="primary-button" type="submit" disabled={!canSaveEdit}>
+                  保存修改
+                </button>
+              </div>
+            </form>
+          </Card>
+        </Section>
+      ) : null}
 
       <Section title="洗护记忆">
         <div className="two-grid">
@@ -254,6 +386,21 @@ function detailFromStatic(item: WardrobeItemView) {
     recommendation: item.recommendation,
     historyText: `已穿 ${item.wearCount} 次，累计洗涤 ${item.washCount} 次。`,
   };
+}
+
+function editDraftFromBackend(item: WardrobeSummaryItem): ClothingEditDraft {
+  return {
+    name: item.name,
+    material: materialInputText(item.material_ratios),
+    colors: item.colors.join(", "),
+    category: item.category ?? "其他",
+    note: item.user_note || item.user_notes?.[0] || "",
+  };
+}
+
+function materialInputText(materialRatios: Record<string, number>) {
+  const entries = Object.entries(materialRatios).filter(([, ratio]) => isPositiveFiniteNumber(ratio));
+  return entries.map(([material, ratio]) => `${material} ${Math.round(ratio * 100)}%`).join(", ");
 }
 
 function recommendationTitleForBackend(item: WardrobeSummaryItem, nonMachineWash = false): string {

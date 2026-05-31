@@ -139,6 +139,53 @@ export async function createWardrobeItem(input: WardrobeInput): Promise<{ status
   return { status: "created", item: photoFilePath ? { ...item, photo_data_url: input.photo_data_url } : item };
 }
 
+export async function updateWardrobeItem(
+  itemId: string,
+  input: WardrobeInput,
+): Promise<{ status: string; item: WardrobeSummaryItem }> {
+  const normalizedItemId = itemId.trim();
+  if (!normalizedItemId) throw new Error("item_id is required");
+  const name = input.name.trim();
+  if (!name) throw new Error("name is required");
+
+  const items = readLocalWardrobeItems();
+  const existing = items.find((item) => item.item_id === normalizedItemId);
+  if (!existing) throw new Error(`Unknown wardrobe item: ${normalizedItemId}`);
+
+  const nextPhotoFilePath = input.photo_data_url
+    ? await saveWardrobePhotoDataUrl(normalizedItemId, input.photo_data_url)
+    : existing.photo_file_path;
+  if (input.photo_data_url && existing.photo_file_path && existing.photo_file_path !== nextPhotoFilePath) {
+    await deleteWardrobePhotoFile(existing.photo_file_path);
+  }
+
+  const profile = buildProfileFromInput({
+    item_id: normalizedItemId,
+    name,
+    material_text: input.material.trim(),
+    colors_text: input.colors.trim(),
+    user_note: input.note.trim(),
+  });
+
+  const updatedItem: WardrobeSummaryItem = {
+    ...existing,
+    item_id: normalizedItemId,
+    name: profile.name,
+    category: normalizeWardrobeCategory(input.category),
+    user_note: profile.user_note,
+    user_notes: [input.note.trim(), input.image_filename.trim()].filter(Boolean),
+    material_ratios: profile.material_ratios,
+    colors: profile.colors,
+    risks: Object.fromEntries(
+      Object.entries(profile.risks).map(([key, level]) => [key, level]),
+    ),
+    ...(nextPhotoFilePath ? { photo_file_path: nextPhotoFilePath } : {}),
+  };
+
+  writeLocalWardrobeItems(items.map((item) => (item.item_id === normalizedItemId ? updatedItem : item)));
+  return { status: "updated", item: input.photo_data_url ? { ...updatedItem, photo_data_url: input.photo_data_url } : updatedItem };
+}
+
 export async function deleteWardrobeItem(itemId: string): Promise<{ status: string; item_id: string }> {
   const normalizedItemId = itemId.trim();
   if (!normalizedItemId) throw new Error("item_id is required");

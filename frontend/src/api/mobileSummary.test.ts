@@ -30,6 +30,7 @@ import {
   setLaundrySelection,
   setWardrobeWearCount,
   undoCompletedLaundry,
+  updateWardrobeItem,
   type MobileSummary,
 } from "./mobileSummary";
 import { PRICING_RULES } from "./pricingRules";
@@ -395,6 +396,41 @@ describe("mobileSummary wardrobe selection", () => {
       category: "外套",
       photo_data_url: "data:image/jpeg;base64,dGh1bWI=",
     });
+  });
+
+  it("updates editable wardrobe item details while preserving wash history", async () => {
+    const created = await createWardrobeItem({
+      name: "白色 T 恤",
+      material: "cotton 100%",
+      colors: "white",
+      note: "常穿，容易出汗",
+      image_filename: "tee.jpg",
+      category: "上衣",
+    });
+    await recordWardrobeWear(created.item.item_id);
+
+    await updateWardrobeItem(created.item.item_id, {
+      name: "白色长袖 T 恤",
+      material: "cotton 80%, polyester 20%",
+      colors: "white, blue",
+      note: "领口容易变形",
+      image_filename: "",
+      category: "上衣",
+    });
+
+    const summary = await fetchMobileSummary();
+
+    expect(summary.wardrobe.items[0]).toMatchObject({
+      item_id: created.item.item_id,
+      name: "白色长袖 T 恤",
+      category: "上衣",
+      user_note: "领口容易变形",
+      user_notes: ["领口容易变形"],
+      wear_count_since_wash: 1,
+      wash_count: 0,
+      colors: ["white", "blue"],
+    });
+    expect(summary.wardrobe.items[0].material_ratios).toMatchObject({ cotton: 0.8, polyester: 0.2 });
   });
 
   it("does not infer a wardrobe category when recognition or user input did not provide one", async () => {
