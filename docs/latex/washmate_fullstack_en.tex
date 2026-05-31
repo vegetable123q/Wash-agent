@@ -1,0 +1,466 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{indentfirst}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue,
+  pdftitle={WashMate Campus Product and Implementation Guide},
+  pdfauthor={WashMate Campus Team}
+}
+
+\lstdefinestyle{command}{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  columns=fullflexible,
+  frame=single,
+  rulecolor=\color{black!30}
+}
+
+\setlist[itemize]{leftmargin=1.6em}
+\setlist[enumerate]{leftmargin=1.8em}
+\renewcommand{\arraystretch}{1.2}
+\setlength{\parindent}{1.6em}
+\setlength{\parskip}{0pt}
+\linespread{1.08}
+\setcounter{tocdepth}{2}
+\setcounter{secnumdepth}{2}
+\sloppy
+
+\title{WashMate Campus\\Product and Implementation Guide}
+\author{WashMate Campus Team}
+\date{2026-05-31}
+
+\begin{document}
+\maketitle
+\clearpage
+\pdfbookmark[1]{Contents}{toc}
+\tableofcontents
+\clearpage
+
+\section{Document Purpose}
+
+This document describes the implemented WashMate Campus product from a product, frontend, backend, data model, testing, and delivery perspective. It is written from repository facts instead of from a target architecture that has not been built.
+
+The most important architectural fact is that WashMate Campus is not a traditional web frontend calling a long-running Python HTTP backend. The primary user-facing product is the React, TypeScript, Vite, and Capacitor mobile app under \path{frontend/}. Its core business logic runs inside the APK as TypeScript modules under \path{frontend/src/api/}. The Python package under \path{backend/} is a reference implementation and test reference. It defines behavior, validates rules, and supports integration tests.
+
+\section{Product Overview}
+
+\subsection{Problem and Users}
+
+WashMate Campus targets campus shared-laundry scenarios. A student usually needs to decide whether clothes should be washed today, which clothes can be washed together, whether a dryer is safe, which dormitory machines are available, and how much time and money the session will cost. These decisions depend on wardrobe memory, clothing care requirements, machine status, weather, personal constraints, and local campus laundry rules.
+
+The product turns those inputs into a mobile workflow:
+
+\begin{enumerate}
+  \item The user maintains a local wardrobe with materials, colors, care tags, photos, wear counts, wash records, and user notes.
+  \item The user records worn outfits or adds items to the dirty basket.
+  \item The app reads campus context after the user configures a dormitory building.
+  \item The planning module splits laundry into safe buckets, assigns machine programs when possible, and estimates wait time, duration, and cost.
+  \item The report screen presents the plan as actionable steps, risk notes, savings notes, and cost lines.
+\end{enumerate}
+
+\subsection{Implemented User-Facing Scope}
+
+The current mobile surface includes Today, Outfit Wiki, Record Outfit, Wardrobe, Add Clothing, Clothing Detail, Dirty Basket, Laundry Room, Machine Detail, Plan Detail, Report, and Profile screens. The main navigation and state management live in \path{frontend/src/App.tsx}; reusable shell UI lives in \path{frontend/src/components/}; product copy and static fixtures live in \path{frontend/src/data/}.
+
+The implemented product supports:
+
+\begin{itemize}
+  \item Manual clothing entry and local photo attachment.
+  \item User-triggered ModelHub image or text recognition.
+  \item Local wardrobe CRUD, wear-count tracking, and dirty-basket state.
+  \item Outfit logging and outfit recommendation support.
+  \item Dormitory selection, live campus machine context, and weather context.
+  \item Rule-based laundry planning with wash buckets, dryer recommendations, warnings, cost, and duration.
+  \item Completed-laundry history with weekly report summaries and undo support.
+  \item Structured report generation for display without natural-language reverse parsing.
+\end{itemize}
+
+The latest mobile scripts also improve several execution details. Add Clothing now shows the missing ModelHub configuration reason next to recognition buttons. Outfit Wiki tells the user when bottoms are missing and provides an add-clothing action. Laundry Room shows machine ids and highlights machines recommended by the current plan. After the user completes a laundry plan, the app stores a local completion record so the report still has useful weekly history after the dirty basket is cleared.
+
+\section{Repository and Stack}
+
+\subsection{Technology Stack}
+
+\begin{longtable}{p{0.20\textwidth} p{0.32\textwidth} p{0.38\textwidth}}
+\toprule
+Layer & Main technology & Implemented role \\
+\midrule
+Mobile UI & React 18, TypeScript, Vite & Mobile screens, navigation, forms, local state, and user-facing interaction. \\
+APK shell & Capacitor 7, Android Gradle & Android WebView packaging, app identity, native sync, and debug or release APK build path. \\
+APK services & TypeScript modules in \path{frontend/src/api/} & Wardrobe, dirty basket, completed-laundry records, campus context, laundry planning, report generation, frequency advice, recognition request logic, local storage, and mobile summaries. \\
+Python reference & Python 3.12, dataclasses, unittest & Shared data models, reference extraction, wardrobe, campus, planning, report, and integration behavior. \\
+External services & ModelHub/Gemini v1beta, CleverSchool, Haier, Open-Meteo & Clothing recognition, dormitory machine status, and weather. \\
+Tooling & uv, npm, GitHub Actions & Dependency sync, tests, frontend build, Capacitor sync, Android build, and release automation. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Key Repository Layout}
+
+\begin{lstlisting}[style=command]
+Wash-agent/
+  README.md
+  AGENTS.md
+  pyproject.toml
+  app.py
+  main.py
+  backend/
+    shared/models.py
+    clothing_extraction/
+    wardrobe/
+    campus/
+    laundry/
+    reports/
+  frontend/
+    src/
+      App.tsx
+      api/
+      components/
+      screens/
+      data/
+    android/
+    package.json
+    capacitor.config.ts
+  config/
+    api_config.example.json
+    machine_rules.json
+  data/
+    wardrobe_sample.json
+    machines_mock.json
+    pics/
+  docs/
+    structure_design.md
+    c_delivery.md
+    e_demo_script.md
+    superpowers/plans/
+  tests/
+    test_*.py
+  .github/workflows/
+    preview.yml
+    release-apk.yml
+\end{lstlisting}
+
+\section{Full-Stack Architecture}
+
+\subsection{Runtime Shape}
+
+The runtime is centered on the mobile app:
+
+\begin{enumerate}
+  \item The user opens the Capacitor app.
+  \item React screens request a \emph{mobile summary} or perform local actions.
+  \item TypeScript services in \path{frontend/src/api/} read local storage, compose wardrobe state, call external services only when the user action or profile configuration requires it, and run rule-based planning/report generation.
+  \item When the user confirms a plan, the mobile service saves a completion snapshot, clears the dirty basket, and keeps an undo path.
+  \item The Python modules provide reference behavior and a test reference, but they are not required to run as an HTTP server for the normal mobile workflow.
+\end{enumerate}
+
+\subsection{Architecture Flow}
+
+\begin{lstlisting}[style=command]
+User
+  -> React / Capacitor screens
+  -> frontend/src/api/mobileSummary.ts
+      -> userProfile and ModelHub config
+      -> local wardrobe and dirty basket
+      -> campusMachineApi + weatherService
+      -> frequencyAdvisor
+      -> laundryPlanner
+      -> reportGenerator
+      -> completed laundry records
+  -> mobile screens render plan, report, machines, and wardrobe state
+
+Python backend
+  -> backend/shared/models.py defines shared data models
+  -> backend/* modules define reference behavior and tests
+  -> tests/ verifies extraction, wardrobe, campus, planning, report, and integration
+\end{lstlisting}
+
+\subsection{Public Boundary Principle}
+
+Frontend screens should handle user interaction only. They should not contain ModelHub request text, machine parsing rules, wardrobe persistence internals, laundry bucket rules, or report assembly rules. Those responsibilities belong to service modules or backend reference modules.
+
+Cross-module data should pass through explicit data models. In Python, the shared model layer is \path{backend/shared/models.py}. In the mobile app, the matching type layer is \path{frontend/src/api/types.ts}. New work should not create parallel models when an existing model already describes the data.
+
+\section{Frontend Implementation}
+
+\subsection{Application Shell and Navigation}
+
+\path{frontend/src/App.tsx} owns the active screen, browser history behavior, selected clothing and machine ids, user profile state, ModelHub configuration state, latest completed laundry record, mobile summary refresh state, and top-level handlers. It imports screens from \path{frontend/src/screens/} and renders the bottom navigation from \path{frontend/src/components/AppChrome.tsx}.
+
+The app uses a screen id model rather than a separate router package. Parent tabs map detail pages back to their owning tab. Examples include:
+
+\begin{itemize}
+  \item \texttt{planDetail} and \texttt{dirtyBasket} under Today.
+  \item \texttt{addClothing} and \texttt{clothingDetail} under Wardrobe.
+  \item \texttt{machineDetail} under Laundry Room.
+  \item \texttt{recordOutfit} under Outfit Wiki.
+\end{itemize}
+
+\subsection{Mobile Screens}
+
+\begin{longtable}{p{0.26\textwidth} p{0.64\textwidth}}
+\toprule
+Screen & Responsibility \\
+\midrule
+\path{TodayScreen.tsx} & Entry dashboard for current summary, weather, dirty-basket status, and plan entry. \\
+\path{DirtyBasketScreen.tsx} & Lets the user select the wardrobe items that are currently waiting for laundry. \\
+\path{PlanDetailScreen.tsx} & Shows the detailed wash plan, confirms execution in a dialog, and shows success plus undo after completion. \\
+\path{OutfitWikiScreen.tsx} & Provides outfit classification, style summary, and recommendation support; when bottoms are missing, it asks the user to add them. \\
+\path{RecordOutfitScreen.tsx} & Records what the user wore and increments wear counts for known wardrobe items. \\
+\path{WardrobeScreen.tsx} & Lists local wardrobe items, supports detail entry, deletion, and clearing. \\
+\path{AddClothingScreen.tsx} & Collects manual input, local photo selection, and optional ModelHub recognition before saving; missing recognition config is shown next to the recognition buttons. \\
+\path{ClothingDetailScreen.tsx} & Shows one local wardrobe item, care memory, wear count, and dirty-basket action. \\
+\path{LaundryRoomScreen.tsx} & Displays configured dormitory machine context, machine ids, queue estimates, refresh state, weather, and plan-recommended machine highlights. \\
+\path{MachineDetailScreen.tsx} & Shows one selected machine with user-facing price and program information. \\
+\path{ReportScreen.tsx} & Renders structured report sections, a concise now-do-this card, weekly completion history, risk notes, and savings notes. \\
+\path{ProfileScreen.tsx} & Stores dormitory, floor, pickup time, and dryer preference; ModelHub and demo data controls live under advanced settings. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Frontend Service Modules}
+
+\begin{longtable}{p{0.30\textwidth} p{0.60\textwidth}}
+\toprule
+Module & Responsibility \\
+\midrule
+\path{mobileSummary.ts} & Composes the data consumed by screens: wardrobe, dirty basket, completed-laundry history, weather, campus context, frequency advice, plan, drying plan, and report. It also completes and undoes laundry sessions. \\
+\path{types.ts} & Defines TypeScript data models that mirror the Python shared models, plus \texttt{CompletedLaundryRecord} and \texttt{CompletedLaundrySummary}. \\
+\path{userProfile.ts} & Loads and saves local profile values such as dormitory name, floor, pickup time, and dryer preference. \\
+\path{modelHubConfig.ts} & Loads, saves, clears, validates, and constrains ModelHub configuration. The supported model list currently includes \texttt{gemini-3.1-pro-preview}. \\
+\path{modelHubRecognition.ts} & Sends user-triggered image or text recognition requests and requires structured JSON output. \\
+\path{clothingExtractor.ts} & Builds local clothing profiles and converts stored wardrobe items into planning inputs. \\
+\path{campusTowerDirectory.ts} & Provides user-facing dormitory options while keeping provider ids inside API/config layers. \\
+\path{campusMachineApi.ts} & Builds live campus context for a configured dormitory and normalizes machine status. \\
+\path{weatherService.ts} & Fetches Tsinghua-area weather from Open-Meteo. \\
+\path{pricingRules.ts} & Packages price, duration, program, and drying-context rules used by planning and display. \\
+\path{frequencyAdvisor.ts} & Computes wash-frequency priority and recommendations from wardrobe and constraints. \\
+\path{laundryPlanner.ts} & Splits laundry into buckets, assigns machine programs, produces warnings, and estimates cost/duration. \\
+\path{reportGenerator.ts} & Converts the final plan and context into structured report content. \\
+\path{outfitLogStore.ts} and \path{outfitWiki.ts} & Store outfit history, derive clothing pairs, and support outfit recommendation workflows. \\
+\path{photoThumbnail.ts} and \path{photoFileStorage.ts} & Create and store local wardrobe photo thumbnails. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Local State and Persistence}
+
+The app stores user profile, ModelHub recognition configuration, wardrobe items, dirty-basket selection, completed laundry records, outfit logs, and local photo references on the device. The design intentionally keeps normal wardrobe, basket, planning, completion history, and report workflows self-contained in the APK.
+
+Completed laundry records are stored under \texttt{washmate.completedLaundryRecords}. Each record includes completed time, item ids, item names, cost and duration estimates, machine labels, a plan summary, and the wardrobe counters before completion. Undo uses that snapshot to restore wear counts, wash counts, and dirty-basket selection.
+
+Only these actions access external services:
+
+\begin{itemize}
+  \item The user triggers image or text recognition through a configured ModelHub endpoint.
+  \item The user has configured a dormitory, and the app fetches CleverSchool or Haier machine status for that dormitory.
+  \item The app fetches Tsinghua-area weather from Open-Meteo.
+\end{itemize}
+
+The UI must show explicit unconfigured, unavailable, loading, or error states when required input or service output is absent. It should not invent a dormitory, machine status, price, weather, material, or care result.
+
+\section{Backend Reference Implementation}
+
+\subsection{Shared Models}
+
+\path{backend/shared/models.py} is the Python shared model layer. It defines enums and dataclasses used across extraction, wardrobe, campus, planning, and report modules.
+
+Important model groups include:
+
+\begin{longtable}{p{0.26\textwidth} p{0.64\textwidth}}
+\toprule
+Model group & Models \\
+\midrule
+Care and risk & \texttt{RiskLevel}, \texttt{WashMethod}, \texttt{DryMethod}. \\
+Machine context & \texttt{MachineType}, \texttt{MachineStatus}, \texttt{MachineTower}, \texttt{MachineInfo}, \texttt{MachineQueueEstimate}, \texttt{CampusContext}. \\
+Clothing and wardrobe & \texttt{ClothingInput}, \texttt{LLMResponse}, \texttt{ClothingProfile}, \texttt{WashRecord}, \texttt{WardrobeItem}. \\
+Planning & \texttt{LaundryConstraints}, \texttt{FrequencyAdvice}, \texttt{LaundryChargeLine}, \texttt{LaundryBucket}, \texttt{LaundryPlan}, \texttt{DryingStep}, \texttt{DryingPlan}. \\
+Reporting & \texttt{WashReport}. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Clothing Extraction}
+
+The clothing extraction package owns product/text/image normalization and reference clothing-profile extraction:
+
+\begin{itemize}
+  \item \path{backend/clothing_extraction/llm_client.py} builds ModelHub/Gemini requests, image content, request text, and JSON response formats.
+  \item \path{backend/clothing_extraction/product_info.py} normalizes product name, shop name, tag text, OCR text, user description, user note, and supplemental sources.
+  \item \path{backend/clothing_extraction/extractor.py} converts normalized input and optional model output into a \texttt{ClothingProfile}, including materials, colors, care actions, care symbols, risks, evidence levels, missing fields, and extraction status.
+\end{itemize}
+
+When image recognition is used, the app sends one request that requires JSON output through \texttt{responseMimeType=application/json} and \texttt{responseSchema}. The extraction module should not store wardrobe state, read campus machines, decide whether the current basket should be washed, or generate reports.
+
+\subsection{Wardrobe Memory and Frequency Advice}
+
+\path{backend/wardrobe/store.py} provides \texttt{WardrobeStore}, which owns wardrobe CRUD, wash history, wear count, item validation, and JSON serialization. \path{backend/wardrobe/frequency_advisor.py} computes priority scores and wash-frequency recommendations from wardrobe items and \texttt{LaundryConstraints}.
+
+This package deliberately does not call an AI model, fetch machine status, or produce the final laundry plan. It gives the planning module a clean memory layer and gives the UI a frequency signal.
+
+\subsection{Campus Context}
+
+\path{backend/campus/machine_api.py} defines \texttt{LaundryMachineClient} and parsing logic for CleverSchool and Haier machine sources. It normalizes towers, machine ids, machine types, machine status, floors, remaining time, provider information, and mock transport behavior.
+
+\path{backend/campus/context.py} builds \texttt{CampusContext} from machine lists, weather, drying context, and pricing rules. It also computes \texttt{MachineQueueEstimate} values by machine type. The context layer is responsible for explicit errors when a dormitory name or provider mapping cannot be resolved.
+
+\path{backend/campus/weather.py} fetches Tsinghua-area current weather from Open-Meteo and validates the shape of the returned weather values.
+
+\subsection{Laundry Planning}
+
+\path{backend/laundry/planner.py} produces the reference \texttt{LaundryPlan}. It owns rule-based decisions such as:
+
+\begin{itemize}
+  \item Selected item validation and urgent item validation.
+  \item Bucket splitting by wash prohibition, dry clean, hand wash, bedding, dark color or color-bleeding risk, light standard loads, and safe mixed loads.
+  \item Machine type selection and nearest-floor preference when the user provides \texttt{preferred\_machine\_floor}.
+  \item Program selection, detergent amount, laundry-bag recommendation, and risk warnings.
+  \item Cost and duration calculations from \texttt{CampusContext.pricing\_rules}.
+  \item Explicit global warnings for missing wait estimates, waiting-time constraints, and budget constraints.
+\end{itemize}
+
+\path{backend/laundry/load_estimator.py} supports load-unit estimation and splitting by load target. Dryer assignment is separated through \texttt{recommend\_drying}; this keeps the wash plan and drying plan explicit.
+
+\subsection{Report Generation}
+
+\path{backend/reports/generator.py} converts a \texttt{LaundryPlan}, optional \texttt{DryingPlan}, wardrobe items, and campus context into a \texttt{WashReport}. The report explains the plan that already exists. It must not re-split buckets, recalculate machine decisions, fetch new context, or call an AI model.
+
+The report model contains structured \texttt{sections}, \texttt{action\_steps}, \texttt{cost\_breakdown}, \texttt{savings\_notes}, and \texttt{risk\_notes}. This allows the UI to render information directly instead of parsing prose.
+
+\section{Cross-Stack Data Models}
+
+\subsection{Python and TypeScript Alignment}
+
+The project maintains aligned data model layers:
+
+\begin{itemize}
+  \item Python: \path{backend/shared/models.py}
+  \item TypeScript: \path{frontend/src/api/types.ts}
+\end{itemize}
+
+The TypeScript data models keep the APK self-contained. They mirror the concepts required by the mobile planning module, campus context, report screen, and wardrobe UI. The Python models remain the reference layer for backend tests and reference behavior.
+
+\subsection{Core Data Flow}
+
+\begin{enumerate}
+  \item \textbf{Profile and configuration.} \path{ProfileScreen.tsx} saves user profile and ModelHub config through \path{userProfile.ts} and \path{modelHubConfig.ts}.
+  \item \textbf{Wardrobe state.} \path{AddClothingScreen.tsx} creates a local wardrobe item through recognition or manual input. \path{mobileSummary.ts} exposes wardrobe state to screens.
+  \item \textbf{Dirty basket.} The user selects item ids for the current laundry session. Dirty-basket records include item id, added time, and whether the time is known or estimated.
+  \item \textbf{Campus context.} A configured dormitory enables machine and weather context. Queue estimates are grouped by machine type.
+  \item \textbf{Plan.} The planning module receives selected items, constraints, campus context, and pricing rules, then returns buckets, warnings, and estimates.
+  \item \textbf{Execution.} When the user confirms execution, \path{mobileSummary.ts} writes a completed-laundry record, resets wear counts for completed items, increments wash counts, and clears the dirty basket.
+  \item \textbf{Drying plan and report.} Dryer recommendations and report generation consume the existing plan and context. Report can also show weekly completion history after the basket is empty.
+\end{enumerate}
+
+\section{External Services and Security}
+
+\subsection{External Service Boundaries}
+
+\begin{longtable}{p{0.22\textwidth} p{0.28\textwidth} p{0.40\textwidth}}
+\toprule
+Service & Trigger & Purpose \\
+\midrule
+ModelHub / Gemini v1beta & User clicks image recognition, batch recognition, or text recognition after configuring credentials. & Converts image or text evidence into structured clothing fields. \\
+CleverSchool & User saves a supported dormitory building. & Reads campus machine towers and machine status for supported devices. \\
+Haier & User saves a supported dormitory building. & Reads Haier laundry point and device status for supported devices. \\
+Open-Meteo & Mobile summary refresh. & Reads Tsinghua-area weather for drying context and user display. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Secrets and Local Configuration}
+
+The mobile app does not ship a real API key. The user enters ModelHub \texttt{baseUrl}, \texttt{apikey}, and \texttt{model\_name} in Profile. The app stores this configuration locally and provides a clear action to remove it.
+
+The Python reference implementation reads local ModelHub configuration from \path{config/api_config.json}, which is ignored by Git. The committed template is \path{config/api_config.example.json}. The repository must not commit real API keys, \path{.env} files, keystores, signing passwords, or production secrets.
+
+\subsection{No Silent Business Guessing}
+
+The project rule is that missing business data should become an explicit error, status, or unknown value. New code should not silently invent material, color, machine, weather, price, duration, risk, or plan data. Explicit unavailable states are acceptable because they tell the UI and the user what is missing.
+
+\section{Testing, Build, and Release}
+
+\subsection{Local Verification Commands}
+
+\begin{lstlisting}[style=command]
+uv sync
+uv run python -m unittest discover -v
+
+cd frontend
+npm install
+npm test
+npm run build
+npm run cap:sync
+\end{lstlisting}
+
+For debug APK generation:
+
+\begin{lstlisting}[style=command]
+cd frontend
+npm run apk:debug
+\end{lstlisting}
+
+The debug APK is generated under:
+
+\begin{lstlisting}[style=command]
+frontend/android/app/build/outputs/apk/debug/app-debug.apk
+\end{lstlisting}
+
+\subsection{Automated Checks}
+
+\path{.github/workflows/preview.yml} runs preview checks for pushes or pull requests targeting preview or main branches. It syncs Python dependencies, runs Python unit tests, installs frontend dependencies with \texttt{npm ci}, runs frontend tests, and builds the frontend.
+
+\path{.github/workflows/release-apk.yml} runs on main branch release flow. It verifies Python and frontend tests, reads the release version from \path{frontend/package.json}, updates Android version metadata, sets up JDK 21 and Android SDK 35, runs Capacitor sync, builds a signed release APK, uploads an artifact, and publishes a GitHub Release.
+
+Release signing should use GitHub Secrets: \texttt{ANDROID\_KEYSTORE\_BASE64}, \texttt{ANDROID\_KEYSTORE\_PASSWORD}, \texttt{ANDROID\_KEY\_ALIAS}, and \texttt{ANDROID\_KEY\_PASSWORD}. If secrets are absent, CI can create a temporary build key for an installable artifact, but that key is not suitable for stable long-term update continuity.
+
+\subsection{Test Coverage Scope}
+
+The repository contains backend tests for clothing extraction, wardrobe behavior, campus machine parsing, campus context, weather, laundry planning, report generation, and full integration. The frontend contains Vitest tests for API services, screen rendering, app integration, refresh behavior, profile configuration, dirty basket, completed-laundry history and undo, recommended machine highlights, report weekly summaries, machine detail, report screens, and related UI flows.
+
+\section{Developer Handoff Notes}
+
+\subsection{Where to Add Future Work}
+
+\begin{itemize}
+  \item Add UI behavior in \path{frontend/src/screens/} and shared shell components in \path{frontend/src/components/}.
+  \item Add mobile business behavior in the focused \path{frontend/src/api/} service module that owns that behavior.
+  \item Add Python reference behavior in the owning backend package rather than in a flat backend module.
+  \item Add shared Python models only in \path{backend/shared/models.py}; add frontend types in \path{frontend/src/api/types.ts} when the APK needs that shape.
+  \item Update \path{docs/structure_design.md} if module boundaries, public interfaces, configuration behavior, or main workflow change.
+\end{itemize}
+
+\subsection{Things Not to Do}
+
+\begin{itemize}
+  \item Do not add compatibility wrapper modules for old flat backend paths.
+  \item Do not put model request text, parsers, planning rules, storage internals, or report logic directly into screens.
+  \item Do not add hidden remote backend dependencies for normal wardrobe, basket, planning, or report workflows.
+  \item Do not commit secrets, keystores, API keys, or real user data.
+  \item Do not mask API failures by returning guessed business results.
+\end{itemize}
+
+\section{Current Limitations and Extension Points}
+
+The current product already works as a complete mobile demo. The following are natural extension points:
+
+\begin{itemize}
+  \item Account-backed profile, wardrobe, basket, and completed-history sync could be added later, but current storage is local-device oriented.
+  \item A hosted backend could be introduced for multi-device sync or shared campus configuration, but the current product does not require it for normal use.
+  \item Additional ModelHub models can be supported only through explicit model allow-list changes and tests.
+  \item New campus providers should be added behind the campus API/context boundary and should expose user-facing dormitory names, not raw provider ids.
+  \item More report formats can be added by consuming structured \texttt{WashReport} data instead of parsing existing report prose.
+\end{itemize}
+
+\section{Conclusion}
+
+WashMate Campus is implemented as a complete mobile product. The frontend is not only a visual layer; it also contains the APK service logic for the user workflow. The Python backend remains useful as the reference design, test reference, and modular expression of the same domain rules. This split gives the product a practical demo surface while preserving clear module ownership, typed data models, testability, and safe integration boundaries.
+
+\end{document}
