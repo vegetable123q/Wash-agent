@@ -12,7 +12,7 @@ export interface WardrobeCareMemory {
 }
 
 const careLabelNames = ["洗涤方式", "洗涤温度", "漂白", "翻转烘干", "熨烫", "干洗", "自然晾干"];
-const NON_MACHINE_WASH_PATTERN = /do_not_machine_wash|no[_ ]machine[_ ]wash|do not machine wash|(?:不可|不能|不可以|不建议|不适合|避免|禁止|非)\s*机洗/i;
+const NON_MACHINE_WASH_PATTERN = /do_not_machine_wash|no[_ ]machine[_ ]wash|do not machine wash|(?:不可|不能|不可以|不建议|不适合|避免|禁止|非)\s*机洗|(?:洗涤方式|washing[_ ]?method|wash[_ ]?method)\s*[：:]\s*(?:手洗|hand[_ ]?wash)(?!\s*(?:也可|可选|optional))/i;
 
 export function splitWardrobeCareMemory(text?: string): WardrobeCareMemory {
   const sourceText = String(text ?? "").trim();

@@ -37,6 +37,7 @@ const LIGHT_COLOR_TERMS = new Set([
 const BEDDING_TERMS = new Set(["bedding", "sheet", "duvet", "床单", "被套", "床品"]);
 const WOOL_TERMS = new Set(["wool", "羊毛", "cashmere", "羊绒"]);
 const HAND_WASH_TERMS = new Set(["hand_wash_only", "hand wash only", "只能手洗", "仅限手洗"]);
+const STRUCTURED_HAND_WASH_PATTERN = /(?:洗涤方式|washing[_ ]?method|wash[_ ]?method)\s*[：:]\s*(?:手洗|hand[_ ]?wash)(?!\s*(?:也可|可选|optional))/i;
 const DO_NOT_MACHINE_WASH_TERMS = new Set([
   "do_not_machine_wash",
   "no_machine_wash",
@@ -295,6 +296,7 @@ function bucketIdFor(item: WardrobeItemForPlan, constraints: LaundryConstraints)
   if (
     item.preferred_method === "hand_wash" ||
     containsAny(text, HAND_WASH_TERMS) ||
+    hasStructuredHandWashCare(text) ||
     containsAny(text, DO_NOT_MACHINE_WASH_TERMS) ||
     hasMaterial(item, WOOL_TERMS)
   ) {
@@ -739,6 +741,10 @@ function containsAny(text: string, terms: Set<string>): boolean {
     if (termMatches(text, term)) return true;
   }
   return false;
+}
+
+function hasStructuredHandWashCare(text: string): boolean {
+  return STRUCTURED_HAND_WASH_PATTERN.test(text);
 }
 
 function termMatches(text: string, term: string): boolean {

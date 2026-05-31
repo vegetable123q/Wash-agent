@@ -28,6 +28,10 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
   const dryingPlan = mobileSummary?.drying_plan;
   const planReport = mobileSummary?.report;
   const hasPlan = Boolean(plan?.buckets.length);
+  const hasCurrentLaundryDemand = Boolean(
+    (mobileSummary?.selected_laundry_item_ids.length ?? 0) > 0 ||
+    (mobileSummary?.dirty_basket.item_count ?? 0) > 0,
+  );
   const reportStatus = reportStatusFor(mobileSummary);
   const isReady = reportStatus === "ready";
   const isBlocked = reportStatus === "blocked";
@@ -71,35 +75,37 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
         <Chip tone={statusCopy.tone}>{statusCopy.label}</Chip>
       </header>
 
-      <PrimaryPanel className="report-hero-panel">
-        <div className="panel-kicker">
-          <TrendingDown size={17} />
-          <span>本次结论</span>
-        </div>
-        <h2>本次结论</h2>
-        <div className="report-hero-grid">
-          <div className="report-hero-total">
-            <strong>{totalCopy.main}</strong>
-            {totalCopy.breakdown ? <span className="report-cost-breakdown">{totalCopy.breakdown}</span> : null}
-            <span>预计费用</span>
+      {hasCurrentLaundryDemand ? (
+        <PrimaryPanel className="report-hero-panel">
+          <div className="panel-kicker">
+            <TrendingDown size={17} />
+            <span>本次结论</span>
           </div>
-          <div className="report-hero-stats">
-            <div>
-              <Clock3 size={17} />
-              <strong>{durationCopy.main}</strong>
-              {durationCopy.breakdown ? <span className="report-cost-breakdown">{durationCopy.breakdown}</span> : null}
-              <span>{durationCopy.label}</span>
+          <h2>本次结论</h2>
+          <div className="report-hero-grid">
+            <div className="report-hero-total">
+              <strong>{totalCopy.main}</strong>
+              {totalCopy.breakdown ? <span className="report-cost-breakdown">{totalCopy.breakdown}</span> : null}
+              <span>预计费用</span>
             </div>
-            <div>
-              <Shirt size={17} />
-              <strong>{bucketCountText}</strong>
-              <span>洗护批次</span>
+            <div className="report-hero-stats">
+              <div>
+                <Clock3 size={17} />
+                <strong>{durationCopy.main}</strong>
+                {durationCopy.breakdown ? <span className="report-cost-breakdown">{durationCopy.breakdown}</span> : null}
+                <span>{durationCopy.label}</span>
+              </div>
+              <div>
+                <Shirt size={17} />
+                <strong>{bucketCountText}</strong>
+                <span>洗护批次</span>
+              </div>
             </div>
           </div>
-        </div>
-        <p className="report-verdict">{plan?.summary ?? "选择本次要清洗的衣物后，这里会生成费用、路线和风险摘要。"}</p>
-        {plan ? <p className="report-cost-source">费用按校园机器规则配置估算，实际以设备页面为准。</p> : null}
-      </PrimaryPanel>
+          <p className="report-verdict">{plan?.summary ?? "选择本次要清洗的衣物后，这里会生成费用、路线和风险摘要。"}</p>
+          {plan ? <p className="report-cost-source">费用按校园机器规则配置估算，实际以设备页面为准。</p> : null}
+        </PrimaryPanel>
+      ) : null}
 
       {quickAction ? (
         <Section title="现在照做">

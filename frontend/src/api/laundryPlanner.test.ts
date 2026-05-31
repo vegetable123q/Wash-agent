@@ -845,6 +845,44 @@ describe("hand-wash classification (bug fix regressions)", () => {
     expect(plan.buckets[0].wash_method).toBe("hand_wash");
   });
 
+  it("keeps structured hand-wash care tags out of machine-wash buckets", () => {
+    const jacket: WardrobeItemForPlan = {
+      profile: {
+        item_id: "hand-wash-care-tag-jacket",
+        name: "银色机能风多口袋夹克",
+        user_note: "洗涤方式：手洗（推断）；洗涤温度：冷水（推断）；翻转烘干：不可烘干（推断）\n银色 PU 涂层材质较特殊，建议冷水轻柔手洗。",
+        material_ratios: { synthetic: 0.5, "pu涂层": 0.5 },
+        colors: ["银色", "蓝色", "黑色"],
+        care_warnings: [],
+        care_recommendations: [],
+        care_forbidden: [],
+        care_symbols: {},
+        risks: { dryer_damage: "high" },
+        recommended_wash: "machine_wash",
+      },
+      wear_count_since_wash: 1,
+      preferred_method: "machine_wash",
+      user_notes: [],
+    };
+
+    const plan = planLaundry([jacket], {
+      selected_item_ids: ["hand-wash-care-tag-jacket"],
+      urgent_item_ids: [],
+      allow_mixed_colors: false,
+      allow_dryer: false,
+      hygiene_sensitive: true,
+      max_wait_minutes: null,
+      budget_yuan: null,
+    }, context);
+
+    expect(plan.buckets).toHaveLength(1);
+    expect(plan.buckets[0]).toMatchObject({
+      bucket_id: "hand-wash",
+      wash_method: "hand_wash",
+    });
+    expect(plan.buckets[0].machine_id).toBeUndefined();
+  });
+
   it("classifies light blue and silver as light-standard instead of defaulting to dark", () => {
     const items: WardrobeItemForPlan[] = [
       standardItem("light-blue-jeans", "浅蓝色牛仔裤", ["浅蓝色"]),

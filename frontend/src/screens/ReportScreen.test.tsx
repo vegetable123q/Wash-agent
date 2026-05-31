@@ -12,7 +12,7 @@ describe("ReportScreen", () => {
   it("shows a visual report structure without technical labels", () => {
     const { container } = render(<ReportScreen />);
 
-    expect(screen.getByRole("heading", { name: "本次结论" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "本次结论" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "环境速览" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "洗护路线" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "重点提醒" })).toBeInTheDocument();
@@ -297,6 +297,7 @@ describe("ReportScreen", () => {
 
     render(<ReportScreen mobileSummary={mobileSummary} />);
 
+    expect(screen.getByRole("heading", { name: "本次结论" })).toBeInTheDocument();
     expect(screen.getByText("带：黑色卫衣、牛仔裤、白T；去：6层洗衣机；花：约 ¥11；19:15 开始，22:15 前结束。")).toBeInTheDocument();
   });
 
@@ -360,6 +361,9 @@ describe("ReportScreen", () => {
     expect(screen.getByText("本周已洗 1 次")).toBeInTheDocument();
     expect(screen.getByText("本周花费 ¥11")).toBeInTheDocument();
     expect(screen.getByText("最近一次：白色棉 T 恤")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "本次结论" })).not.toBeInTheDocument();
+    expect(screen.queryByText("费用待确认")).not.toBeInTheDocument();
+    expect(screen.queryByText("0 个批次")).not.toBeInTheDocument();
   });
 
   it("does not show the static demo total when a live summary has no cost yet", () => {
