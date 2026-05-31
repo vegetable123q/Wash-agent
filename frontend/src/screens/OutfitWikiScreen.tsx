@@ -93,6 +93,7 @@ export function OutfitWikiScreen({
   );
 
   const isEmpty = wardrobeItems.length === 0;
+  const missingBottoms = !isEmpty && bottoms.length === 0;
 
   // Check if today's worn items are already in dirty basket
   const todayAllWornIds = todayLog
@@ -174,6 +175,16 @@ export function OutfitWikiScreen({
               <h3>还没有衣物记录</h3>
               <p>先去「衣柜」添加衣物，才能推荐穿搭。</p>
             </div>
+          </Card>
+        ) : missingBottoms ? (
+          <Card accent="amber" className="empty-state-card">
+            <div>
+              <h3>还缺下衣</h3>
+              <p>缺少裤装/裙装，暂时无法推荐完整穿搭。</p>
+            </div>
+            <button type="button" className="secondary-button" onClick={() => onNavigate("addClothing")}>
+              添加下衣
+            </button>
           </Card>
         ) : recommendation && recommendation.top_ids.length > 0 ? (
           <Card accent="purple" className="recommendation-card">

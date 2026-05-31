@@ -34,6 +34,7 @@ describe("App in-APK backend integration", () => {
     render(<App />);
 
     fireEvent.click(screen.getByRole("button", { name: /我的/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "高级设置" }));
     expect(await screen.findByText("识图模型")).toBeInTheDocument();
 
     const modelSelect = screen.getByLabelText("model_name") as HTMLSelectElement;
@@ -199,6 +200,56 @@ describe("App in-APK backend integration", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "返回" }));
     expect(await screen.findByRole("heading", { name: "脏衣篮" })).toBeInTheDocument();
+  });
+
+  it("keeps a completed laundry report after executing and clearing the dirty basket", async () => {
+    localStorage.setItem(
+      "washmate.localWardrobe",
+      JSON.stringify([
+        {
+          item_id: "tee-1",
+          name: "白色棉 T 恤",
+          user_note: "",
+          user_notes: [],
+          wear_count_since_wash: 5,
+          wash_count: 1,
+          material_ratios: { cotton: 1 },
+          colors: ["white"],
+          risks: {},
+        },
+      ]),
+    );
+    localStorage.setItem(
+      "washmate.selectedLaundryItemIds",
+      JSON.stringify([{ item_id: "tee-1", added_at: "2026-05-31T10:00:00.000Z", added_at_source: "known" }]),
+    );
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirm);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        json: async () => ({}),
+      }),
+    );
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /管理脏衣篮/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "查看本次方案" }));
+    fireEvent.click(await screen.findByRole("button", { name: "按此方案执行" }));
+    expect(confirm).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole("button", { name: "确认执行" }));
+
+    expect(await screen.findByText("已记录洗涤：白色棉 T 恤")).toBeInTheDocument();
+    expect(screen.getByText("洗涤次数 +1")).toBeInTheDocument();
+    expect(screen.getByText("已从脏衣篮移除")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /报告/ }));
+
+    expect(await screen.findByText("本周已洗 1 次")).toBeInTheDocument();
+    expect(screen.getByText("最近一次：白色棉 T 恤")).toBeInTheDocument();
   });
 
   it("handles the browser or phone back key by returning to the parent screen", async () => {

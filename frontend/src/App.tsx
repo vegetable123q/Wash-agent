@@ -15,7 +15,9 @@ import {
   recordWardrobeWear,
   setLaundrySelection,
   setWardrobeWearCount,
+  undoCompletedLaundry,
   type BackendMachine,
+  type CompletedLaundryRecord,
   type MobileSummary,
   type WardrobeSummaryItem,
 } from "./api/mobileSummary";
@@ -81,6 +83,7 @@ export default function App() {
   const [modelHubConfig, setModelHubConfig] = useState<ModelHubConfig>(() => loadModelHubConfig());
   const [selectedClothingId, setSelectedClothingId] = useState("");
   const [selectedMachineId, setSelectedMachineId] = useState("");
+  const [lastCompletedLaundry, setLastCompletedLaundry] = useState<CompletedLaundryRecord | null>(null);
   const activeTab = parentTab[screen];
 
   const replaceHistoryScreen = (target: ScreenId) => {
@@ -184,6 +187,7 @@ export default function App() {
     } else {
       selected.add(itemId);
     }
+    setLastCompletedLaundry(null);
     const result = await setLaundrySelection([...selected]);
     setMobileSummary((current) =>
       current ? rebuildMobileSummaryForSelection(current, result.selected_item_ids, userProfile) : current,
@@ -191,6 +195,7 @@ export default function App() {
   };
 
   const handleClearLaundrySelection = async () => {
+    setLastCompletedLaundry(null);
     const result = await clearLaundrySelection();
     setMobileSummary((current) =>
       current ? rebuildMobileSummaryForSelection(current, result.selected_item_ids, userProfile) : current,
@@ -201,6 +206,7 @@ export default function App() {
     if (!mobileSummary) {
       return;
     }
+    setLastCompletedLaundry(null);
     const result = await setLaundrySelection(mobileSummary.wardrobe.items.map((item) => item.item_id));
     setMobileSummary((current) =>
       current ? rebuildMobileSummaryForSelection(current, result.selected_item_ids, userProfile) : current,
@@ -220,6 +226,7 @@ export default function App() {
   const handleAddClothingToBasket = async (itemId: string) => {
     const selected = new Set(mobileSummary?.selected_laundry_item_ids ?? []);
     selected.add(itemId);
+    setLastCompletedLaundry(null);
     const result = await setLaundrySelection([...selected]);
     setMobileSummary((current) =>
       current ? rebuildMobileSummaryForSelection(current, result.selected_item_ids, userProfile) : current,
@@ -229,6 +236,7 @@ export default function App() {
   const handleAddItemsToBasket = async (itemIds: string[]) => {
     const selected = new Set(mobileSummary?.selected_laundry_item_ids ?? []);
     for (const id of itemIds) selected.add(id);
+    setLastCompletedLaundry(null);
     const result = await setLaundrySelection([...selected]);
     setMobileSummary((current) =>
       current ? rebuildMobileSummaryForSelection(current, result.selected_item_ids, userProfile) : current,
@@ -236,7 +244,17 @@ export default function App() {
   };
 
   const handleCompleteLaundryPlan = async () => {
-    await completeLaundryPlan();
+    const result = await completeLaundryPlan(mobileSummary);
+    setLastCompletedLaundry(result.record);
+    await refreshMobileSummary();
+  };
+
+  const handleUndoCompletedLaundry = async () => {
+    if (!lastCompletedLaundry) {
+      return;
+    }
+    await undoCompletedLaundry(lastCompletedLaundry.record_id);
+    setLastCompletedLaundry(null);
     await refreshMobileSummary();
   };
 
@@ -340,6 +358,8 @@ export default function App() {
             mobileSummary={mobileSummary}
             modelHubConfig={modelHubConfig}
             onCompletePlan={handleCompleteLaundryPlan}
+            completedRecord={lastCompletedLaundry}
+            onUndoCompletePlan={handleUndoCompletedLaundry}
           />
         );
       case "dirtyBasket":

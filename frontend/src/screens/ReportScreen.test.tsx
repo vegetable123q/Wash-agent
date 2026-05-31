@@ -1,11 +1,12 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MobileSummary } from "../api/mobileSummary";
 import { ReportScreen } from "./ReportScreen";
 
 describe("ReportScreen", () => {
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
   });
 
   it("shows a visual report structure without technical labels", () => {
@@ -16,6 +17,7 @@ describe("ReportScreen", () => {
     expect(screen.getByRole("heading", { name: "洗护路线" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "重点提醒" })).toBeInTheDocument();
     expect(screen.getAllByText("待确认").length).toBeGreaterThan(0);
+    expect(screen.queryByText("用几眼看完花费、路线和风险，不再读长段报告。")).not.toBeInTheDocument();
     expect(screen.queryByText(/后端|WashReport|LaundryPlan/)).not.toBeInTheDocument();
     expect(container.textContent).not.toContain("¥24");
   });
@@ -229,6 +231,135 @@ describe("ReportScreen", () => {
     expect(container.textContent).not.toContain("计费批次");
     expect(container.textContent).not.toContain("790781");
     expect(container.textContent).not.toContain("clever-nq21-6");
+  });
+
+  it("shows a one-line now-do-this version for an active plan", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 4, 31, 19, 15));
+    const mobileSummary = {
+      source: "backend",
+      selected_laundry_item_ids: ["hoodie-1", "jeans-1", "tee-1"],
+      dirty_basket: {
+        item_count: 3,
+        load_percent: 70,
+        oldest_days: 1,
+        urgent_count: 0,
+        status_label: "可清洗",
+        recommendation: "今晚处理。",
+        next_action: "查看报告",
+        items: [],
+      },
+      wardrobe: {
+        items: [
+          wardrobeItem("hoodie-1", "黑色卫衣"),
+          wardrobeItem("jeans-1", "牛仔裤"),
+          wardrobeItem("tee-1", "白T"),
+        ],
+      },
+      campus_context: {
+        all_machines: [],
+        available_machines: [],
+        queue_estimates: [],
+        weather: {},
+        drying_context: {},
+        pricing_rules: { wash_programs: {}, dryer_programs: {} },
+      },
+      plan: {
+        buckets: [
+          {
+            bucket_id: "dark-standard",
+            item_ids: ["hoodie-1", "jeans-1", "tee-1"],
+            wash_method: "machine_wash",
+            machine_type: "standard_washer",
+            machine_id: "washer-6-3",
+            machine_location: "6层洗衣机",
+            program: "standard",
+            detergent_ml: 36,
+            use_laundry_bag: true,
+            dry_method: "air_dry",
+            estimated_cost_yuan: 11,
+            estimated_duration_minutes: 180,
+            warnings: [],
+          },
+        ],
+        estimated_cost_yuan: 11,
+        estimated_duration_minutes: 180,
+        summary: "带这三件衣物去洗。",
+        global_warnings: [],
+      },
+      report: {
+        title: "本次洗护报告",
+        sections: {},
+        savings_notes: [],
+        risk_notes: [],
+      },
+    } satisfies MobileSummary;
+
+    render(<ReportScreen mobileSummary={mobileSummary} />);
+
+    expect(screen.getByText("带：黑色卫衣、牛仔裤、白T；去：6层洗衣机；花：约 ¥11；19:15 开始，22:15 前结束。")).toBeInTheDocument();
+  });
+
+  it("keeps a weekly completed report when the current dirty basket is empty", () => {
+    const mobileSummary = {
+      source: "backend",
+      selected_laundry_item_ids: [],
+      dirty_basket: {
+        item_count: 0,
+        load_percent: 0,
+        oldest_days: 0,
+        urgent_count: 0,
+        status_label: "空篮",
+        recommendation: "先选择衣物。",
+        next_action: "去选择",
+        items: [],
+      },
+      wardrobe: { items: [wardrobeItem("tee-1", "白色棉 T 恤")] },
+      campus_context: {
+        all_machines: [],
+        available_machines: [],
+        queue_estimates: [],
+        weather: {},
+        drying_context: {},
+        pricing_rules: { wash_programs: {}, dryer_programs: {} },
+      },
+      completed_laundry: {
+        weekly_count: 1,
+        weekly_cost_yuan: 11,
+        recent_records: [
+          {
+            record_id: "complete-1",
+            completed_at: "2026-05-31T19:15:00.000Z",
+            completed_item_ids: ["tee-1"],
+            item_names: ["白色棉 T 恤"],
+            estimated_cost_yuan: 11,
+            estimated_duration_minutes: 180,
+            machine_labels: ["6层洗衣机"],
+            plan_summary: "已完成。",
+            before_items: [{ item_id: "tee-1", wear_count_since_wash: 5, wash_count: 1 }],
+          },
+        ],
+      },
+      plan: {
+        buckets: [],
+        estimated_cost_yuan: null,
+        estimated_duration_minutes: null,
+        summary: "请选择本次要清洗的衣物后生成洗护安排。",
+        global_warnings: [],
+      },
+      report: {
+        title: "本次洗护报告",
+        sections: {},
+        savings_notes: [],
+        risk_notes: [],
+      },
+    } satisfies MobileSummary;
+
+    render(<ReportScreen mobileSummary={mobileSummary} />);
+
+    expect(screen.getByText("本周已洗 1 次")).toBeInTheDocument();
+    expect(screen.getByText("本周花费 ¥11")).toBeInTheDocument();
+    expect(screen.getByText("最近一次：白色棉 T 恤")).toBeInTheDocument();
   });
 
   it("does not show the static demo total when a live summary has no cost yet", () => {

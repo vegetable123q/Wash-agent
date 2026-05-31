@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { ModelHubConfig } from "../api/modelHubConfig";
 import { generatePlanSummary } from "../api/llmSummary";
+import type { CompletedLaundryRecord } from "../api/mobileSummary";
 import type { MobileSummary } from "../api/mobileSummary";
 import { Card, Chip, Page, Section, TopBar } from "../components/AppChrome";
 
@@ -11,6 +12,8 @@ interface PlanDetailScreenProps {
   mobileSummary?: MobileSummary | null;
   modelHubConfig?: ModelHubConfig;
   onCompletePlan?: () => void | Promise<void>;
+  completedRecord?: CompletedLaundryRecord | null;
+  onUndoCompletePlan?: () => void | Promise<void>;
 }
 
 interface PreparationStep {
@@ -25,7 +28,14 @@ interface ExclusionItem {
   method: string;
 }
 
-export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig, onCompletePlan }: PlanDetailScreenProps) {
+export function PlanDetailScreen({
+  onBack,
+  mobileSummary,
+  modelHubConfig,
+  onCompletePlan,
+  completedRecord,
+  onUndoCompletePlan,
+}: PlanDetailScreenProps) {
   const planBuckets = mobileSummary?.plan.buckets ?? [];
   const dryingPlan = mobileSummary?.drying_plan;
   const hasSummary = Boolean(mobileSummary);
@@ -153,6 +163,7 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig, onComp
 
   // LLM-enhanced summary
   const [llmSummary, setLlmSummary] = useState<string | null>(null);
+  const [isExecutionDialogOpen, setIsExecutionDialogOpen] = useState(false);
   useEffect(() => {
     if (!mobileSummary?.plan || !modelHubConfig) return;
     let cancelled = false;
@@ -164,9 +175,12 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig, onComp
 
   const handleExecutePlan = () => {
     if (!onCompletePlan) return;
-    if (!window.confirm("执行后会记录本次洗涤并清空脏衣篮中这批衣物，确定继续吗？")) {
-      return;
-    }
+    setIsExecutionDialogOpen(true);
+  };
+
+  const confirmExecutePlan = () => {
+    if (!onCompletePlan) return;
+    setIsExecutionDialogOpen(false);
     void onCompletePlan();
   };
 
@@ -182,10 +196,52 @@ export function PlanDetailScreen({ onBack, mobileSummary, modelHubConfig, onComp
         <Chip tone={hasBuckets ? "teal" : "orange"}>{hasBuckets ? "已生成" : hasSelectedEmptyPlan ? "待确认" : hasSummary ? "待选择" : "加载中"}</Chip>
       </Card>
 
+      {completedRecord ? (
+        <Card accent="teal" className="plan-complete-card">
+          <div>
+            <h2>已完成本次洗涤</h2>
+            <p>已记录洗涤：{completedRecord.item_names.join("、") || "本次衣物"}</p>
+          </div>
+          <div className="chip-row">
+            <Chip tone="teal">洗涤次数 +1</Chip>
+            <Chip tone="blue">已从脏衣篮移除</Chip>
+          </div>
+          {onUndoCompletePlan ? (
+            <div className="plan-complete-actions">
+              <button className="secondary-button" type="button" onClick={() => void onUndoCompletePlan()}>
+                撤销
+              </button>
+            </div>
+          ) : null}
+        </Card>
+      ) : null}
+
       {hasBuckets && hasSelectedItems ? (
         <button className="primary-button plan-execute-button" type="button" onClick={handleExecutePlan} disabled={!onCompletePlan}>
           按此方案执行
         </button>
+      ) : null}
+
+      {isExecutionDialogOpen ? (
+        <div className="app-dialog-backdrop">
+          <div className="app-dialog" role="dialog" aria-modal="true" aria-labelledby="execute-plan-dialog-title">
+            <span className="app-dialog-icon">
+              <AlertTriangle size={20} />
+            </span>
+            <div>
+              <h2 id="execute-plan-dialog-title">确认执行方案</h2>
+              <p>执行后会记录本次洗涤，并把这批衣物从脏衣篮移除。</p>
+            </div>
+            <div className="app-dialog-actions">
+              <button className="secondary-button" type="button" onClick={() => setIsExecutionDialogOpen(false)}>
+                取消
+              </button>
+              <button className="primary-button" type="button" onClick={confirmExecutePlan}>
+                确认执行
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       <Section title="洗衣顺序">

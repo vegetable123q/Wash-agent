@@ -50,6 +50,7 @@ export function LaundryRoomScreen({
   const queueRows = backendQueues.map(queueFromBackend);
   const pricingRules = mobileSummary?.campus_context.pricing_rules;
   const displayedMachines = filterMachines(backendMachines, machineFilter, dormFloorNumber);
+  const recommendedMachineIds = recommendedMachineIdSet(mobileSummary);
   const refreshAction = onRefresh ? (
     <button
       className="icon-button refresh-button"
@@ -147,24 +148,28 @@ export function LaundryRoomScreen({
           ))}
         </div>
         <div className="machine-list">
-          {hasBackend && displayedMachines.length ? displayedMachines.map((machine) => (
-            <Card
-              key={machine.machine_id}
-              className="machine-card machine-card-equal"
-              accent={toneForMachineStatus(machine.status)}
-              onClick={() => (onViewMachine ? onViewMachine(machine.machine_id) : onNavigate("machineDetail"))}
-            >
-              <div>
-                <div className="machine-title">
-                  <span className={`status-dot status-${toneForMachineStatus(machine.status)}`} />
-                  <h3>{machineCardTitle(machine)}</h3>
+          {hasBackend && displayedMachines.length ? displayedMachines.map((machine) => {
+            const recommended = recommendedMachineIds.has(machine.machine_id);
+            const statusTone = toneForMachineStatus(machine.status);
+            return (
+              <Card
+                key={machine.machine_id}
+                className={`machine-card machine-card-equal ${recommended ? "machine-card-recommended" : ""}`}
+                accent={recommended ? "purple" : statusTone}
+                onClick={() => (onViewMachine ? onViewMachine(machine.machine_id) : onNavigate("machineDetail"))}
+              >
+                <div>
+                  <div className="machine-title">
+                    <span className={`status-dot status-${recommended ? "purple" : statusTone}`} />
+                    <h3>{machineCardTitle(machine)}</h3>
+                  </div>
+                  <p>{machinePriceText(machine, pricingRules)}</p>
+                  <p className="machine-submeta">{machineCardMeta(machine)}</p>
                 </div>
-                <p>{machinePriceText(machine, pricingRules)}</p>
-                <p className="machine-submeta">{machineCardMeta(machine)}</p>
-              </div>
-              <Chip tone={toneForMachineStatus(machine.status)}>{statusText(machine.status)}</Chip>
-            </Card>
-          )) : hasBackend ? (
+                <Chip tone={recommended ? "purple" : statusTone}>{recommended ? "推荐使用" : statusText(machine.status)}</Chip>
+              </Card>
+            );
+          }) : hasBackend ? (
             <Card className="machine-card" accent="amber">
               <div>
                 <div className="machine-title">
@@ -214,6 +219,13 @@ function queueFromBackend(queue: BackendQueueEstimate) {
     wait: queueWaitText(queue.estimated_wait_minutes),
     tone: toneForMachineStatus(queue.available_count > 0 ? "available" : queue.running_count > 0 ? "running" : "out_of_service"),
   };
+}
+
+function recommendedMachineIdSet(summary?: MobileSummary | null): Set<string> {
+  return new Set([
+    ...(summary?.plan.buckets.map((bucket) => bucket.machine_id).filter((id): id is string => Boolean(id)) ?? []),
+    ...(summary?.drying_plan?.steps.map((step) => step.dryer_machine_id).filter((id): id is string => Boolean(id)) ?? []),
+  ]);
 }
 
 function filterMachines(machines: BackendMachine[], filter: MachineFilter, dormFloor: number | null): BackendMachine[] {
@@ -324,7 +336,7 @@ function machineCardTitle(machine: BackendMachine) {
 }
 
 function machineCardMeta(machine: BackendMachine) {
-  const parts = [statusText(machine.status)];
+  const parts = [statusText(machine.status), `设备 ${machine.machine_id}`];
   if (isFiniteNonNegativeInteger(machine.remaining_minutes)) {
     parts.push(`剩余 ${machine.remaining_minutes} 分钟`);
   }

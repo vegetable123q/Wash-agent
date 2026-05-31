@@ -397,13 +397,21 @@ describe("PlanDetailScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "按此方案执行" }));
 
-    expect(confirm).toHaveBeenCalledWith("执行后会记录本次洗涤并清空脏衣篮中这批衣物，确定继续吗？");
+    expect(confirm).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "确认执行方案" })).toBeInTheDocument();
+    expect(screen.getByText("执行后会记录本次洗涤，并把这批衣物从脏衣篮移除。")).toBeInTheDocument();
+    expect(onCompletePlan).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "确认执行" }));
+
     expect(onCompletePlan).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog", { name: "确认执行方案" })).not.toBeInTheDocument();
   });
 
-  it("keeps the generated plan unchanged when execution confirmation is cancelled", () => {
+  it("keeps the generated plan unchanged when app confirmation is cancelled", () => {
     const onCompletePlan = vi.fn();
-    vi.stubGlobal("confirm", vi.fn(() => false));
+    const confirm = vi.fn(() => false);
+    vi.stubGlobal("confirm", confirm);
     const mobileSummary = {
       source: "backend",
       selected_laundry_item_ids: ["tee-1"],
@@ -472,6 +480,42 @@ describe("PlanDetailScreen", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "按此方案执行" }));
 
+    expect(confirm).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "确认执行方案" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+
     expect(onCompletePlan).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "确认执行方案" })).not.toBeInTheDocument();
+  });
+
+  it("shows a completed-plan success panel with undo", () => {
+    const onUndoCompletePlan = vi.fn();
+    render(
+      <PlanDetailScreen
+        onBack={vi.fn()}
+        completedRecord={{
+          record_id: "complete-1",
+          completed_at: "2026-05-31T19:15:00.000Z",
+          completed_item_ids: ["tee-1"],
+          item_names: ["白色棉质T恤"],
+          estimated_cost_yuan: 3.5,
+          estimated_duration_minutes: 40,
+          machine_labels: ["紫荆1号楼6层洗衣机"],
+          plan_summary: "浅色标准洗。",
+          before_items: [{ item_id: "tee-1", wear_count_since_wash: 5, wash_count: 1 }],
+        }}
+        onUndoCompletePlan={onUndoCompletePlan}
+      />,
+    );
+
+    expect(screen.getByText("已完成本次洗涤")).toBeInTheDocument();
+    expect(screen.getByText("已记录洗涤：白色棉质T恤")).toBeInTheDocument();
+    expect(screen.getByText("洗涤次数 +1")).toBeInTheDocument();
+    expect(screen.getByText("已从脏衣篮移除")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "撤销" }));
+
+    expect(onUndoCompletePlan).toHaveBeenCalledTimes(1);
   });
 });

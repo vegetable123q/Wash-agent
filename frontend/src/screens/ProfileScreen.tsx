@@ -1,4 +1,4 @@
-import { Database, Save, UserRound } from "lucide-react";
+import { Database, Save, Settings2, UserRound } from "lucide-react";
 import { FormEvent, useState } from "react";
 import {
   hasCompleteModelHubConfig,
@@ -42,6 +42,7 @@ export function ProfileScreen({
   const [modelHubSaved, setModelHubSaved] = useState(false);
   const [demoSeeding, setDemoSeeding] = useState(false);
   const [demoResult, setDemoResult] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const selectedDormIsListed = towerOptions.some((tower) => tower.name === draft.dormName);
   const normalizedModelHubDraft = normalizeModelHubConfig(modelHubDraft);
   const hasModelDraft = hasCompleteModelHubConfig(normalizedModelHubDraft);
@@ -211,6 +212,17 @@ export function ProfileScreen({
         </button>
       </form>
 
+      <button
+        className="secondary-button advanced-toggle-button"
+        type="button"
+        onClick={() => setShowAdvanced((current) => !current)}
+      >
+        <Settings2 size={16} />
+        高级设置
+      </button>
+
+      {showAdvanced ? (
+        <div className="advanced-settings">
       <form className="form-stack api-config-form" onSubmit={handleApiSubmit}>
         <Section title="识图模型" action={<Chip tone={modelHubStatus.tone}>{modelHubStatus.label}</Chip>}>
           <div className="form-stack">
@@ -320,6 +332,8 @@ export function ProfileScreen({
             ) : null}
           </Card>
         </Section>
+      ) : null}
+        </div>
       ) : null}
     </Page>
   );

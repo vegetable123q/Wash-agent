@@ -74,7 +74,7 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved, onConfigure
   const canRecognizeText = hasModelHubConfig && textDescription.trim().length > 0 && recognitionStatus !== "recognizing";
   const canRecognizeBatch = hasModelHubConfig && batchFiles.length > 0 && recognitionStatus !== "recognizing";
   const canSaveBatch = batchDrafts.length > 0 && (status === "idle" || status === "error");
-  const showMissingModelHubConfig = !hasModelHubConfig && status !== "saved";
+  const missingModelHubConfig = !hasModelHubConfig && status !== "saved";
   const inferredCategory = !categoryTouched ? inferWardrobeCategory(draft) : null;
   const showInferredCategory = inferredCategory != null && inferredCategory === draft.category;
 
@@ -301,6 +301,7 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved, onConfigure
             <Camera size={18} />
             {recognitionStatus === "recognizing" ? "识别中" : "拍照识别"}
           </button>
+          {missingModelHubConfig ? <MissingModelHubHint onConfigureModelHub={onConfigureModelHub} /> : null}
         </>
       ) : null}
 
@@ -324,6 +325,7 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved, onConfigure
             <FileText size={18} />
             {recognitionStatus === "recognizing" ? "提取中" : "智能提取文字"}
           </button>
+          {missingModelHubConfig ? <MissingModelHubHint onConfigureModelHub={onConfigureModelHub} /> : null}
         </>
       ) : null}
 
@@ -338,6 +340,7 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved, onConfigure
           error={error}
           canRecognizeBatch={canRecognizeBatch}
           canSaveBatch={canSaveBatch}
+          onConfigureModelHub={onConfigureModelHub}
           onFilesChange={(files) => {
             setBatchFiles(files);
             setBatchDrafts([]);
@@ -404,16 +407,6 @@ export function AddClothingScreen({ modelHubConfig, onBack, onSaved, onConfigure
             </Card>
           </Section>
 
-          {showMissingModelHubConfig ? (
-            <div className="config-action-row">
-              <p className="form-status form-status-error">识图需要先在“我的”页面输入 ModelHub baseUrl 和 apikey</p>
-              {onConfigureModelHub ? (
-                <button className="secondary-button" type="button" onClick={onConfigureModelHub}>
-                  去配置识图模型
-                </button>
-              ) : null}
-            </div>
-          ) : null}
           {recognitionStatus === "recognized" ? <p className="form-status form-status-ok">识别完成，已填入可编辑字段</p> : null}
           {recognitionStatus === "error" ? <p className="form-status form-status-error">{recognitionError}</p> : null}
           {status === "saved" ? <p className="form-status form-status-ok">保存成功，已加入衣柜</p> : null}
@@ -475,6 +468,19 @@ function BatchRecognitionDialog({ progress }: { progress: BatchRecognitionProgre
   );
 }
 
+function MissingModelHubHint({ onConfigureModelHub }: { onConfigureModelHub?: () => void }) {
+  return (
+    <div className="recognition-config-hint">
+      <p>需要先在“我的”配置识图模型</p>
+      {onConfigureModelHub ? (
+        <button className="secondary-button" type="button" onClick={onConfigureModelHub}>
+          去配置
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function BatchEntry({
   files,
   drafts,
@@ -485,6 +491,7 @@ function BatchEntry({
   error,
   canRecognizeBatch,
   canSaveBatch,
+  onConfigureModelHub,
   onFilesChange,
   onRecognize,
   onSave,
@@ -498,6 +505,7 @@ function BatchEntry({
   error: string;
   canRecognizeBatch: boolean;
   canSaveBatch: boolean;
+  onConfigureModelHub?: () => void;
   onFilesChange: (files: File[]) => void;
   onRecognize: () => void;
   onSave: () => void;
@@ -524,7 +532,7 @@ function BatchEntry({
         {recognitionStatus === "recognizing" ? "批量识别中" : "批量识别"}
       </button>
 
-      {!hasModelHubConfig ? <p className="form-status form-status-error">识图需要先在“我的”页面输入 ModelHub baseUrl 和 apikey</p> : null}
+      {!hasModelHubConfig ? <MissingModelHubHint onConfigureModelHub={onConfigureModelHub} /> : null}
       {recognitionStatus === "recognized" ? <p className="form-status form-status-ok">已识别 {drafts.length} 件衣物，可统一保存。</p> : null}
       {recognitionError ? <p className="form-status form-status-error">{recognitionError}</p> : null}
 

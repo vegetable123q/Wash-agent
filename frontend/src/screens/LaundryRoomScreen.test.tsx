@@ -156,8 +156,10 @@ describe("LaundryRoomScreen", () => {
     expect(screen.queryByText("shoe_washer")).not.toBeInTheDocument();
     expect(screen.queryByText("large_washer")).not.toBeInTheDocument();
     expect(screen.queryByText("大件机")).not.toBeInTheDocument();
-    expect(screen.queryByText(/455514|wm10003112|764255/)).not.toBeInTheDocument();
-    expect(screen.getAllByText("空闲 · 模式待同步").length).toBeGreaterThan(0);
+    expect(screen.getByText(/设备 455514/)).toBeInTheDocument();
+    expect(screen.getByText(/设备 wm10003112/)).toBeInTheDocument();
+    expect(screen.getByText(/设备 764255/)).toBeInTheDocument();
+    expect(screen.getAllByText(/空闲 · 设备 .* · 模式待同步/).length).toBeGreaterThan(0);
     expect(container.textContent).not.toContain("18.5");
     expect(document.querySelectorAll(".machine-card.machine-card-equal")).toHaveLength(3);
   });
@@ -336,10 +338,12 @@ describe("LaundryRoomScreen", () => {
 
     expect(screen.getByRole("button", { name: "全部" })).toHaveAttribute("aria-pressed", "true");
     expect(document.querySelectorAll(".machine-card.machine-card-equal")).toHaveLength(4);
+    expect(screen.getByText("推荐使用")).toBeInTheDocument();
+    expect(document.querySelectorAll(".machine-card-recommended")).toHaveLength(1);
 
     fireEvent.click(screen.getByRole("button", { name: "空闲" }));
     expect(document.querySelectorAll(".machine-card.machine-card-equal")).toHaveLength(3);
-    expect(screen.queryByText("运行中 · 剩余 12 分钟 · 标准洗")).not.toBeInTheDocument();
+    expect(screen.queryByText("运行中 · 设备 washer-6-2 · 剩余 12 分钟 · 标准洗")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "烘干机" }));
     expect(document.querySelectorAll(".machine-card.machine-card-equal")).toHaveLength(1);
@@ -349,7 +353,7 @@ describe("LaundryRoomScreen", () => {
     expect(document.querySelectorAll(".machine-card.machine-card-equal")).toHaveLength(3);
     expect(screen.getAllByRole("heading", { name: "洗衣机 · 紫荆1号楼 六层" })).toHaveLength(2);
     expect(screen.getByRole("heading", { name: "烘干机 · 紫荆1号楼 六层" })).toBeInTheDocument();
-    expect(screen.getByText("运行中 · 剩余 12 分钟 · 标准洗")).toBeInTheDocument();
+    expect(screen.getByText("运行中 · 设备 washer-6-2 · 剩余 12 分钟 · 标准洗")).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "洗衣机 · 紫荆1号楼 五层" })).not.toBeInTheDocument();
   });
 
@@ -425,10 +429,24 @@ function laundryRoomSummaryWithUnavailableWeather(): MobileSummary {
       pricing_rules: { ...PRICING_RULES },
     },
     plan: {
-      buckets: [],
-      estimated_cost_yuan: 0,
-      estimated_duration_minutes: 0,
-      summary: "",
+      buckets: [
+        {
+          bucket_id: "light-standard",
+          item_ids: [],
+          wash_method: "machine_wash",
+          machine_type: "standard_washer",
+          machine_id: "washer-6-1",
+          machine_location: "紫荆1号楼 六层",
+          program: "standard",
+          detergent_ml: 24,
+          use_laundry_bag: false,
+          dry_method: "air_dry",
+          warnings: [],
+        },
+      ],
+      estimated_cost_yuan: 3.5,
+      estimated_duration_minutes: 40,
+      summary: "推荐使用六层洗衣机。",
       global_warnings: [],
     },
     report: {
@@ -511,10 +529,24 @@ function laundryRoomSummaryForFilters(): MobileSummary {
       pricing_rules: { ...PRICING_RULES },
     },
     plan: {
-      buckets: [],
-      estimated_cost_yuan: 0,
-      estimated_duration_minutes: 0,
-      summary: "",
+      buckets: [
+        {
+          bucket_id: "light-standard",
+          item_ids: [],
+          wash_method: "machine_wash",
+          machine_type: "standard_washer",
+          machine_id: "washer-6-1",
+          machine_location: "紫荆1号楼 六层",
+          program: "standard",
+          detergent_ml: 24,
+          use_laundry_bag: false,
+          dry_method: "air_dry",
+          warnings: [],
+        },
+      ],
+      estimated_cost_yuan: 3.5,
+      estimated_duration_minutes: 40,
+      summary: "推荐使用六层洗衣机。",
       global_warnings: [],
     },
     report: {

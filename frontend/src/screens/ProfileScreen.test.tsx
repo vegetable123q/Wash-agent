@@ -40,6 +40,41 @@ describe("ProfileScreen", () => {
     expect(screen.queryByText(/haier/)).not.toBeInTheDocument();
   });
 
+  it("hides developer-facing controls until advanced settings are opened", () => {
+    render(
+      <ProfileScreen
+        profile={{
+          displayName: "",
+          dormName: "",
+          dormFloor: "",
+          latestPickupTime: "22:30",
+          allowDryer: false,
+          budgetYuan: null,
+          maxWaitMinutes: null,
+        }}
+        modelHubConfig={emptyModelHubConfig}
+        backendStatus="connected"
+        towerOptions={[{ name: "南区21号楼" }]}
+        onSave={vi.fn()}
+        onSaveModelHubConfig={vi.fn((config) => config)}
+        onClearModelHubConfig={vi.fn()}
+        onSeedDemoData={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("识图模型")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("ModelHub baseUrl")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("apikey")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /加载演示数据/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "高级设置" }));
+
+    expect(screen.getByText("识图模型")).toBeInTheDocument();
+    expect(screen.getByLabelText("ModelHub baseUrl")).toBeInTheDocument();
+    expect(screen.getByLabelText("apikey")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /加载演示数据/ })).toBeInTheDocument();
+  });
+
   it("saves a manually entered dorm floor from 1 to 30", () => {
     const onSave = vi.fn();
     render(

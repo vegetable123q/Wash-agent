@@ -660,6 +660,16 @@ button.card {
   margin-top: 18px;
 }
 
+.advanced-toggle-button {
+  width: 100%;
+  margin-top: 14px;
+}
+
+.advanced-settings {
+  display: grid;
+  gap: 14px;
+}
+
 .primary-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -672,6 +682,17 @@ button.card {
 
 .plan-execute-button {
   margin-top: 12px;
+}
+
+.plan-complete-card {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.plan-complete-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .top-bar {
@@ -1112,6 +1133,30 @@ button.card {
   gap: 8px;
 }
 
+.recognition-config-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #f2c4c0;
+  border-radius: 8px;
+  background: var(--red-soft);
+  padding: 8px 10px;
+  margin-top: -4px;
+  margin-bottom: 10px;
+}
+
+.recognition-config-hint p {
+  color: var(--red);
+  font-weight: 850;
+}
+
+.recognition-config-hint .secondary-button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  background: #fff;
+}
+
 .upload-panel {
   width: 100%;
   height: 132px;
@@ -1348,6 +1393,55 @@ textarea.input-like:focus {
   color: var(--thu-purple);
 }
 
+.app-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  display: grid;
+  place-items: center;
+  background: rgb(20 18 24 / 48%);
+  padding: 22px;
+}
+
+.app-dialog {
+  width: min(100%, 352px);
+  display: grid;
+  gap: 13px;
+  border: 1px solid rgb(255 255 255 / 78%);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 24px 54px rgb(36 28 42 / 24%);
+  padding: 18px;
+}
+
+.app-dialog h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.app-dialog p {
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+
+.app-dialog-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #fff1dc;
+  color: var(--amber);
+}
+
+.app-dialog-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
 .recognition-progress-bar {
   height: 10px;
 }
@@ -1480,6 +1574,12 @@ textarea.input-like:focus {
   gap: 9px;
   padding-right: 32px;
   overflow: hidden;
+}
+
+.machine-card-recommended {
+  border-color: #c9a8d8;
+  background: #fffbff;
+  box-shadow: inset 0 0 0 1px rgba(95, 31, 122, 0.14);
 }
 
 .machine-card > div {
@@ -1897,6 +1997,39 @@ textarea.input-like:focus {
 .report-empty-card {
   display: grid;
   gap: 7px;
+}
+
+.report-now-card,
+.report-weekly-card {
+  display: grid;
+  gap: 8px;
+}
+
+.report-now-card p {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.report-weekly-grid {
+  display: grid;
+  gap: 7px;
+}
+
+.report-weekly-grid div {
+  display: grid;
+  gap: 3px;
+}
+
+.report-weekly-grid strong {
+  color: var(--thu-purple);
+  font-size: 17px;
+}
+
+.report-weekly-grid span {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 850;
 }
 
 .report-reminder-card {

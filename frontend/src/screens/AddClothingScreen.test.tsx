@@ -132,7 +132,7 @@ describe("AddClothingScreen", () => {
     render(<AddClothingScreen modelHubConfig={{ ...modelHubConfig, apikey: "" }} onBack={() => undefined} />);
 
     expect(screen.getByRole("button", { name: "单件录入" })).toBeInTheDocument();
-    expect(screen.getByText("识图需要先在“我的”页面输入 ModelHub baseUrl 和 apikey")).toBeInTheDocument();
+    expect(screen.getByText("需要先在“我的”配置识图模型")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /拍照识别/ })).toBeDisabled();
   });
 
@@ -141,9 +141,18 @@ describe("AddClothingScreen", () => {
 
     render(<AddClothingScreen modelHubConfig={{ ...modelHubConfig, apikey: "" }} onBack={() => undefined} onConfigureModelHub={onConfigureModelHub} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "去配置识图模型" }));
+    fireEvent.click(screen.getByRole("button", { name: "去配置" }));
 
     expect(onConfigureModelHub).toHaveBeenCalledTimes(1);
+  });
+
+  it("puts the unavailable recognition reason directly below the photo recognition button", () => {
+    render(<AddClothingScreen modelHubConfig={{ ...modelHubConfig, apikey: "" }} onBack={() => undefined} onConfigureModelHub={vi.fn()} />);
+
+    const recognizeButton = screen.getByRole("button", { name: /拍照识别/ });
+
+    expect(recognizeButton.nextElementSibling).toHaveTextContent("需要先在“我的”配置识图模型");
+    expect(recognizeButton.nextElementSibling).toHaveTextContent("去配置");
   });
 
   it("infers a practical category from a manually typed hoodie name", () => {

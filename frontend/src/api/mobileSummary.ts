@@ -13,6 +13,7 @@ import { buildProfileFromInput, storedToPlanItem, type StoredWardrobeItem } from
 import { adviseAllFrequencies } from "./frequencyAdvisor";
 import { estimatedWasherLoadCount, loadPercentForItems } from "./laundryLoad";
 import { planLaundry, recommendDrying } from "./laundryPlanner";
+import { machineDisplayLabel } from "./machineDisplay";
 import { deleteWardrobePhotoFile, loadWardrobePhotoDataUrl, saveWardrobePhotoDataUrl } from "./photoFileStorage";
 import { DRYING_CONTEXT, PRICING_RULES } from "./pricingRules";
 import { generateReport } from "./reportGenerator";
@@ -22,6 +23,8 @@ import type {
   CampusContext,
   CampusContextStatus,
   CampusTowerOption,
+  CompletedLaundryRecord,
+  CompletedLaundrySummary,
   DirtyBasketAddedAtSource,
   DirtyBasketItem,
   DirtyBasketSummary,
@@ -43,12 +46,13 @@ import { normalizeDormFloor, type UserProfile } from "../userProfile";
 
 // ─── public types re-exported for screens ───────────────────────────────
 
-export type { BackendMachine, BackendQueueEstimate, CampusTowerOption, MobileSummary, WardrobeCategory, WardrobeInput, WardrobeSummaryItem };
+export type { BackendMachine, BackendQueueEstimate, CampusTowerOption, CompletedLaundryRecord, CompletedLaundrySummary, MobileSummary, WardrobeCategory, WardrobeInput, WardrobeSummaryItem };
 
 // ─── wardrobe CRUD ──────────────────────────────────────────────────────
 
 const LOCAL_WARDROBE_STORAGE_KEY = "washmate.localWardrobe";
 const LOCAL_LAUNDRY_SELECTION_STORAGE_KEY = "washmate.selectedLaundryItemIds";
+const LOCAL_COMPLETED_LAUNDRY_STORAGE_KEY = "washmate.completedLaundryRecords";
 const DAY_MS = 24 * 60 * 60 * 1000;
 let wardrobeItemIdCounter = 0;
 
@@ -93,6 +97,7 @@ export function rebuildMobileSummaryForSelection(
     selected_laundry_item_ids: selectedLaundryItemIds,
     dirty_basket: buildDirtyBasketSummary(selectedItems, dirtyBasketRecords),
     frequency_advice: frequencyAdvice,
+    completed_laundry: buildCompletedLaundrySummary(readCompletedLaundryRecords()),
     plan: toMobileLaundryPlan(plan),
     drying_plan: dryingPlan,
     report,
@@ -211,11 +216,15 @@ export async function clearLaundrySelection(): Promise<{ status: string; selecte
   return { status: "cleared", selected_item_ids: [] };
 }
 
-export async function completeLaundryPlan(): Promise<{ status: string; completed_item_ids: string[] }> {
+export async function completeLaundryPlan(
+  summary?: MobileSummary | null,
+): Promise<{ status: string; completed_item_ids: string[]; record: CompletedLaundryRecord | null }> {
   const items = readLocalWardrobeItems();
   const dirtyBasketRecords = readDirtyBasketRecords(items);
   const completedItemIds = dirtyBasketRecords.map((record) => record.item_id);
   const completedSet = new Set(completedItemIds);
+  const selectedItems = items.filter((item) => completedSet.has(item.item_id));
+  const record = completedItemIds.length ? buildCompletedLaundryRecord(selectedItems, completedItemIds, summary) : null;
 
   if (completedSet.size > 0) {
     const nextItems = items.map((item) =>
@@ -224,10 +233,189 @@ export async function completeLaundryPlan(): Promise<{ status: string; completed
         : item,
     );
     writeLocalWardrobeItems(nextItems);
+    if (record) {
+      writeCompletedLaundryRecords([record, ...readCompletedLaundryRecords()].slice(0, 20));
+    }
   }
   writeDirtyBasketRecords([]);
 
-  return { status: "completed", completed_item_ids: completedItemIds };
+  return { status: "completed", completed_item_ids: completedItemIds, record };
+}
+
+export async function undoCompletedLaundry(
+  recordId: string,
+): Promise<{ status: string; record_id: string; restored_item_ids: string[] }> {
+  const normalizedRecordId = recordId.trim();
+  if (!normalizedRecordId) throw new Error("record_id is required");
+  const records = readCompletedLaundryRecords();
+  const record = records.find((item) => item.record_id === normalizedRecordId);
+  if (!record) throw new Error(`Unknown completed laundry record: ${normalizedRecordId}`);
+
+  const snapshotById = new Map(record.before_items.map((item) => [item.item_id, item]));
+  const nextItems = readLocalWardrobeItems().map((item) => {
+    const snapshot = snapshotById.get(item.item_id);
+    return snapshot
+      ? { ...item, wear_count_since_wash: snapshot.wear_count_since_wash, wash_count: snapshot.wash_count }
+      : item;
+  });
+  writeLocalWardrobeItems(nextItems);
+  writeCompletedLaundryRecords(records.filter((item) => item.record_id !== normalizedRecordId));
+  const validIds = new Set(nextItems.map((item) => item.item_id));
+  writeDirtyBasketRecords(record.completed_item_ids.filter((id) => validIds.has(id)).map((itemId) => ({
+    item_id: itemId,
+    added_at: new Date().toISOString(),
+    added_at_source: "known",
+  })));
+
+  return { status: "undone", record_id: normalizedRecordId, restored_item_ids: record.completed_item_ids };
+}
+
+function buildCompletedLaundryRecord(
+  selectedItems: WardrobeSummaryItem[],
+  completedItemIds: string[],
+  summary?: MobileSummary | null,
+): CompletedLaundryRecord {
+  const completedAt = new Date().toISOString();
+  return {
+    record_id: `laundry-${Date.now().toString(36)}-${completedItemIds.join("-")}`,
+    completed_at: completedAt,
+    completed_item_ids: completedItemIds,
+    item_names: selectedItems.map((item) => item.name),
+    estimated_cost_yuan: completedCost(summary),
+    estimated_duration_minutes: completedDuration(summary),
+    machine_labels: completionMachineLabels(summary),
+    plan_summary: summary?.plan.summary ?? `${selectedItems.map((item) => item.name).join("、")} 已完成洗涤。`,
+    before_items: selectedItems.map((item) => ({
+      item_id: item.item_id,
+      wear_count_since_wash: item.wear_count_since_wash,
+      wash_count: item.wash_count,
+    })),
+  };
+}
+
+function completedCost(summary?: MobileSummary | null): number | null {
+  if (!summary) return null;
+  const wash = optionalFiniteNonNegativeNumber(summary.plan.estimated_cost_yuan);
+  const dry = optionalFiniteNonNegativeNumber(summary.drying_plan?.estimated_cost_yuan);
+  if (wash == null && dry == null) return null;
+  return (wash ?? 0) + (dry ?? 0);
+}
+
+function completedDuration(summary?: MobileSummary | null): number | null {
+  if (!summary) return null;
+  const wash = optionalFiniteNonNegativeInteger(summary.plan.estimated_duration_minutes);
+  const dry = optionalFiniteNonNegativeInteger(summary.drying_plan?.estimated_duration_minutes);
+  if (wash == null && dry == null) return null;
+  return (wash ?? 0) + (dry ?? 0);
+}
+
+function completionMachineLabels(summary?: MobileSummary | null): string[] {
+  if (!summary) return [];
+  const labels = [
+    ...summary.plan.buckets
+      .filter((bucket) => bucket.machine_id || bucket.machine_location)
+      .map((bucket) =>
+        machineDisplayLabel({
+          machine_id: bucket.machine_id,
+          machine_location: bucket.machine_location,
+          machine_type: bucket.machine_type,
+        }),
+      ),
+    ...(summary.drying_plan?.steps ?? [])
+      .filter((step) => step.dryer_machine_id || step.dryer_machine_location)
+      .map((step) =>
+        machineDisplayLabel({
+          machine_id: step.dryer_machine_id,
+          machine_location: step.dryer_machine_location,
+          machine_type: "dryer",
+        }),
+      ),
+  ];
+  return [...new Set(labels.filter(Boolean))];
+}
+
+function buildCompletedLaundrySummary(records: CompletedLaundryRecord[]): CompletedLaundrySummary {
+  const now = new Date();
+  const weeklyRecords = records.filter((record) => sameWeek(new Date(record.completed_at), now));
+  const weeklyCosts = weeklyRecords
+    .map((record) => record.estimated_cost_yuan)
+    .filter((value): value is number => optionalFiniteNonNegativeNumber(value) != null);
+  return {
+    weekly_count: weeklyRecords.length,
+    weekly_cost_yuan: weeklyCosts.length ? weeklyCosts.reduce((sum, value) => sum + value, 0) : null,
+    recent_records: records.slice(0, 10),
+  };
+}
+
+function readCompletedLaundryRecords(): CompletedLaundryRecord[] {
+  return readLocalStorageArray<unknown>(LOCAL_COMPLETED_LAUNDRY_STORAGE_KEY, "本地洗衣记录无法读取")
+    .map(completedRecordFromStorage)
+    .filter((record): record is CompletedLaundryRecord => record !== null)
+    .sort((a, b) => new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime());
+}
+
+function writeCompletedLaundryRecords(records: CompletedLaundryRecord[]): void {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(LOCAL_COMPLETED_LAUNDRY_STORAGE_KEY, JSON.stringify(records));
+}
+
+function completedRecordFromStorage(value: unknown): CompletedLaundryRecord | null {
+  if (typeof value !== "object" || value === null) return null;
+  const raw = value as Partial<CompletedLaundryRecord>;
+  const recordId = String(raw.record_id ?? "").trim();
+  const completedAt = validIsoDate(raw.completed_at) ? String(raw.completed_at) : "";
+  const completedItemIds = stringArray(raw.completed_item_ids);
+  const beforeItems = Array.isArray(raw.before_items)
+    ? raw.before_items
+        .map(completedSnapshotFromStorage)
+        .filter((item): item is CompletedLaundryRecord["before_items"][number] => item !== null)
+    : [];
+  if (!recordId || !completedAt || !completedItemIds.length) return null;
+  return {
+    record_id: recordId,
+    completed_at: completedAt,
+    completed_item_ids: completedItemIds,
+    item_names: stringArray(raw.item_names),
+    estimated_cost_yuan: optionalFiniteNonNegativeNumber(raw.estimated_cost_yuan),
+    estimated_duration_minutes: optionalFiniteNonNegativeInteger(raw.estimated_duration_minutes),
+    machine_labels: stringArray(raw.machine_labels),
+    plan_summary: String(raw.plan_summary ?? "").trim(),
+    before_items: beforeItems,
+  };
+}
+
+function completedSnapshotFromStorage(value: unknown): CompletedLaundryRecord["before_items"][number] | null {
+  if (typeof value !== "object" || value === null) return null;
+  const raw = value as Partial<CompletedLaundryRecord["before_items"][number]>;
+  const itemId = String(raw.item_id ?? "").trim();
+  if (!itemId) return null;
+  return {
+    item_id: itemId,
+    wear_count_since_wash: nonNegativeInteger(raw.wear_count_since_wash),
+    wash_count: nonNegativeInteger(raw.wash_count),
+  };
+}
+
+function optionalFiniteNonNegativeNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function optionalFiniteNonNegativeInteger(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+function sameWeek(left: Date, right: Date): boolean {
+  if (Number.isNaN(left.getTime()) || Number.isNaN(right.getTime())) return false;
+  return weekStart(left).getTime() === weekStart(right).getTime();
+}
+
+function weekStart(date: Date): Date {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const day = start.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  start.setDate(start.getDate() + mondayOffset);
+  return start;
 }
 
 // ─── integrated summary builder ─────────────────────────────────────────
@@ -304,6 +492,7 @@ async function buildIntegratedMobileSummary(profile?: MobileSummaryProfile): Pro
         source: "integrated",
       },
     },
+    completed_laundry: buildCompletedLaundrySummary(readCompletedLaundryRecords()),
     plan: toMobileLaundryPlan(plan),
     drying_plan: dryingPlan,
     report,

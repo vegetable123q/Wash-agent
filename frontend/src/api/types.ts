@@ -207,6 +207,33 @@ export interface WashReport {
   risk_notes: string[];
 }
 
+/** Wardrobe counters before a laundry completion, used for undo. */
+export interface CompletedLaundryItemSnapshot {
+  item_id: string;
+  wear_count_since_wash: number;
+  wash_count: number;
+}
+
+/** One locally recorded completed laundry session. */
+export interface CompletedLaundryRecord {
+  record_id: string;
+  completed_at: string;
+  completed_item_ids: string[];
+  item_names: string[];
+  estimated_cost_yuan: number | null;
+  estimated_duration_minutes: number | null;
+  machine_labels: string[];
+  plan_summary: string;
+  before_items: CompletedLaundryItemSnapshot[];
+}
+
+/** Lightweight weekly summary for the report tab. */
+export interface CompletedLaundrySummary {
+  weekly_count: number;
+  weekly_cost_yuan: number | null;
+  recent_records: CompletedLaundryRecord[];
+}
+
 /** Wash frequency and priority advice for one wardrobe item. */
 export interface FrequencyAdvice {
   item_id: string;
@@ -346,6 +373,7 @@ export interface MobileSummary {
     drying_context: Record<string, unknown>;
     pricing_rules: Record<string, unknown>;
   };
+  completed_laundry?: CompletedLaundrySummary;
   plan: LaundryPlan;
   drying_plan?: DryingPlan;
   report: {

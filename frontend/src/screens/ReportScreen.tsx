@@ -52,6 +52,9 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
   const reminders = conciseReminders(planReport?.risk_notes, plan?.global_warnings, plan?.buckets.flatMap((bucket) => bucket.warnings));
   const overview = environmentOverview(mobileSummary);
   const statusCopy = reportStatusCopy(reportStatus);
+  const quickAction = quickActionText(mobileSummary);
+  const completedLaundry = mobileSummary?.completed_laundry;
+  const latestCompleted = completedLaundry?.recent_records[0];
 
   // Drying route cards.
   const dryRouteCards = dryingPlan
@@ -64,7 +67,6 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
         <div>
           <div className="eyebrow">费用与节能</div>
           <h1>{planReport?.title ?? "本次洗护报告"}</h1>
-          <p>用几眼看完花费、路线和风险，不再读长段报告。</p>
         </div>
         <Chip tone={statusCopy.tone}>{statusCopy.label}</Chip>
       </header>
@@ -98,6 +100,29 @@ export function ReportScreen({ mobileSummary }: { mobileSummary?: MobileSummary 
         <p className="report-verdict">{plan?.summary ?? "选择本次要清洗的衣物后，这里会生成费用、路线和风险摘要。"}</p>
         {plan ? <p className="report-cost-source">费用按校园机器规则配置估算，实际以设备页面为准。</p> : null}
       </PrimaryPanel>
+
+      {quickAction ? (
+        <Section title="现在照做">
+          <Card accent="teal" className="report-now-card">
+            <h3>现在照做</h3>
+            <p>{quickAction}</p>
+          </Card>
+        </Section>
+      ) : null}
+
+      {completedLaundry && latestCompleted ? (
+        <Section title="本周报告">
+          <Card accent="purple" className="report-weekly-card">
+            <div className="report-weekly-grid">
+              <div>
+                <strong>本周已洗 {completedLaundry.weekly_count} 次</strong>
+                <span>{weeklyCostText(completedLaundry.weekly_cost_yuan)}</span>
+              </div>
+              <p>最近一次：{latestCompleted.item_names.join("、") || "本次衣物"}</p>
+            </div>
+          </Card>
+        </Section>
+      ) : null}
 
       <Section title="环境速览">
         <div className="report-metric-grid">
@@ -335,6 +360,60 @@ function durationSummary(
 
 function formatMoney(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function quickActionText(summary?: MobileSummary | null): string | null {
+  const buckets = summary?.plan.buckets ?? [];
+  if (!summary || !buckets.length) return null;
+  const nameMap = new Map(summary.wardrobe.items.map((item) => [item.item_id, item.name]));
+  const itemNames = [...new Set(buckets.flatMap((bucket) => bucket.item_ids))]
+    .map((id) => nameMap.get(id) ?? id)
+    .filter(Boolean);
+  if (!itemNames.length) return null;
+  const machine = firstAssignedMachineLabel(summary) ?? "洗衣房按机器列表确认";
+  const cost = summaryTotalCost(summary);
+  const duration = summaryTotalDuration(summary);
+  const costText = cost == null ? "花：费用待确认" : `花：约 ¥${formatMoney(cost)}`;
+  const timeText = duration == null
+    ? "时间待确认"
+    : `${formatClock(new Date())} 开始，${formatClock(new Date(Date.now() + duration * 60 * 1000))} 前结束`;
+  return `带：${itemNames.join("、")}；去：${machine}；${costText}；${timeText}。`;
+}
+
+function firstAssignedMachineLabel(summary: MobileSummary): string | null {
+  for (const bucket of summary.plan.buckets) {
+    const label = bucketMachineLabel(bucket);
+    if (label) return label;
+  }
+  for (const step of summary.drying_plan?.steps ?? []) {
+    const label = dryingMachineLabel(step);
+    if (label) return label;
+  }
+  return null;
+}
+
+function summaryTotalCost(summary: MobileSummary): number | null {
+  const wash = isFiniteNonNegativeNumber(summary.plan.estimated_cost_yuan) ? summary.plan.estimated_cost_yuan : null;
+  const dry = isFiniteNonNegativeNumber(summary.drying_plan?.estimated_cost_yuan) ? summary.drying_plan.estimated_cost_yuan : null;
+  if (wash == null && dry == null) return null;
+  return (wash ?? 0) + (dry ?? 0);
+}
+
+function summaryTotalDuration(summary: MobileSummary): number | null {
+  const wash = isPositiveInteger(summary.plan.estimated_duration_minutes) ? summary.plan.estimated_duration_minutes : null;
+  const dry = isPositiveInteger(summary.drying_plan?.estimated_duration_minutes) ? summary.drying_plan.estimated_duration_minutes : null;
+  if (wash == null && dry == null) return null;
+  return (wash ?? 0) + (dry ?? 0);
+}
+
+function formatClock(date: Date): string {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function weeklyCostText(value: number | null | undefined): string {
+  return isFiniteNonNegativeNumber(value) ? `本周花费 ¥${formatMoney(value)}` : "本周花费待确认";
 }
 
 function reportStatusFor(summary?: MobileSummary | null): ReportStatus {

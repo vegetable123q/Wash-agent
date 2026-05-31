@@ -29,6 +29,7 @@ import {
   recordWardrobeWear,
   setLaundrySelection,
   setWardrobeWearCount,
+  undoCompletedLaundry,
   type MobileSummary,
 } from "./mobileSummary";
 import { PRICING_RULES } from "./pricingRules";
@@ -318,12 +319,52 @@ describe("mobileSummary wardrobe selection", () => {
     const summary = await fetchMobileSummary();
     const itemsById = new Map(summary.wardrobe.items.map((item) => [item.item_id, item]));
 
-    expect(result).toEqual({ status: "completed", completed_item_ids: ["tee-1", "pants-1"] });
+    expect(result).toMatchObject({ status: "completed", completed_item_ids: ["tee-1", "pants-1"] });
     expect(summary.selected_laundry_item_ids).toEqual([]);
     expect(summary.dirty_basket.item_count).toBe(0);
     expect(itemsById.get("tee-1")).toMatchObject({ wear_count_since_wash: 0, wash_count: 2 });
     expect(itemsById.get("pants-1")).toMatchObject({ wear_count_since_wash: 0, wash_count: 3 });
     expect(itemsById.get("coat-1")).toMatchObject({ wear_count_since_wash: 4, wash_count: 0 });
+  });
+
+  it("stores a completed laundry record so reports survive dirty-basket clearing", async () => {
+    localStorage.setItem(
+      wardrobeStorageKey,
+      JSON.stringify([
+        wardrobeItem("tee-1", "白色棉 T 恤", { wear_count_since_wash: 5, wash_count: 1 }),
+      ]),
+    );
+    await setLaundrySelection(["tee-1"]);
+
+    const result = await completeLaundryPlan();
+    const summary = await fetchMobileSummary();
+
+    expect(result.record?.item_names).toEqual(["白色棉 T 恤"]);
+    expect(summary.selected_laundry_item_ids).toEqual([]);
+    expect(summary.completed_laundry!.weekly_count).toBe(1);
+    expect(summary.completed_laundry!.recent_records[0]).toMatchObject({
+      item_names: ["白色棉 T 恤"],
+      completed_item_ids: ["tee-1"],
+    });
+  });
+
+  it("undoes the last completed laundry record by restoring counts and dirty basket", async () => {
+    localStorage.setItem(
+      wardrobeStorageKey,
+      JSON.stringify([
+        wardrobeItem("tee-1", "白色棉 T 恤", { wear_count_since_wash: 5, wash_count: 1 }),
+      ]),
+    );
+    await setLaundrySelection(["tee-1"]);
+    const completed = await completeLaundryPlan();
+
+    const undo = await undoCompletedLaundry(completed.record!.record_id);
+    const summary = await fetchMobileSummary();
+
+    expect(undo.status).toBe("undone");
+    expect(summary.selected_laundry_item_ids).toEqual(["tee-1"]);
+    expect(summary.wardrobe.items[0]).toMatchObject({ wear_count_since_wash: 5, wash_count: 1 });
+    expect(summary.completed_laundry!.recent_records).toEqual([]);
   });
 
   it("rejects wear-count records for unknown wardrobe items", async () => {
@@ -951,3 +992,22 @@ describe("mobileSummary wardrobe selection", () => {
     expect(updated.plan.global_warnings.some((warning) => warning.includes("预计等待 12 分钟超过最大等待 5 分钟"))).toBe(true);
   });
 });
+
+function wardrobeItem(
+  itemId: string,
+  name: string,
+  overrides: Partial<MobileSummary["wardrobe"]["items"][number]> = {},
+): MobileSummary["wardrobe"]["items"][number] {
+  return {
+    item_id: itemId,
+    name,
+    user_note: "",
+    user_notes: [],
+    wear_count_since_wash: 1,
+    wash_count: 0,
+    material_ratios: {},
+    colors: [],
+    risks: {},
+    ...overrides,
+  };
+}
