@@ -50,6 +50,8 @@ export function riskKeyLabel(key: string): string {
     deform: "变形",
     pilling: "起球",
     dryer_damage: "烘干损伤",
+    odor: "异味",
+    wrinkle: "易皱",
   };
   return labels[key] || key;
 }

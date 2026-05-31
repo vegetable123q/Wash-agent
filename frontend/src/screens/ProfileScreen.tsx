@@ -1,4 +1,4 @@
-import { Save, UserRound } from "lucide-react";
+import { Database, Save, UserRound } from "lucide-react";
 import { FormEvent, useState } from "react";
 import {
   hasCompleteModelHubConfig,
@@ -6,6 +6,7 @@ import {
   supportedModelNames,
   type ModelHubConfig,
 } from "../api/modelHubConfig";
+import { seedDemoData } from "../api/demoData";
 import { Card, Chip, Page, Section } from "../components/AppChrome";
 import type { CampusTowerOption } from "../api/mobileSummary";
 import { dormWithFloor, isValidPickupTime, normalizeDormFloor, type UserProfile } from "../userProfile";
@@ -20,6 +21,7 @@ interface ProfileScreenProps {
   onSave: (profile: UserProfile) => void;
   onSaveModelHubConfig: (config: ModelHubConfig) => ModelHubConfig;
   onClearModelHubConfig: () => void;
+  onSeedDemoData?: (profile: UserProfile) => void;
 }
 
 export function ProfileScreen({
@@ -30,6 +32,7 @@ export function ProfileScreen({
   onSave,
   onSaveModelHubConfig,
   onClearModelHubConfig,
+  onSeedDemoData,
 }: ProfileScreenProps) {
   const [draft, setDraft] = useState(profile);
   const [modelHubDraft, setModelHubDraft] = useState(modelHubConfig);
@@ -37,6 +40,8 @@ export function ProfileScreen({
   const [floorError, setFloorError] = useState<string | null>(null);
   const [pickupError, setPickupError] = useState<string | null>(null);
   const [modelHubSaved, setModelHubSaved] = useState(false);
+  const [demoSeeding, setDemoSeeding] = useState(false);
+  const [demoResult, setDemoResult] = useState<string | null>(null);
   const selectedDormIsListed = towerOptions.some((tower) => tower.name === draft.dormName);
   const normalizedModelHubDraft = normalizeModelHubConfig(modelHubDraft);
   const hasModelDraft = hasCompleteModelHubConfig(normalizedModelHubDraft);
@@ -273,6 +278,49 @@ export function ProfileScreen({
           </button>
         </div>
       </form>
+
+      {onSeedDemoData ? (
+        <Section title="演示数据">
+          <Card accent="blue" className="demo-data-card">
+            <div>
+              <h3>一键加载演示数据</h3>
+              <p>
+                填入 14 件衣柜衣物、5 件脏衣篮、7 天穿搭记录和搭配关系，
+                所有页面立即展示完整交互内容。
+              </p>
+            </div>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={demoSeeding}
+              onClick={() => {
+                setDemoSeeding(true);
+                setDemoResult(null);
+                try {
+                  const result = seedDemoData();
+                  setDraft(result.profile);
+                  onSeedDemoData(result.profile);
+                  setDemoResult(
+                    `已加载：${result.wardrobeCount} 件衣物 · ${result.basketCount} 件脏衣 · ${result.logCount} 天穿搭`,
+                  );
+                } catch (error) {
+                  setDemoResult(error instanceof Error ? error.message : "加载失败");
+                } finally {
+                  setDemoSeeding(false);
+                }
+              }}
+            >
+              <Database size={16} />
+              {demoSeeding ? "加载中…" : "加载演示数据"}
+            </button>
+            {demoResult ? (
+              <p className={demoResult.startsWith("已加载") ? "form-status form-status-ok" : "form-status form-status-error"}>
+                {demoResult}
+              </p>
+            ) : null}
+          </Card>
+        </Section>
+      ) : null}
     </Page>
   );
 }

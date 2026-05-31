@@ -254,6 +254,19 @@ export default function App() {
     await refreshMobileSummary();
   };
 
+  const handleSeedDemoData = async (profile: UserProfile) => {
+    setUserProfile(profile);
+    setMobileSummary(null);
+    setBackendStatus("loading");
+    try {
+      const summary = await fetchMobileSummary(profile);
+      setMobileSummary(summary);
+      setBackendStatus("connected");
+    } catch {
+      setBackendStatus("offline");
+    }
+  };
+
   useEffect(() => {
     screenRef.current = screen;
   }, [screen]);
@@ -427,6 +440,7 @@ export default function App() {
             onSave={handleProfileSave}
             onSaveModelHubConfig={handleModelHubConfigSave}
             onClearModelHubConfig={handleModelHubConfigClear}
+            onSeedDemoData={handleSeedDemoData}
             backendStatus={backendStatus}
           />
         );
