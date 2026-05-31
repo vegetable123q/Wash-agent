@@ -14,7 +14,7 @@
   colorlinks=true,
   linkcolor=blue,
   urlcolor=blue,
-  pdftitle={WashMate Campus 产品与实现说明文档},
+  pdftitle={WashMate Campus 编程大作业说明文档},
   pdfauthor={WashMate Campus Team}
 }
 
@@ -33,24 +33,34 @@
 \setcounter{secnumdepth}{2}
 \sloppy
 
-\title{WashMate Campus\\产品与实现说明文档}
-\author{WashMate Campus Team}
+\title{WashMate Campus\\编程大作业说明文档}
+\author{武子皓、王成思宇、林恺鋆、王博翔、周逸航}
 \date{2026-05-31}
 
 \begin{document}
 \maketitle
+
+\begin{center}
+\begin{tabular}{rl}
+课程名称： & 大模型与生成式人工智能 \\
+作业名称： & 编程大作业 \\
+仓库地址： & \url{https://github.com/vegetable123q/Wash-agent} \\
+APK 路径： & \path{frontend/android/app/build/outputs/apk/debug/app-debug.apk} \\
+\end{tabular}
+\end{center}
+
 \clearpage
 \pdfbookmark[1]{目录}{toc}
 \tableofcontents
 \clearpage
 
-\section{文档目标}
+\section{项目概述}
 
-本文档基于当前仓库已经实现的事实，说明 WashMate Campus 的产品目标、前端实现、后端参考实现、数据结构、外部服务边界、测试验证和发布链路。它不是一份设想中的未来架构说明，而是面向产品介绍、团队交接和后续维护的技术说明文档。
+\subsection{文档用途}
 
-本项目最关键的实现事实是：WashMate Campus 不是“网页前端 + 长期运行的 Python HTTP 后端”的传统结构。当前稳定的用户侧产品是 \path{frontend/} 下的 React + TypeScript + Vite + Capacitor 移动端应用。核心业务服务以内置 TypeScript 模块的形式运行在 APK 内部，主要位于 \path{frontend/src/api/}。\path{backend/} 下的 Python 模块是参考实现和测试基准，用于明确模块边界、业务规则、数据结构和集成测试行为。
+本文档介绍 WashMate Campus 的产品目标、主要功能、前端实现、后端参考实现、数据结构、外部服务、测试验证和发布流程。它可以用于了解产品全貌，也可以作为后续维护和功能交接的说明材料。
 
-\section{产品概述}
+WashMate Campus 不是“网页前端 + 长期运行的 Python HTTP 后端”的传统结构。当前稳定的用户侧产品是 \path{frontend/} 下的 React + TypeScript + Vite + Capacitor 移动端应用。核心业务服务以内置 TypeScript 模块的形式运行在 APK 内部，主要位于 \path{frontend/src/api/}。\path{backend/} 下的 Python 模块是参考实现和测试基准，用于明确模块边界、业务规则、数据结构和集成测试行为。
 
 \subsection{问题背景与目标用户}
 
@@ -79,7 +89,55 @@ WashMate Campus 的目标是把这些信息放进同一个手机流程。用户�
 
 最新移动端脚本还补强了几处执行体验：Add Clothing 在识图按钮旁直接提示缺少 ModelHub 配置；Outfit Wiki 在缺少裤装或裙装时给出添加入口；Laundry Room 会展示设备编号，并高亮当前方案推荐使用的机器。完成一次洗衣后，应用会在本地保存完成记录，让报告页在脏衣篮清空后仍能显示本周统计和最近一次洗衣内容。
 
-\section{技术栈与仓库结构}
+\section{需求与评分点对应关系}
+
+本项目按照 \path{evaluation_system.md} 中的最终交付评测体系整理。评分点和文档、代码、测试的对应关系如下。
+
+\begin{longtable}{p{0.18\textwidth} p{0.12\textwidth} p{0.30\textwidth} p{0.30\textwidth}}
+\toprule
+评分模块 & 分值 & 本项目对应内容 & 主要文件或验证方式 \\
+\midrule
+后端核心功能 & 25 & 衣物抽取、衣柜、校园上下文、洗衣规划和报告生成完整串联。 & \path{backend/}、\path{tests/}、完整集成测试。 \\
+数据可信度 & 15 & 材质、天气、机器、价格和时长均来自明确来源；缺失时显示错误或未知状态。 & \path{config/machine_rules.json}、\path{campusMachineApi.ts}、\path{weatherService.ts}。 \\
+移动端流程 & 20 & Today、Wardrobe、Add Clothing、Laundry Room、Plan Detail、Report、Profile 等主流程可用。 & \path{frontend/src/screens/}、前端集成测试、APK 冒烟测试。 \\
+UI 与交互质量 & 15 & 页面有空态、加载态、错误态；按钮有明确行为或禁用原因。 & Vitest 页面测试、人工验收流程。 \\
+边界与异常 & 15 & API 失败、配置缺失、空衣柜、机器不可用、天气不可用等状态显式展示。 & \path{evaluation_system.md} 边界清单、前后端异常测试。 \\
+工程质量 & 10 & 测试、构建、APK、文档、CI 和模块边界完整。 & \path{README.md}、\path{docs/structure_design.md}、GitHub workflows。 \\
+\bottomrule
+\end{longtable}
+
+\section{系统功能展示}
+
+\subsection{页面截图预留}
+
+以下位置用于放置最终页面截图。图片文件可在本地补充后替换占位框。建议截图覆盖 Today、Wardrobe、Add Clothing、Laundry Room、Plan Detail 和 Report。
+
+\begin{center}
+\begin{tabular}{ccc}
+\fbox{\parbox[c][3.2cm][c]{0.28\textwidth}{\centering Today 截图预留}} &
+\fbox{\parbox[c][3.2cm][c]{0.28\textwidth}{\centering Wardrobe 截图预留}} &
+\fbox{\parbox[c][3.2cm][c]{0.28\textwidth}{\centering Add Clothing 截图预留}} \\
+\\
+\fbox{\parbox[c][3.2cm][c]{0.28\textwidth}{\centering Laundry Room 截图预留}} &
+\fbox{\parbox[c][3.2cm][c]{0.28\textwidth}{\centering Plan Detail 截图预留}} &
+\fbox{\parbox[c][3.2cm][c]{0.28\textwidth}{\centering Report 截图预留}} \\
+\end{tabular}
+\end{center}
+
+\subsection{Demo 演示流程}
+
+\path{docs/e_demo_script.md} 中的 3--5 分钟演示流程可以浓缩为以下路径：
+
+\begin{enumerate}
+  \item 打开移动端 App，查看 Today 页的天气、脏衣篮、洗衣建议和方案入口。
+  \item 进入 Wardrobe 或 Add Clothing，查看样例衣物或添加新衣物。
+  \item 在 Dirty Basket 中选择本次要洗的衣物。
+  \item 进入 Laundry Room，查看宿舍楼机器状态、设备编号和排队估计。
+  \item 打开 Plan Detail，查看分桶、程序、费用、时长和风险提醒。
+  \item 打开 Report，查看行动步骤、本周完成记录、风险说明和节水节电说明。
+\end{enumerate}
+
+\section{技术架构与模块设计}
 
 \subsection{技术栈}
 
@@ -141,8 +199,6 @@ Wash-agent/
     release-apk.yml
 \end{lstlisting}
 
-\section{总体架构}
-
 \subsection{运行时形态}
 
 项目的实际运行时以移动端为主：
@@ -184,7 +240,7 @@ Python backend
 
 页面层只做交互和编排，不写 ModelHub 提示词、机器解析、JSON 存储细节、洗衣分桶规则和最终报告生成。跨模块数据通过明确的数据结构传递：Python 侧使用 \path{backend/shared/models.py}，移动端使用 \path{frontend/src/api/types.ts}。当已有模型能够描述数据时，不应新增平行结构或兼容旧路径。
 
-\section{前端实现说明}
+\section{核心实现说明}
 
 \subsection{应用入口与导航}
 
@@ -260,9 +316,9 @@ Python backend
 
 缺少配置、机器状态、天气、识别结果或价格规则时，系统应该展示明确的未配置、不可用、未知或错误状态，而不是静默补一个不存在的默认值。
 
-\section{后端参考实现说明}
+\subsection{后端参考实现}
 
-\subsection{共享模型}
+\subsubsection{共享模型}
 
 \path{backend/shared/models.py} 是 Python 后端唯一的共享模型层，存放 enum 和 dataclass。它定义了从衣物输入、衣物 profile、衣柜 item、洗衣约束、校园上下文、洗衣方案、烘干方案到报告的完整数据语言。
 
@@ -278,7 +334,7 @@ Python backend
 \bottomrule
 \end{longtable}
 
-\subsection{衣物信息抽取}
+\subsubsection{衣物信息抽取}
 
 \path{backend/clothing_extraction/} 负责把用户输入、商品信息、吊牌/OCR 文本和可选图片识别结果转换为结构化 \texttt{ClothingProfile}。
 
@@ -290,13 +346,13 @@ Python backend
 
 图片识别只发起一次带 JSON 格式约束的请求，使用 \texttt{responseMimeType=application/json} 和 \texttt{responseSchema}。结果包含图片类型、可见证据、材质、颜色、洗护动作、风险和缺失字段。该模块不负责衣柜存储、洗衣频率、校园机器、最终计划或报告。
 
-\subsection{衣柜记忆与洗护频率}
+\subsubsection{衣柜记忆与洗护频率}
 
 \path{backend/wardrobe/store.py} 提供 \texttt{WardrobeStore}，负责衣柜 CRUD、洗涤历史、穿着次数、历史问题、输入校验和 JSON 序列化。\path{backend/wardrobe/frequency_advisor.py} 根据衣物、穿着次数和 \texttt{LaundryConstraints} 输出 \texttt{FrequencyAdvice}。
 
 该模块的边界很清晰：它不调用模型，不读机器状态，也不生成最终洗衣分桶方案。
 
-\subsection{校园上下文}
+\subsubsection{校园上下文}
 
 \path{backend/campus/machine_api.py} 提供 \texttt{LaundryMachineClient}，负责 CleverSchool 和 Haier 机器来源的请求与解析。它归一化宿舍楼、provider keys、机器 id、机器类型、状态、楼层、剩余时间和 provider 信息。
 
@@ -304,7 +360,7 @@ Python backend
 
 \path{backend/campus/weather.py} 负责读取并校验 Open-Meteo 天气数据。
 
-\subsection{洗衣规划}
+\subsubsection{洗衣规划}
 
 \path{backend/laundry/planner.py} 是规则化洗衣规划模块的参考实现。它负责：
 
@@ -319,15 +375,15 @@ Python backend
 
 \path{backend/laundry/load_estimator.py} 提供衣物负载估算和按负载拆分能力。\texttt{recommend\_drying} 把烘干分配从洗涤分桶中拆开，使 wash plan 和 drying plan 的责任更清晰。
 
-\subsection{报告生成}
+\subsubsection{报告生成}
 
 \path{backend/reports/generator.py} 把 \texttt{LaundryPlan}、可选 \texttt{DryingPlan}、衣物列表和 \texttt{CampusContext} 转换为 \texttt{WashReport}。报告模块只解释洗衣规划模块已经生成的结果，不重新分桶、不重新决策、不抓取机器、不调用模型。
 
 \texttt{WashReport} 保留 \texttt{sections}、\texttt{action\_steps}、\texttt{cost\_breakdown}、\texttt{savings\_notes} 和 \texttt{risk\_notes} 等结构化字段，前端可以直接渲染，不需要从自然语言报告中反向解析费用和步骤。
 
-\section{前后端数据结构与主流程}
+\subsection{数据结构与主流程}
 
-\subsection{数据结构对齐}
+\subsubsection{数据结构对齐}
 
 Python 和 TypeScript 分别有自己的共享契约层：
 
@@ -338,7 +394,7 @@ Python 和 TypeScript 分别有自己的共享契约层：
 
 TypeScript 数据结构保证 APK 内置业务服务可以独立运行。Python 数据结构保证后端参考实现和单元测试有稳定的数据语言。两者不要求文件内容逐字相同，但应保持业务语义一致。
 
-\subsection{核心业务数据流}
+\subsubsection{核心业务数据流}
 
 \begin{enumerate}
   \item 用户在 Profile 保存宿舍楼、楼层、取衣时间、烘干偏好和 ModelHub 配置。
@@ -367,6 +423,20 @@ Open-Meteo & 刷新 mobile summary。 & 读取清华附近天气，用于晾晒�
 \bottomrule
 \end{longtable}
 
+\subsection{在线数据来源与字段}
+
+天气数据由移动端 \path{frontend/src/api/weatherService.ts} 和 Python 参考实现 \path{backend/campus/weather.py} 读取。当前接口是 Open-Meteo forecast API：\url{https://api.open-meteo.com/v1/forecast}。移动端使用清华附近坐标 \texttt{40.0023, 116.3268}，时区为 \texttt{Asia/Shanghai}，请求当前天气字段 \path{temperature_2m}、\path{relative_humidity_2m}、\path{precipitation} 和 \path{weather_code}。返回结果必须包含 \path{current}。温度、湿度和降水必须是有效数字。读取成功时，页面收到 \texttt{source=open-meteo} 和 \texttt{status=live}；读取失败或字段不合法时，页面收到 \texttt{status=unavailable} 和错误信息。
+
+洗衣机数据来自两类校园服务。移动端先使用 \path{frontend/src/api/campusTowerDirectory.ts} 中的本地宿舍楼目录，把用户看到的宿舍楼名映射到内部 \path{towerKey} 或 \path{positionId}。页面不会直接展示这些内部 id。
+
+CleverSchool 机器状态由移动端 \path{frontend/src/api/campusMachineApi.ts} 读取。接口地址是 \url{https://api.cleverschool.cn/washapi4/device/status}。请求使用 POST，body 包含 \path{towerKey} 和空的 \path{deviceType}。响应中的 \path{macUnionCode} 用来拆出机器编号，\path{tower} 和 \path{floorName} 用来生成位置，\path{status} 用来生成机器状态和剩余时间。状态文字中的“待机”“空闲”“可用”“可使用”会转成 \texttt{available}；“工作”“运转”“使用”“运行”会转成 \texttt{running}；“脱水”“开盖”“出错”“错误”“异常”“故障”“不可使用”“停用”会转成 \texttt{out\_of\_service}。剩余时间只从明确的“剩余时间”文字中读取。
+
+海乐生活机器状态也由 \path{campusMachineApi.ts} 读取。接口地址是 \url{https://yshz-user.haier-ioc.com/position/deviceDetailPage}。请求使用 POST，body 包含 \path{positionId}、\path{categoryCode}、\path{page}、\path{floorCode} 和 \path{pageSize}。移动端会分别请求 \texttt{00}、\texttt{01} 和 \texttt{02} 三类设备，并把它们映射为普通洗衣机、洗鞋机和烘干机。响应中的 \path{id} 是机器编号，\path{name} 是位置文字，\path{state} 是状态。状态 \texttt{1} 表示可用，\texttt{2} 表示运行中，\texttt{3} 表示不可用；其他值记为 \texttt{unknown}。
+
+Python 参考实现还保留楼栋和点位发现接口。CleverSchool 使用 \url{https://api.cleverschool.cn/washapi4/device/tower} 获取楼栋列表。海乐生活使用 \url{https://yshz-user.haier-ioc.com/position/nearPosition}，并用清华附近坐标 \texttt{lng=116.32697, lat=40.00281} 获取附近点位。后端会把同名楼栋合并成 \texttt{MachineTower}，并在 \path{provider_keys} 中保留不同来源的内部 id。
+
+实时机器接口不提供完整价格和程序时，系统不会在机器解析层补齐这些业务数据。价格、模式和时长来自 \path{config/machine_rules.json} 以及移动端镜像的 \path{frontend/src/api/pricingRules.ts}。本地网页预览时，请求会改写到 \path{/cleverschool-api} 和 \path{/haier-api} 代理路径；Android APK 中使用 Capacitor HTTP 直接发起请求。
+
 \subsection{密钥与本地配置}
 
 移动端 release APK 不内置真实 API key。用户在 Profile 中填写 ModelHub \texttt{baseUrl}、\texttt{apikey} 和 \texttt{model\_name}，配置保存在本机，并提供清除入口。
@@ -377,9 +447,11 @@ Python 参考实现使用本地 \path{config/api_config.json}，仓库只提交 
 
 项目规则强调 no fallback / no default。这里的含义是：缺少业务数据时，应显式展示未配置、不可用、未知、错误状态或抛出异常，而不是补一个看似合理但没有来源的数据。不能凭空生成材质、颜色、机器状态、天气、价格、时长、风险或洗衣方案。
 
-\section{测试、构建与发布}
+\section{运行方法与交付文件}
 
-\subsection{本地验证命令}
+\subsection{本地运行与构建命令}
+
+项目仓库地址为 \url{https://github.com/vegetable123q/Wash-agent}。debug APK 交付路径为 \path{frontend/android/app/build/outputs/apk/debug/app-debug.apk}。如果本地尚未生成 APK，可按下面命令重新构建。
 
 \begin{lstlisting}[style=command]
 uv sync
@@ -413,13 +485,48 @@ frontend/android/app/build/outputs/apk/debug/app-debug.apk
 
 稳定 release 签名依赖 GitHub Secrets：\texttt{ANDROID\_KEYSTORE\_BASE64}、\texttt{ANDROID\_KEYSTORE\_PASSWORD}、\texttt{ANDROID\_KEY\_ALIAS}、\texttt{ANDROID\_KEY\_PASSWORD}。如果这些 secrets 缺失，CI 可以生成临时 key 来构建可安装 APK，但该 key 不适合作为长期更新签名。
 
-\subsection{测试覆盖}
+\section{测试与验收结果}
+
+\subsection{自动化测试与覆盖}
 
 当前仓库包含 Python unittest 和 frontend Vitest。后端测试覆盖衣物抽取、衣柜 CRUD、频率建议、校园机器解析、校园上下文、天气、洗衣规划、报告生成和完整集成流程。前端测试覆盖 API services、页面渲染、Profile 配置、ModelHub 配置持久化、脏衣篮、完成洗衣记录与撤销、推荐机器高亮、报告周统计、刷新行为和 App integration。
 
-\section{后续开发交接说明}
+\subsection{实测验收结果}
 
-\subsection{应该在哪里新增功能}
+\path{evaluation_system.md} 记录了 2026-05-28 的验收结果。主要结论如下：
+
+\begin{itemize}
+  \item Python unittest：通过，命令为 \texttt{uv run python -m unittest discover -v}。
+  \item Frontend test：通过，命令为 \texttt{npm test -- --run}。
+  \item Frontend build：通过，命令为 \texttt{npm run build}。
+  \item Capacitor sync：通过，命令为 \texttt{npm run cap:sync}。
+  \item APK debug build：通过，命令为 \texttt{npm run apk:debug}，生成 \path{frontend/android/app/build/outputs/apk/debug/app-debug.apk}。
+  \item APK 安装与启动：通过，Android Emulator 安装后可打开 \texttt{edu.tsinghua.washmatecampus/.MainActivity}。
+  \item APK 内置服务：通过，不启动本机后端也可以查看 Today、衣柜、洗衣房、方案和报告等主流程。
+  \item WebView 冒烟测试：通过，覆盖 Today、衣柜、衣物详情、添加衣物、洗衣房、机器详情、方案详情、报告和我的页面。
+\end{itemize}
+
+本轮验收发现的 P1 问题已修复并复验，包括衣柜删除、宿舍楼选择、图片识别配置、展示型按钮禁用、空衣柜状态、固定样例详情、APK 后端依赖、API key 配置和等待时间提醒等。当前交付结论为：自动化、模拟器 APK、API 和移动端主流程均通过，未发现剩余 P0/P1 缺陷。
+
+\section{团队分工}
+
+\subsection{成员与贡献预留}
+
+以下表格用于填写最终团队分工和贡献说明。成员名单已按提交信息预置，具体负责模块和完成内容可在最终版中补充。
+
+\begin{longtable}{p{0.18\textwidth} p{0.30\textwidth} p{0.42\textwidth}}
+\toprule
+成员 & 负责模块 & 主要贡献 \\
+\midrule
+武子皓 & 待补充 & 待补充 \\
+王成思宇 & 待补充 & 待补充 \\
+林恺鋆 & 待补充 & 待补充 \\
+王博翔 & 待补充 & 待补充 \\
+周逸航 & 待补充 & 待补充 \\
+\bottomrule
+\end{longtable}
+
+\subsection{模块维护说明}
 
 \begin{itemize}
   \item 页面和交互放在 \path{frontend/src/screens/}，通用外壳或组件放在 \path{frontend/src/components/}。
@@ -430,7 +537,7 @@ frontend/android/app/build/outputs/apk/debug/app-debug.apk
   \item 如果修改模块边界、公共接口、配置行为或主流程，应同步更新 \path{docs/structure_design.md}。
 \end{itemize}
 
-\subsection{不应该做什么}
+\subsection{开发注意事项}
 
 \begin{itemize}
   \item 不新增旧路径兼容层，例如重新创建 flat backend import。
@@ -440,7 +547,7 @@ frontend/android/app/build/outputs/apk/debug/app-debug.apk
   \item 不通过猜测结果掩盖外部 API 失败或缺失配置。
 \end{itemize}
 
-\section{当前限制与扩展方向}
+\section{当前限制与未来改进}
 
 当前实现已经适合作为完整移动端产品演示，但仍有明确扩展空间：
 
@@ -452,7 +559,7 @@ frontend/android/app/build/outputs/apk/debug/app-debug.apk
   \item 如果要导出更多报告格式，应消费结构化 \texttt{WashReport}，不要解析自然语言段落。
 \end{itemize}
 
-\section{总结}
+\subsection{总结}
 
 WashMate Campus 的事实实现是一个以移动端为主的完整产品。前端不仅是 UI，也包含 APK 内置业务服务；Python 后端是参考实现和测试基准，帮助团队保持清晰的模块边界、数据结构和业务规则。这样的设计让项目能直接演示完整产品流程，也能通过测试和文档保留可维护的工程结构。
 
